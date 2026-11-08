@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" fill="none" class="gh-illustration gh-illustration-buying-guide">
+  <rect width="240" height="180" rx="12" fill="#FAFAF8" class="gh-ill-bg" />
+  <circle cx="85" cy="60" r="32" fill="#E85D3F" fill-opacity="0.06" />
+  <path d="M20 150H220" stroke="#111111" stroke-width="1.75" stroke-linecap="round" stroke-opacity="0.15" />
+
+  <!-- Guidebook / Bound Reference Document -->
+  <rect x="55" y="45" width="75" height="95" rx="3" fill="#FFFFFF" stroke="#111111" stroke-width="1.75" />
+  <path d="M55 45H68V140H55V45Z" fill="#111111" />
+  <line x1="80" y1="62" x2="118" y2="62" stroke="#E85D3F" stroke-width="2" stroke-linecap="round" />
+  <line x1="80" y1="76" x2="118" y2="76" stroke="#111111" stroke-width="1.5" stroke-linecap="round" />
+  <line x1="80" y1="88" x2="118" y2="88" stroke="#111111" stroke-width="1.5" stroke-linecap="round" />
+  <line x1="80" y1="100" x2="108" y2="100" stroke="#111111" stroke-width="1.5" stroke-linecap="round" />
+
+  <!-- Stamp Duty / Calculator Icon Token -->
+  <rect x="145" y="65" width="46" height="60" rx="3" fill="#FFFFFF" stroke="#111111" stroke-width="1.75" />
+  <rect x="153" y="73" width="30" height="12" rx="1.5" fill="#111111" fill-opacity="0.08" stroke="#111111" stroke-width="1" />
+  <circle cx="158" cy="95" r="2.5" fill="#111111" />
+  <circle cx="168" cy="95" r="2.5" fill="#111111" />
+  <circle cx="178" cy="95" r="2.5" fill="#111111" />
+  <circle cx="158" cy="107" r="2.5" fill="#111111" />
+  <circle cx="168" cy="107" r="2.5" fill="#111111" />
+  <circle cx="178" cy="107" r="2.5" fill="#E85D3F" />
+
+  <!-- Bookmark Ribbon on Guide -->
+  <path d="M102 38V55L108 50L114 55V38H102Z" fill="#E85D3F" />
+</svg>

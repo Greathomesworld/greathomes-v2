@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" fill="none" class="gh-illustration gh-illustration-empty-recent">
+  <rect width="240" height="180" rx="12" fill="#FAFAF8" class="gh-ill-bg" />
+  <circle cx="120" cy="80" r="48" fill="#E85D3F" fill-opacity="0.06" />
+  <path d="M20 150H220" stroke="#111111" stroke-width="1.75" stroke-linecap="round" stroke-opacity="0.15" />
+
+  <!-- Dotted Discovery Path Awaiting Visits -->
+  <path d="M40 145C80 145 85 120 125 120C165 120 170 95 200 95" stroke="#111111" stroke-width="1.75" stroke-dasharray="4 4" stroke-opacity="0.4" stroke-linecap="round" />
+
+  <!-- Awaiting Home Outlines -->
+  <rect x="90" y="65" width="40" height="48" rx="3" fill="#FFFFFF" stroke="#111111" stroke-width="1.5" stroke-dasharray="3 3" />
+  <path d="M90 80L110 65L130 80" stroke="#111111" stroke-width="1.25" stroke-dasharray="3 3" />
+  
+  <!-- Footsteps / Explorer Silhouette Starting Journey -->
+  <circle cx="55" cy="112" r="7" fill="#111111" />
+  <path d="M45 145V130C45 124 50 120 55 120C60 120 65 124 65 130V145" fill="#111111" stroke="#111111" stroke-width="1.5" />
+  <path d="M55 128L68 122" stroke="#E85D3F" stroke-width="1.5" stroke-linecap="round" />
+
+  <!-- Compass Needle Encouraging Discovery -->
+  <circle cx="165" cy="65" r="14" fill="#FFFFFF" stroke="#E85D3F" stroke-width="1.75" />
+  <polygon points="165,56 169,65 165,63 161,65" fill="#E85D3F" />
+  <polygon points="165,74 169,65 165,67 161,65" fill="#111111" fill-opacity="0.3" />
+</svg>

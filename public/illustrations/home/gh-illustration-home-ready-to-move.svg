@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" fill="none" class="gh-illustration gh-illustration-ready-to-move">
+  <rect width="240" height="180" rx="12" fill="#FAFAF8" class="gh-ill-bg" />
+  <circle cx="175" cy="55" r="32" fill="#218C5A" fill-opacity="0.08" />
+  <path d="M20 150H220" stroke="#111111" stroke-width="1.75" stroke-linecap="round" stroke-opacity="0.15" />
+
+  <!-- Completed Premium Residential Building -->
+  <rect x="50" y="45" width="75" height="105" rx="3" fill="#FFFFFF" stroke="#111111" stroke-width="1.75" />
+  <rect x="62" y="58" width="20" height="16" rx="1.5" fill="#218C5A" fill-opacity="0.1" stroke="#218C5A" stroke-width="1.25" />
+  <rect x="94" y="58" width="20" height="16" rx="1.5" fill="#111111" fill-opacity="0.05" stroke="#111111" stroke-width="1.25" />
+  <rect x="62" y="84" width="20" height="16" rx="1.5" fill="#111111" fill-opacity="0.05" stroke="#111111" stroke-width="1.25" />
+  <rect x="94" y="84" width="20" height="16" rx="1.5" fill="#218C5A" fill-opacity="0.1" stroke="#218C5A" stroke-width="1.25" />
+  <rect x="78" y="118" width="20" height="32" rx="1" fill="#111111" />
+
+  <!-- Verification Badge / Occupancy Certificate Checkmark -->
+  <circle cx="165" cy="80" r="24" fill="#FFFFFF" stroke="#218C5A" stroke-width="2" />
+  <path d="M154 80L162 88L178 72" stroke="#218C5A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+
+  <!-- Handover Ribbon / Key Cue -->
+  <path d="M165 110V145" stroke="#E85D3F" stroke-width="1.75" stroke-linecap="round" />
+  <circle cx="165" cy="120" r="6" fill="#E85D3F" fill-opacity="0.2" stroke="#E85D3F" stroke-width="1.5" />
+  
+  <!-- Garden / Landscape Element -->
+  <path d="M28 150C28 140 36 134 44 134C52 134 60 140 60 150" fill="#218C5A" fill-opacity="0.15" stroke="#218C5A" stroke-width="1.5" />
+</svg>

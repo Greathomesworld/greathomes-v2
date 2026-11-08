@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" fill="none" class="gh-illustration gh-illustration-advisor">
+  <rect width="240" height="180" rx="12" fill="#FAFAF8" class="gh-ill-bg" />
+  <circle cx="120" cy="55" r="42" fill="#E85D3F" fill-opacity="0.06" />
+  <path d="M20 150H220" stroke="#111111" stroke-width="1.75" stroke-linecap="round" stroke-opacity="0.15" />
+
+  <!-- Architectural Background House / Project -->
+  <path d="M85 150V90L120 62L155 90V150H85Z" fill="#FFFFFF" stroke="#111111" stroke-width="1.5" stroke-linejoin="round" />
+  <rect x="100" y="98" width="16" height="14" rx="1" fill="#111111" fill-opacity="0.05" stroke="#111111" stroke-width="1.25" />
+  <rect x="124" y="98" width="16" height="14" rx="1" fill="#E85D3F" fill-opacity="0.12" stroke="#E85D3F" stroke-width="1.25" />
+
+  <!-- Great Homes Advisor (Left - Professional, Knowledgeable, Holding Property Portfolio / Tablet) -->
+  <circle cx="68" cy="85" r="9" fill="#111111" />
+  <path d="M52 150V122C52 113 59 107 68 107C77 107 84 113 84 122V150" fill="#111111" stroke="#111111" stroke-width="1.75" stroke-linejoin="round" />
+  <!-- Advisor Arm & Portfolio Folder / Tablet -->
+  <path d="M78 120L95 125L92 138L75 132" fill="#FFFFFF" stroke="#E85D3F" stroke-width="1.75" stroke-linejoin="round" />
+  <rect x="90" y="122" width="14" height="18" rx="1.5" transform="rotate(15 90 122)" fill="#FFFFFF" stroke="#E85D3F" stroke-width="1.5" />
+  <line x1="93" y1="128" x2="102" y2="130" stroke="#E85D3F" stroke-width="1.25" />
+
+  <!-- Buyer (Right - Attentive, Exploring) -->
+  <circle cx="172" cy="90" r="8" fill="#111111" />
+  <path d="M158 150V126C158 118 164 112 172 112C180 112 186 118 186 126V150" fill="#FFFFFF" stroke="#111111" stroke-width="1.75" stroke-linejoin="round" />
+  <path d="M165 128L150 132" stroke="#111111" stroke-width="1.5" stroke-linecap="round" />
+
+  <!-- Dialogue / Consultation Sparkle Indicator -->
+  <circle cx="120" cy="40" r="3" fill="#E85D3F" />
+  <circle cx="132" cy="48" r="2" fill="#218C5A" />
+  <path d="M110 46C115 44 125 44 130 46" stroke="#111111" stroke-width="1.25" stroke-linecap="round" stroke-dasharray="2 2" />
+</svg>

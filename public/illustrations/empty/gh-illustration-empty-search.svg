@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" fill="none" class="gh-illustration gh-illustration-empty-search">
+  <rect width="240" height="180" rx="12" fill="#FAFAF8" class="gh-ill-bg" />
+  <circle cx="110" cy="80" r="48" fill="#E85D3F" fill-opacity="0.06" />
+  <path d="M20 150H220" stroke="#111111" stroke-width="1.75" stroke-linecap="round" stroke-opacity="0.15" />
+
+  <!-- Dotted Map Grid / Uncharted Territory -->
+  <path d="M50 130L95 105L170 120" stroke="#111111" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="3 3" stroke-opacity="0.3" />
+  <rect x="60" y="80" width="30" height="38" rx="2" fill="#FFFFFF" stroke="#111111" stroke-width="1.5" stroke-dasharray="3 3" stroke-opacity="0.4" />
+
+  <!-- Prominent Magnifying Search Glass with Architectural Lens -->
+  <g transform="translate(10, -5)">
+    <circle cx="110" cy="80" r="32" fill="#FFFFFF" stroke="#111111" stroke-width="2.5" />
+    <circle cx="110" cy="80" r="26" fill="#FAFAF8" stroke="#E85D3F" stroke-width="1.5" stroke-dasharray="4 4" />
+    
+    <!-- Minimal Silhouette of Home inside Search Lens -->
+    <path d="M98 92V78L110 68L122 78V92H98Z" fill="#FFFFFF" stroke="#E85D3F" stroke-width="1.75" stroke-linejoin="round" />
+    <rect x="106" y="82" width="8" height="10" rx="0.5" fill="#E85D3F" fill-opacity="0.2" />
+
+    <!-- Magnifying Glass Handle (Terracotta Accent) -->
+    <path d="M133 103L160 130" stroke="#111111" stroke-width="4.5" stroke-linecap="round" />
+    <path d="M133 103L160 130" stroke="#E85D3F" stroke-width="2" stroke-linecap="round" />
+  </g>
+
+  <!-- Gentle Ambient Question / Discovery Particles -->
+  <circle cx="178" cy="55" r="3" fill="#E85D3F" />
+  <circle cx="192" cy="70" r="2" fill="#111111" fill-opacity="0.3" />
+</svg>

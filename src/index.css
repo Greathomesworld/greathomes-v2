@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #FAFAF8;
+  --color-foreground: #111111;
+  --color-accent: #E85D3F;
+  --color-success: #218C5A;
+  --color-border: rgba(17, 17, 17, 0.1);
+  --font-display: var(--font-plus-jakarta), "Plus Jakarta Sans", sans-serif;
+  --font-editorial: var(--font-fjalla), "Fjalla One", sans-serif;
+  --font-body: var(--font-inter), "Inter", sans-serif;
+  --font-sans: var(--font-inter), "Inter", sans-serif;
+  --font-serif: var(--font-fjalla), "Fjalla One", sans-serif;
+}
+
+:root {
+  color-scheme: light;
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-inter), "Inter", sans-serif;
+}
+
+.dark {
+  --color-background: #1a1a1a;
+  --color-foreground: #E5E5E5;
+  --color-border: rgba(229, 229, 229, 0.1);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@keyframes gh-cta-shine {
+  0% {
+    transform: translateX(-180%) skewX(-20deg);
+  }
+  26% {
+    transform: translateX(320%) skewX(-20deg);
+  }
+  100% {
+    transform: translateX(320%) skewX(-20deg);
+  }
+}
+
+@media (min-width: 1024px) and (prefers-reduced-motion: no-preference) {
+  .gh-cta-shine-btn .gh-cta-shine-bar {
+    opacity: 0.85;
+    animation: gh-cta-shine 5.2s ease-in-out infinite;
+    will-change: transform;
+  }
+  .gh-cta-shine-btn:hover .gh-cta-shine-bar {
+    opacity: 1;
+  }
+}
+

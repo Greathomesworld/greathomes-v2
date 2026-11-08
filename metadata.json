@@ -1,0 +1,8 @@
+{
+  "name": "Great Homes | Verified Residential Property Discovery in Kolkata",
+  "description": "Discover verified projects, resale homes and rentals across Kolkata — with the property intelligence and assistance you need to make a confident decision.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="100%" height="100%">
+  <defs>
+    <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+      <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#f1f5f9" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="800" height="600" fill="#ffffff"/>
+  <rect width="800" height="600" fill="url(#grid)"/>
+
+  <rect x="20" y="20" width="760" height="560" fill="none" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="25" y="25" width="750" height="40" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="40" y="50" font-family="'Manrope', sans-serif" font-size="14" font-weight="700" fill="#0f172a">3 BHK PRIME — TYPE A WITH STUDY NOOK (1,010 SQ.FT. CARPET)</text>
+  <text x="750" y="50" font-family="'Inter', sans-serif" font-size="11" font-weight="600" fill="#64748b" text-anchor="end">SCALE: 1:100 | NTS</text>
+
+  <g transform="translate(730, 100)">
+    <circle cx="0" cy="0" r="16" fill="none" stroke="#94a3b8" stroke-width="1.5"/>
+    <polygon points="0,-14 4,0 0,-4" fill="#E85D3F"/>
+    <polygon points="0,-4 -4,0 0,-14" fill="#cbd5e1"/>
+    <text x="0" y="-18" font-family="'Manrope', sans-serif" font-size="10" font-weight="800" fill="#E85D3F" text-anchor="middle">N</text>
+  </g>
+
+  <rect x="70" y="85" width="620" height="435" fill="#f8fafc" stroke="#1e293b" stroke-width="4"/>
+
+  <rect x="70" y="85" width="280" height="260" fill="#ffffff" stroke="#334155" stroke-width="2"/>
+  <text x="210" y="180" font-family="'Manrope', sans-serif" font-size="13" font-weight="700" fill="#1e293b" text-anchor="middle">PRIME LIVING &amp; DINING</text>
+  <text x="210" y="200" font-family="'Inter', sans-serif" font-size="11" fill="#64748b" text-anchor="middle">23'0" × 13'6" (310 sq.ft.)</text>
+
+  <rect x="70" y="345" width="280" height="85" fill="#fef2f2" stroke="#334155" stroke-width="2"/>
+  <line x1="70" y1="430" x2="350" y2="430" stroke="#E85D3F" stroke-width="2" stroke-dasharray="4,4"/>
+  <text x="210" y="390" font-family="'Manrope', sans-serif" font-size="12" font-weight="700" fill="#b91c1c" text-anchor="middle">LANDSCAPED BALCONY</text>
+
+  <rect x="350" y="85" width="340" height="210" fill="#ffffff" stroke="#334155" stroke-width="2"/>
+  <text x="520" y="150" font-family="'Manrope', sans-serif" font-size="12" font-weight="700" fill="#1e293b" text-anchor="middle">MASTER SUITE + STUDY NOOK</text>
+  <text x="520" y="170" font-family="'Inter', sans-serif" font-size="10" fill="#64748b" text-anchor="middle">15'6" × 12'6"</text>
+
+  <rect x="350" y="295" width="140" height="110" fill="#f8fafc" stroke="#334155" stroke-width="2"/>
+  <text x="420" y="350" font-family="'Manrope', sans-serif" font-size="11" font-weight="700" fill="#1e293b" text-anchor="middle">M. BATH</text>
+
+  <rect x="490" y="295" width="200" height="225" fill="#ffffff" stroke="#334155" stroke-width="2"/>
+  <text x="590" y="380" font-family="'Manrope', sans-serif" font-size="11" font-weight="700" fill="#1e293b" text-anchor="middle">BEDROOM 2 (KIDS SUITE)</text>
+
+  <rect x="70" y="430" width="140" height="90" fill="#f8fafc" stroke="#334155" stroke-width="2"/>
+  <text x="140" y="475" font-family="'Manrope', sans-serif" font-size="11" font-weight="700" fill="#1e293b" text-anchor="middle">KITCHEN</text>
+
+  <rect x="210" y="430" width="140" height="90" fill="#ffffff" stroke="#334155" stroke-width="2"/>
+  <text x="280" y="475" font-family="'Manrope', sans-serif" font-size="11" font-weight="700" fill="#1e293b" text-anchor="middle">BEDROOM 3</text>
+
+  <rect x="350" y="405" width="140" height="115" fill="#f8fafc" stroke="#334155" stroke-width="2"/>
+  <text x="420" y="465" font-family="'Manrope', sans-serif" font-size="11" font-weight="700" fill="#1e293b" text-anchor="middle">BATH</text>
+
+  <g transform="translate(35, 545)">
+    <text x="0" y="0" font-family="'Manrope', sans-serif" font-size="11" font-weight="700" fill="#334155">CARPET AREA: 1,010 SQ.FT.</text>
+    <text x="190" y="0" font-family="'Inter', sans-serif" font-size="11" fill="#64748b">BUILT-UP AREA: 1,235 SQ.FT.</text>
+    <text x="380" y="0" font-family="'Inter', sans-serif" font-size="11" fill="#64748b">SUPER BUILT-UP: 1,515 SQ.FT.</text>
+    <text x="700" y="0" font-family="'Manrope', sans-serif" font-size="11" font-weight="800" fill="#0f172a" text-anchor="end">GREAT HOMES VERIFIED ARCHITECTURAL PLAN</text>
+  </g>
+</svg>

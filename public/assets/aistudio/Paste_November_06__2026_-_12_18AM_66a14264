@@ -1,0 +1,1048 @@
+# GREAT HOMES V2
+# COMPLETE RESALE + RENTAL ADMIN, LISTING LIFECYCLE & UNIFIED INVENTORY FORENSIC AUDIT
+
+**Audit Type:** Enterprise-Level Full-Stack Forensic Audit  
+**Operating Mode:** STRICTLY READ-ONLY — ZERO MUTATIONS  
+**Priority:** Critical  
+**Scope:** Resale + Rental Admin Architecture, Create/Edit Workflows, Lifecycle State Machines, Archive/Restore/Relist, Data Integrity, Media Management, Public Listing Visibility, Permissions, Audit History and Unified Property Inventory Readiness.
+
+---
+
+# 0. CRITICAL OPERATING INSTRUCTIONS — MUST FOLLOW
+
+You are auditing the existing Great Homes V2 application.
+
+This is an investigation of the actual current codebase and database architecture, not a redesign exercise based on assumptions.
+
+## 0.1 Strict read-only requirements
+
+During this audit:
+
+- DO NOT modify any source code.
+- DO NOT create, edit, rename, move or delete files.
+- DO NOT execute database migrations.
+- DO NOT execute SQL INSERT, UPDATE, DELETE, TRUNCATE, DROP or ALTER statements.
+- DO NOT modify existing database records.
+- DO NOT create test listings in the existing database.
+- DO NOT archive, restore, publish, unpublish or relist any actual listing.
+- DO NOT upload, replace, delete or modify R2 objects.
+- DO NOT modify environment variables or secrets.
+- DO NOT create or switch Neon branches.
+- DO NOT modify Git branches, commits, PRs or repository history.
+- DO NOT deploy or change Vercel configuration.
+- DO NOT modify existing public pages or admin interfaces.
+
+You may inspect code, schemas, migrations, existing tests, repository methods, services, API handlers, components and configuration.
+
+You may run non-mutating checks and existing tests only if they do not alter the database, files, external services or production state. Do not run tests that seed, reset or write to the existing Neon database.
+
+If a check could create or modify data, DO NOT execute it. Explain the limitation.
+
+**The existing Great Homes database and Cloudflare R2 storage contain valuable data. Their preservation is mandatory.**
+
+## 0.2 Ground-truth requirement
+
+Do not assume that Resale and Rental follow identical architectures.
+
+Inspect the actual implementation and establish:
+
+- What is shared?
+- What is separate?
+- What is duplicated?
+- What is inconsistent?
+- What is missing?
+- What can safely be reused?
+
+Every important finding must include the exact file path, function, component, schema field, API endpoint or query responsible.
+
+Where possible, include line numbers.
+
+Clearly distinguish:
+
+1. VERIFIED ISSUE — directly established from code.
+2. VERIFIED SAFE — directly established as correctly implemented.
+3. POTENTIAL ISSUE — suspicious or incomplete, requiring further validation.
+4. NOT IMPLEMENTED — required functionality does not exist.
+5. UNKNOWN — evidence is insufficient.
+
+Do not claim a feature works merely because a component or function exists. Trace the complete execution path.
+
+---
+
+# 1. AUDIT OBJECTIVE
+
+We are preparing a coordinated improvement of the Great Homes V2 property listing management system.
+
+The scope includes:
+
+A. Resale admin management  
+B. Rental admin management  
+C. Unified lifecycle governance  
+D. Archive, restore and relist functionality  
+E. Admin create/edit page reliability  
+F. Media, pricing and property data integrity  
+G. Public listing visibility and search consistency  
+H. Staff permissions and audit history  
+I. Future Owner/Partner property submission portal compatibility  
+J. Unified inventory architecture without duplicating listing systems.
+
+The objective is to identify every important gap before implementation.
+
+Do not implement anything during this audit.
+
+---
+
+# 2. RESALE ADMIN ARCHITECTURE — COMPLETE INVESTIGATION
+
+Start with the existing resale routes and discover the actual dependency tree.
+
+Previously identified routes include:
+
+- `app/admin/listings/resale/page.tsx`
+- `app/admin/listings/resale/new/page.tsx`
+- `app/admin/listings/resale/[id]/edit/page.tsx`
+- `app/admin/listings/resale/[id]/page.tsx`
+
+Previously identified APIs include:
+
+- `app/api/resale/route.ts`
+- `app/api/resale/[id]/route.ts`
+- `app/api/resale/[id]/status/route.ts`
+- `app/api/resale/[id]/media/route.ts`
+- `app/api/resale/[id]/media/[mediaId]/route.ts`
+- `app/api/resale/[id]/amenities/route.ts`
+
+Previously identified domain files include:
+
+- `src/domain/projects/services/resaleService.ts`
+- `src/domain/projects/repositories/resaleRepository.ts`
+
+These paths are starting references, not an exhaustive route inventory. Discover all additional dependencies.
+
+## 2.1 Trace the complete architecture
+
+For each resale operation, trace:
+
+Admin UI → Component → API → Authentication/Authorization → Service → Repository → Database → Response → UI update.
+
+Investigate:
+
+- Listing index and filters.
+- New listing form.
+- Edit listing form.
+- Listing detail and preview.
+- Media management.
+- Amenities management.
+- Pricing and area fields.
+- Project and location relationships.
+- Owner/partner information.
+- Verification controls.
+- Lifecycle status actions.
+- Archive and restore actions.
+- Public listing query and detail page.
+
+## 2.2 Create and edit form investigation
+
+Inspect whether:
+
+- Existing listing data loads completely.
+- All form fields are correctly pre-populated.
+- Null and optional values are handled safely.
+- Existing media is displayed correctly.
+- Removing one photo does not remove unrelated photos.
+- Adding new photos preserves existing media.
+- Amenities are loaded and saved correctly.
+- Pricing and area values retain their correct units and basis.
+- Project/location relationships remain intact.
+- Saving one section does not overwrite another section.
+- Partial updates are handled safely.
+- Validation is consistent between client and server.
+- A failed save leaves existing data unchanged.
+- Reopening an edit page reflects the latest saved values.
+- Concurrent edits can cause accidental overwrites.
+
+Identify any differences between the create form and edit form.
+
+## 2.3 Admin table and filters
+
+Inspect:
+
+- All lifecycle statuses.
+- Search by title, location, project and ID.
+- Source/attribution filters, if present.
+- Archived listing visibility.
+- Pagination and sorting.
+- Empty and loading states.
+- Stale data after status changes.
+- Whether counts and filters use consistent database queries.
+- Whether archived listings can be found and reopened.
+
+---
+
+# 3. RENTAL ADMIN ARCHITECTURE — COMPLETE INVESTIGATION
+
+Perform the same depth of investigation for Rental.
+
+First discover the actual routes. Do not assume they follow the resale route structure.
+
+Search the complete codebase for:
+
+- Rental admin index.
+- Rental create page.
+- Rental edit page.
+- Rental detail/preview page.
+- Rental API endpoints.
+- Rental service.
+- Rental repository.
+- Rental media endpoints.
+- Rental amenities endpoints.
+- Rental lifecycle/status endpoints.
+- Rental public discovery and detail queries.
+
+Report the exact discovered paths.
+
+## 3.1 Rental-specific form and data audit
+
+Inspect all rental-specific fields, including where applicable:
+
+- Monthly rent.
+- Security deposit.
+- Maintenance charges.
+- Brokerage.
+- Furnishing status.
+- Bedroom and bathroom configuration.
+- Carpet area and other area measurements.
+- Floor and total floors.
+- Availability date.
+- Lease duration.
+- Preferred tenant information.
+- Parking.
+- Amenities.
+- Property photographs.
+- Connected project and location.
+- Owner or listing partner information.
+- Contact and enquiry configuration.
+
+Do not assume all these fields exist. Mark each as implemented, missing, optional, conditionally required or unknown.
+
+Verify:
+
+- Create form saves all supported fields.
+- Edit form pre-populates all supported fields.
+- Numeric fields preserve values and units.
+- Optional fields can be cleared without corrupting records.
+- Rental-specific validation is correct.
+- Existing media is retained during edits.
+- Changing rent does not accidentally reset other information.
+- Rental records remain associated with the correct project and location.
+
+## 3.2 Rental-specific lifecycle audit
+
+Determine the actual lifecycle statuses and valid transitions.
+
+Investigate:
+
+- Draft.
+- Submitted.
+- Under review.
+- Approved.
+- Published.
+- Paused/unpublished.
+- Rented/leased.
+- Archived.
+- Restored/relisted.
+
+These are investigation targets, not assumptions about the current enum.
+
+Identify whether Rental has the same archive-to-relist defect as Resale or a different defect.
+
+Trace the actual code responsible for every transition.
+
+---
+
+# 4. LIFECYCLE STATE MACHINE — RESALE AND RENTAL COMPARISON
+
+This is one of the most important parts of the audit.
+
+Inspect the lifecycle state machine independently for Resale and Rental.
+
+For each listing type, produce:
+
+1. Complete list of lifecycle statuses.
+2. Allowed transitions.
+3. Forbidden transitions.
+4. Function responsible for transition validation.
+5. API endpoint responsible for executing transitions.
+6. UI action that triggers each transition.
+7. Permission required for each transition.
+8. Audit event generated.
+9. Database fields changed.
+10. Public visibility consequences.
+
+## 4.1 Resale archive-to-relist defect
+
+The previously shared resale audit identified this implementation:
+
+`VALID_LIFECYCLE_TRANSITIONS`:
+
+```ts
+ARCHIVED: []
+```
+
+The previous audit concluded that this prevents an archived listing from returning to an active state.
+
+Verify this finding against the current codebase.
+
+Do not assume the previous report remains accurate if code has changed.
+
+Trace the complete archive-to-relist execution path and verify:
+
+- Whether the listing remains available by ID.
+- Whether the edit form loads it.
+- Whether metadata updates are permitted.
+- Whether the status API rejects restoration.
+- Whether the UI exposes any restore action.
+- Whether the listing can be restored through any other existing path.
+- Whether the transition error is correctly surfaced to the administrator.
+
+## 4.2 Rental archive-to-relist investigation
+
+Perform the same investigation for Rental.
+
+Determine whether:
+
+- Archived rental listings can be restored.
+- The lifecycle map allows restoration.
+- The status API accepts the transition.
+- The admin UI has a restore action.
+- The public query correctly excludes archived records.
+- Restoring a rental listing preserves its original rental information.
+
+## 4.3 Recommend a safe lifecycle model
+
+Based on actual findings, propose a common lifecycle governance model where appropriate.
+
+Consider these conceptual statuses:
+
+`DRAFT → SUBMITTED → UNDER_REVIEW → APPROVED → PUBLISHED`
+
+Additional states may include:
+
+- PAUSED / UNPUBLISHED
+- SOLD (Resale)
+- RENTED / LEASED (Rental)
+- CHANGES_REQUESTED
+- ARCHIVED
+
+Important lifecycle principles:
+
+1. Archive must not mean permanent deletion.
+2. An archived listing must have an administrative recovery path.
+3. Restoring should normally return a listing to DRAFT or an appropriate review state.
+4. Restoration must not automatically bypass verification.
+5. Direct publication after restoration should require an explicitly justified, authorized workflow.
+6. Sold and rented states must follow their respective business rules.
+7. A terminal commercial state must not silently be treated as an archive.
+8. Every lifecycle transition must be traceable.
+9. Staff permissions must be enforced server-side.
+10. Public discovery must only expose eligible published listings.
+
+Do not prescribe identical transition rules if resale and rental business rules require differences.
+
+Provide a complete proposed transition matrix for both.
+
+---
+
+# 5. ARCHIVE, RESTORE, RELIST AND DATA PRESERVATION
+
+Investigate the full archive operation for both listing types.
+
+## 5.1 Archive operation
+
+Determine exactly what happens when an admin archives a listing:
+
+- Which database fields change?
+- Is lifecycle status changed?
+- Is an archived timestamp stored?
+- Is archive reason recorded?
+- Is the previous status retained?
+- Is the acting staff member recorded?
+- Is the archive action reversible?
+- Are media records retained?
+- Are amenity relationships retained?
+- Are enquiries retained?
+- Are CRM relationships retained?
+- Are project/location relationships retained?
+- Is the slug preserved?
+- Are historical timestamps preserved?
+- Is the record excluded from public discovery?
+
+Establish whether archive is truly a soft archive.
+
+## 5.2 Restore operation
+
+Determine whether a restore function already exists.
+
+If not, identify the exact services, API routes, database fields and admin components that would need to be introduced or extended.
+
+A proposed restore operation must preserve:
+
+- Listing ID.
+- Slug, where safe and valid.
+- Pricing.
+- Area and property configuration.
+- Project/location relationships.
+- Existing photographs and media references.
+- Amenities.
+- Owner/partner attribution.
+- Contact information.
+- Existing enquiries.
+- CRM records.
+- Historical records.
+- Original creation date.
+
+Do not propose recreating an archived listing as a new record.
+
+## 5.3 Relisting versus restoration
+
+Clearly distinguish:
+
+- Restore to Draft.
+- Return to Review.
+- Relist after verification.
+- Republish an eligible listing.
+- Resume a paused listing.
+- Reopen a previously sold/rented listing, if the business permits it.
+
+Recommend safe behavior for each.
+
+---
+
+# 6. MEDIA MANAGEMENT AND STORAGE INTEGRITY
+
+Inspect both Resale and Rental media architecture.
+
+The existing media architecture has important preservation rules.
+
+## 6.1 Existing media policy
+
+- Existing historical images must remain unchanged.
+- Do not re-watermark historical images.
+- Do not regenerate or replace historical image derivatives.
+- Do not rewrite historical image URLs.
+- Do not delete existing media objects.
+- Do not modify Cloudflare R2.
+- Do not use project photographs as if they were actual resale or rental unit photographs.
+
+The future eligible property-media pipeline uses a permanent public watermark and WebP derivative according to the existing media architecture.
+
+Developer/company logos are not to be watermarked. Brochure PDFs remain PDFs.
+
+Do not change this policy during the audit.
+
+## 6.2 Media investigation
+
+For both listing types, inspect:
+
+- Media schema.
+- Media repository.
+- Media upload API.
+- Media delete API.
+- Sort/order management.
+- Cover image selection.
+- Primary image behavior.
+- Gallery rendering.
+- Public URL generation.
+- R2 object-key relationships.
+- Listing-to-media foreign keys.
+- Orphan handling.
+- Duplicate references.
+- Media cleanup behavior.
+
+Determine whether archive/restore affects any media records or objects.
+
+Check whether editing a listing can accidentally detach, replace or delete media.
+
+Report whether resale and rental use the same media pipeline or separate implementations.
+
+Do not run cleanup or mutate storage.
+
+---
+
+# 7. PRICING, AREA AND PROPERTY DATA INTEGRITY
+
+Investigate resale and rental pricing separately.
+
+## 7.1 Resale
+
+Inspect:
+
+- Asking price.
+- Price per square foot.
+- Carpet area.
+- Built-up area.
+- Super built-up area.
+- Canonical area basis.
+- Derived effective price per square foot.
+- Numeric precision and rounding.
+- Currency formatting.
+- Missing and null values.
+
+Respect the existing canonical area architecture: carpet area is mandatory, with supported area-basis distinctions.
+
+Verify that calculations do not mix different area bases.
+
+## 7.2 Rental
+
+Inspect:
+
+- Monthly rent.
+- Security deposit.
+- Maintenance.
+- Brokerage.
+- Price display.
+- Rent per square foot, if implemented.
+- Area basis.
+- Numeric precision.
+- Null/zero behavior.
+
+Verify that editing a rental listing does not accidentally invoke resale pricing calculations.
+
+## 7.3 Cross-system integrity
+
+Investigate whether:
+
+- Shared property details are stored consistently.
+- Resale and rental records can refer to the same physical property where supported.
+- A resale record and rental record are accidentally duplicated or conflated.
+- Updating a project or location association affects unrelated listings.
+- Property-level data and listing-specific data are properly distinguished.
+
+Do not recommend a schema consolidation without examining the actual database design and migration implications.
+
+---
+
+# 8. ADMIN PERMISSIONS, AUTHENTICATION AND STAFF GOVERNANCE
+
+Inspect staff authentication and role-based access control.
+
+Existing Great Homes staff authentication uses email/password, distinct from customer OTP authentication.
+
+Investigate:
+
+- Super Admin.
+- Admin.
+- Sales Manager.
+- Sales Executive.
+- Telecaller.
+- Other roles actually defined in code.
+
+Do not assume every role has the same permissions.
+
+For both Resale and Rental, determine who can:
+
+- Create listings.
+- Edit listings.
+- Change pricing.
+- Manage media.
+- Verify information.
+- Approve listings.
+- Publish listings.
+- Pause/unpublish listings.
+- Archive listings.
+- Restore listings.
+- View sensitive owner/contact details.
+
+Check that all critical permissions are enforced in the server-side API/service layer, not only hidden in the UI.
+
+Check for:
+
+- Missing authentication checks.
+- Missing authorization checks.
+- Insecure direct object references.
+- Cross-listing access.
+- Unauthorized status changes.
+- Insufficient audit logging.
+
+Report any security issue with its precise code location and impact.
+
+---
+
+# 9. ADMIN AUDIT HISTORY AND ACCOUNTABILITY
+
+Investigate whether the application has a complete audit trail for listing operations.
+
+Check whether the following events are logged:
+
+- Listing created.
+- Listing edited.
+- Price changed.
+- Media added.
+- Media removed.
+- Verification completed.
+- Approval granted.
+- Publication.
+- Unpublication.
+- Pause.
+- Archive.
+- Restore.
+- Relist.
+- Sold.
+- Rented/leased.
+- Changes requested.
+- Owner/partner attribution changed.
+
+For each event determine:
+
+- Is there an audit record?
+- Is the actor recorded?
+- Is the timestamp recorded?
+- Is the listing ID recorded?
+- Is the previous state recorded?
+- Is the new state recorded?
+- Is a reason or note recorded?
+- Can staff see the history?
+
+Do not create audit records during this investigation.
+
+Recommend an audit-event structure if the current implementation is insufficient.
+
+---
+
+# 10. PUBLIC WEBSITE AND DISCOVERY CONSISTENCY
+
+Audit public discovery independently for Resale and Rental.
+
+Inspect:
+
+- Listing detail pages.
+- Search results.
+- Location pages.
+- Project-linked listings.
+- Similar listings.
+- Filters.
+- Search indexing.
+- Sitemap inclusion.
+- Metadata and canonical URLs.
+- Structured data, where applicable.
+- Cached responses and revalidation.
+- Listing status changes and stale public data.
+
+Verify:
+
+1. Only eligible PUBLISHED listings are publicly discoverable.
+2. DRAFT, SUBMITTED, UNDER_REVIEW and ARCHIVED listings are not exposed.
+3. PAUSED/unpublished listings are not publicly exposed.
+4. Sold/rented listings follow their intended visibility policy.
+5. An archived listing cannot be accessed through a public API simply by knowing its ID or slug.
+6. A restored listing does not become public until the appropriate approval and publishing conditions are satisfied.
+7. Public search, detail pages, APIs and sitemaps use consistent eligibility rules.
+
+Check whether the public listing pages and admin preview pages correctly distinguish between unpublished and published listings.
+
+---
+
+# 11. UNIFIED PROPERTY INVENTORY ARCHITECTURE
+
+This section is critical because Great Homes will support internal listings and external Owner/Partner submissions.
+
+We want one unified inventory architecture, not separate public listing engines.
+
+Investigate the current data model and establish how this can be achieved safely.
+
+## 11.1 Three listing sources
+
+The future platform will support:
+
+1. GREAT HOMES LISTED — created internally by authorized staff.
+2. OWNER LISTED — submitted by a property owner.
+3. PARTNER LISTED — submitted by a property agent/partner.
+
+All three must ultimately be managed in the same Great Homes resale/rental inventory and public discovery systems.
+
+Resale and Rental remain distinct listing types where their property fields and business rules differ.
+
+## 11.2 Owner and Partner submission requirements
+
+A future public submission portal will support:
+
+- Customer mobile OTP login through the existing 2Factor integration.
+- Property Owner account type.
+- Listing Partner / Agent account type.
+- Property submission.
+- Photo submission.
+- Asking price or rent.
+- Property details.
+- Submitter contact details.
+- My Listings dashboard.
+- Edit own submission.
+- Track review and publication status.
+
+The owner/partner must not be able to approve or publish their own listing.
+
+Great Homes staff retain control over verification, approval, publication, unpublication, archive and restore.
+
+## 11.3 Critical agent privacy rule
+
+For an agent/partner submission:
+
+- Store the agent's own verified contact details as the submitter/representative contact.
+- Do not require the actual property owner's phone number or email.
+- Do not expose the actual owner's private contact details to the partner portal.
+- The partner must attest that they have obtained the owner's authorization to market and submit the property.
+- This attestation must not be treated as independent proof of ownership or authorization.
+- Great Homes may conduct its own verification process.
+
+For an owner submission, the submitter's own contact details represent the owner contact.
+
+## 11.4 Attribution and traceability
+
+The system should distinguish:
+
+- Listing source.
+- Submitter account.
+- Actual property owner, where known.
+- Listing representative/agent, where applicable.
+- Great Homes reviewer.
+- Staff member who approved or published.
+- Staff member who last edited the listing.
+
+Proposed public attribution labels:
+
+- Owner Listed.
+- Partner Listed.
+- Great Homes Listed.
+
+Inspect whether the existing data model supports these distinctions.
+
+## 11.5 Submission and listing relationship
+
+Investigate whether an external submission can become an existing resale or rental listing without creating duplicate records.
+
+The future architecture should preserve:
+
+- Original submission ID.
+- Final listing ID.
+- Submitter identity.
+- Source attribution.
+- Submission history.
+- Admin review history.
+- Media relationships.
+- All relevant changes.
+
+An owner or partner editing their submission must not create a new unrelated property record each time.
+
+Proposed submission workflow for investigation:
+
+`DRAFT → SUBMITTED → UNDER_REVIEW → CHANGES_REQUESTED → APPROVED → PUBLISHED`
+
+Additional withdrawal and archive handling should be considered.
+
+The submitter must not directly control administrative lifecycle states.
+
+## 11.6 Unified admin inventory
+
+Investigate the feasibility of a common admin listing-management experience with:
+
+- Resale and Rental filters.
+- Great Homes Listed / Owner Listed / Partner Listed filters.
+- Draft, Submitted, Under Review, Approved, Published, Paused and Archived filters.
+- Review and verification workflow.
+- Source attribution.
+- Submission history.
+- Listing history.
+- Restore and relist actions.
+
+Do not assume a complete single table or schema redesign is necessary. Recommend the safest architecture after inspecting the actual implementation.
+
+---
+
+# 12. SHARED ARCHITECTURE AND DUPLICATION ANALYSIS
+
+Compare Resale and Rental at the following layers:
+
+| Layer | Resale | Rental | Shared or Separate? |
+|---|---|---|---|
+| Admin list page | Inspect | Inspect | Determine |
+| Create form | Inspect | Inspect | Determine |
+| Edit form | Inspect | Inspect | Determine |
+| Detail/preview | Inspect | Inspect | Determine |
+| API handlers | Inspect | Inspect | Determine |
+| Service layer | Inspect | Inspect | Determine |
+| Repository | Inspect | Inspect | Determine |
+| Database schema | Inspect | Inspect | Determine |
+| Lifecycle engine | Inspect | Inspect | Determine |
+| Media service | Inspect | Inspect | Determine |
+| Amenities | Inspect | Inspect | Determine |
+| Pricing logic | Inspect | Inspect | Determine |
+| Permissions | Inspect | Inspect | Determine |
+| Audit logging | Inspect | Inspect | Determine |
+| Public queries | Inspect | Inspect | Determine |
+
+Identify:
+
+- Duplicated code.
+- Divergent business rules.
+- Inconsistent validation.
+- Different archive behavior.
+- Different permission enforcement.
+- Different media behavior.
+- Different query filters.
+- Shared components that are safe to reuse.
+- Components that must remain listing-type-specific.
+
+Recommend a shared architecture only where it reduces duplication without erasing legitimate differences between Resale and Rental.
+
+---
+
+# 13. DATABASE SCHEMA AND MIGRATION IMPACT ASSESSMENT
+
+Inspect the actual PostgreSQL/Drizzle schema and relevant migrations.
+
+Identify:
+
+- Resale listing tables.
+- Rental listing tables.
+- Media tables.
+- Amenities tables.
+- Project relationships.
+- Location relationships.
+- Owner/partner fields.
+- Staff audit tables.
+- Lifecycle fields.
+- Submission-related tables, if present.
+- Foreign keys and indexes.
+- Unique constraints.
+- Relevant enums.
+
+For every recommended change, state:
+
+1. Is a schema change required?
+2. Is a migration required?
+3. Could existing records be affected?
+4. Could historical media references be affected?
+5. Is a backfill required?
+6. Can the change be implemented without data migration?
+7. What rollback strategy would be appropriate?
+
+Do not create or run any migration.
+
+Do not recommend dropping or recreating tables as a shortcut.
+
+---
+
+# 14. TEST COVERAGE AND FAILURE SCENARIOS
+
+Inspect existing automated tests for both Resale and Rental.
+
+Report the actual test files and what they cover.
+
+Evaluate whether tests cover:
+
+- Create listing.
+- Edit listing.
+- Partial update.
+- Missing optional fields.
+- Invalid numeric values.
+- Media preservation.
+- Amenities preservation.
+- Archive.
+- Restore.
+- Relist.
+- Publish.
+- Unpublish.
+- Invalid lifecycle transitions.
+- Authorization.
+- Cross-user access.
+- Public visibility.
+- Sold/rented states.
+- Source attribution.
+- Audit history.
+
+Recommend a test matrix for the eventual implementation.
+
+Do not execute any test that writes to Neon, R2 or external systems.
+
+Do not claim tests pass unless they were actually executed safely.
+
+---
+
+# 15. REQUIRED FINAL REPORT FORMAT
+
+Return one comprehensive report with the following sections.
+
+## A. Executive Summary
+
+- Overall health of Resale admin.
+- Overall health of Rental admin.
+- Most critical defects.
+- Data integrity risks.
+- Security risks.
+- Architectural duplication.
+- Readiness for unified Owner/Partner submission.
+
+## B. Actual Architecture Map
+
+Show the discovered routes, components, APIs, services, repositories and database tables for both Resale and Rental.
+
+Use actual file paths.
+
+## C. Resale Findings
+
+List each finding with:
+
+- Finding ID.
+- Severity.
+- Classification.
+- File path.
+- Function/component.
+- Exact behavior.
+- Business impact.
+- Evidence.
+- Recommended correction.
+
+## D. Rental Findings
+
+Use the same structure.
+
+## E. Lifecycle Comparison
+
+Provide separate actual state transition matrices for Resale and Rental.
+
+Identify every invalid or missing transition.
+
+## F. Archive/Restore/Relist Root Cause
+
+Explain the exact root cause for each listing type.
+
+Clearly state whether restoration is blocked by:
+
+- State machine.
+- API validation.
+- Service logic.
+- Repository query.
+- UI action.
+- Permission check.
+- Other cause.
+
+Do not simply recommend changing the lifecycle map without tracing the full path.
+
+## G. Data Preservation Report
+
+Confirm what remains intact after archive for both listing types.
+
+Identify any actual risks.
+
+## H. Media Integrity Report
+
+Explain how both listing types manage media and whether existing media is safe during archive, restore and edit.
+
+## I. Admin UX Findings
+
+Identify missing or inconsistent functionality in create, edit, list, detail, archive and restore interfaces.
+
+## J. Public Discovery and SEO
+
+Confirm visibility rules and identify inconsistencies.
+
+## K. Permissions and Audit Logging
+
+Report access-control and accountability gaps.
+
+## L. Unified Inventory Architecture Assessment
+
+Explain how Great Homes Listed, Owner Listed and Partner Listed can use one inventory system while retaining separate Resale and Rental business logic.
+
+Identify required schema and service changes, if any.
+
+## M. Recommended Target Architecture
+
+Show the proposed architecture and clearly separate:
+
+- Shared functionality.
+- Resale-specific functionality.
+- Rental-specific functionality.
+- Owner/Partner submission functionality.
+- Staff-only administration functionality.
+
+## N. Implementation Plan
+
+Organize proposed work into logical implementation groups:
+
+**Group 1 — Critical lifecycle and data-integrity fixes**
+
+**Group 2 — Resale admin improvements**
+
+**Group 3 — Rental admin improvements**
+
+**Group 4 — Shared inventory and lifecycle governance**
+
+**Group 5 — Owner/Partner submission readiness**
+
+**Group 6 — Audit logging, permissions and test coverage**
+
+For each group provide:
+
+- Files likely to change.
+- Database changes, if any.
+- Dependencies.
+- Risk level.
+- Testing requirements.
+- Rollback considerations.
+
+Do not implement the plan.
+
+## O. Acceptance Criteria
+
+Provide measurable criteria that must be satisfied before implementation can be accepted.
+
+## P. Unresolved Questions
+
+List only questions that cannot be answered from the codebase.
+
+Avoid asking questions already answered by this specification.
+
+---
+
+# 16. NON-NEGOTIABLE IMPLEMENTATION GUARDRAILS
+
+The following must be preserved during any future implementation:
+
+1. Existing production and development data must remain intact.
+2. No new Neon branch or database.
+3. No new R2 bucket.
+4. No destructive migration.
+5. No bulk listing rewrite.
+6. No historical image watermark regeneration.
+7. No replacement of existing historical image URLs.
+8. No deletion of existing enquiries or CRM relationships.
+9. No accidental duplication of listing records.
+10. No bypass of staff verification and approval.
+11. No customer/partner access to internal CRM or staff-only notes.
+12. No agent requirement to disclose actual owner contact information.
+13. No owner/partner ability to publish directly.
+14. No changes to production deployment during implementation without explicit approval.
+15. Resale and Rental must remain correctly differentiated.
+16. Great Homes Listed, Owner Listed and Partner Listed must be traceable through the complete listing lifecycle.
+
+---
+
+# 17. FINAL INSTRUCTION
+
+This is a forensic audit, not an implementation task.
+
+Do not start fixing the resale archive bug while investigating Rental.
+
+Do not implement isolated patches.
+
+Do not modify any code, schema, records, storage, environment or deployment.
+
+Inspect the complete Resale and Rental systems, compare their architecture, establish the actual root causes and provide a coordinated implementation proposal.
+
+If any area cannot be verified safely, mark it UNKNOWN and explain exactly what evidence is missing.
+
+**STOP after producing the complete forensic report.**
+
+Wait for explicit approval before making any changes.
+
+**Expected outcome:** One evidence-based, complete Resale + Rental forensic report that allows Great Homes V2 to move into a single coordinated implementation phase without unnecessary rewrites, data loss or duplicated architecture.

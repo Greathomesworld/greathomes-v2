@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" fill="none" class="gh-illustration gh-illustration-property-intelligence">
+  <rect width="240" height="180" rx="12" fill="#FAFAF8" class="gh-ill-bg" />
+  <circle cx="80" cy="65" r="35" fill="#E85D3F" fill-opacity="0.06" />
+  <path d="M20 150H220" stroke="#111111" stroke-width="1.75" stroke-linecap="round" stroke-opacity="0.15" />
+
+  <!-- Residential Structure with Metric Overlay -->
+  <path d="M45 150V85L85 52L125 85V150H45Z" fill="#FFFFFF" stroke="#111111" stroke-width="1.75" />
+  <rect x="62" y="95" width="18" height="18" rx="1.5" fill="#111111" fill-opacity="0.05" stroke="#111111" stroke-width="1.25" />
+  <rect x="90" y="95" width="18" height="18" rx="1.5" fill="#E85D3F" fill-opacity="0.12" stroke="#E85D3F" stroke-width="1.25" />
+
+  <!-- Structured Data Panel / Intelligence Card -->
+  <rect x="135" y="42" width="75" height="95" rx="3" fill="#FFFFFF" stroke="#111111" stroke-width="1.75" />
+  <rect x="145" y="54" width="28" height="8" rx="1" fill="#111111" />
+  
+  <!-- Metric Bars (Carpet Area, Pricing, Status) -->
+  <rect x="145" y="70" width="55" height="12" rx="2" fill="#FAFAF8" stroke="#111111" stroke-width="1" />
+  <rect x="147" y="72" width="35" height="8" rx="1" fill="#E85D3F" />
+
+  <rect x="145" y="88" width="55" height="12" rx="2" fill="#FAFAF8" stroke="#111111" stroke-width="1" />
+  <rect x="147" y="90" width="45" height="8" rx="1" fill="#218C5A" />
+
+  <rect x="145" y="106" width="55" height="12" rx="2" fill="#FAFAF8" stroke="#111111" stroke-width="1" />
+  <rect x="147" y="108" width="25" height="8" rx="1" fill="#111111" />
+
+  <!-- Rupee Symbol / Price Intelligence Vector -->
+  <circle cx="115" cy="50" r="13" fill="#FFFFFF" stroke="#E85D3F" stroke-width="1.75" />
+  <text x="115" y="55" font-family="var(--font-manrope), sans-serif" font-size="14" font-weight="700" fill="#E85D3F" text-anchor="middle">₹</text>
+</svg>

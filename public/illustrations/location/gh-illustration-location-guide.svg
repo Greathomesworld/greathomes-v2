@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" fill="none" class="gh-illustration gh-illustration-location-guide">
+  <rect width="240" height="180" rx="12" fill="#FAFAF8" class="gh-ill-bg" />
+  <circle cx="170" cy="55" r="30" fill="#E85D3F" fill-opacity="0.06" />
+  <path d="M20 150H220" stroke="#111111" stroke-width="1.75" stroke-linecap="round" stroke-opacity="0.15" />
+
+  <!-- Guidebook / Open Editorial Map Fold -->
+  <polygon points="45,45 85,35 125,45 125,140 85,130 45,140" fill="#FFFFFF" stroke="#111111" stroke-width="1.75" stroke-linejoin="round" />
+  <polygon points="125,45 165,35 200,45 200,140 165,130 125,140" fill="#FFFFFF" stroke="#111111" stroke-width="1.75" stroke-linejoin="round" />
+  <line x1="85" y1="35" x2="85" y2="130" stroke="#111111" stroke-width="1.25" stroke-dasharray="3 3" />
+  <line x1="165" y1="35" x2="165" y2="130" stroke="#111111" stroke-width="1.25" stroke-dasharray="3 3" />
+
+  <!-- Road & Transit Vectors on Guide Map -->
+  <path d="M55 75Q85 65 110 85T155 70" stroke="#111111" stroke-width="1.5" stroke-linecap="round" stroke-opacity="0.4" />
+  <circle cx="75" cy="72" r="3" fill="#111111" />
+  <circle cx="140" cy="78" r="3" fill="#111111" />
+
+  <!-- Location Pin on Highlighted Neighbourhood -->
+  <path d="M100 60C96 60 92 63.5 92 68C92 74 100 82 100 82C100 82 108 74 108 68C108 63.5 104 60 100 60Z" fill="#E85D3F" stroke="#FFFFFF" stroke-width="1.25" />
+  <circle cx="100" cy="67" r="2.5" fill="#FFFFFF" />
+
+  <!-- Compass Needle / Directional Indicator -->
+  <circle cx="178" cy="105" r="14" fill="#FFFFFF" stroke="#111111" stroke-width="1.5" />
+  <polygon points="178,96 182,105 178,103 174,105" fill="#E85D3F" />
+  <polygon points="178,114 182,105 178,107 174,105" fill="#111111" fill-opacity="0.3" />
+</svg>

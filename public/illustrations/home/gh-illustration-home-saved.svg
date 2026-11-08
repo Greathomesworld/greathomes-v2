@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" fill="none" class="gh-illustration gh-illustration-saved-home">
+  <rect width="240" height="180" rx="12" fill="#FAFAF8" class="gh-ill-bg" />
+  <circle cx="120" cy="85" r="54" fill="#E85D3F" fill-opacity="0.06" />
+
+  <!-- Architectural House Silhouette -->
+  <path d="M70 142V88L120 48L170 88V142H70Z" fill="#FFFFFF" stroke="#111111" stroke-width="1.75" stroke-linejoin="round" />
+  
+  <!-- Architectural Cutouts -->
+  <rect x="86" y="96" width="24" height="20" rx="2" fill="#111111" fill-opacity="0.05" stroke="#111111" stroke-width="1.5" />
+  <line x1="98" y1="96" x2="98" y2="116" stroke="#111111" stroke-width="1.25" />
+  <rect x="130" y="96" width="24" height="20" rx="2" fill="#111111" fill-opacity="0.05" stroke="#111111" stroke-width="1.5" />
+  <line x1="142" y1="96" x2="142" y2="116" stroke="#111111" stroke-width="1.25" />
+
+  <!-- Prominent Great Homes Bookmark Ribbon -->
+  <path d="M142 34V84L156 74L170 84V34H142Z" fill="#E85D3F" stroke="#E85D3F" stroke-width="1.75" stroke-linejoin="round" />
+
+  <!-- Ground & Ambient Details -->
+  <path d="M40 142H200" stroke="#111111" stroke-width="1.75" stroke-linecap="round" stroke-opacity="0.15" />
+  <circle cx="56" cy="110" r="3" fill="#E85D3F" fill-opacity="0.6" />
+  <circle cx="188" cy="120" r="2.5" fill="#111111" fill-opacity="0.3" />
+</svg>

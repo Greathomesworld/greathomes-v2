@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" fill="none" class="gh-illustration gh-illustration-project-discovery">
+  <rect width="240" height="180" rx="12" fill="#FAFAF8" class="gh-ill-bg" />
+  <circle cx="160" cy="55" r="36" fill="#E85D3F" fill-opacity="0.06" />
+  <path d="M20 150H220" stroke="#111111" stroke-width="1.75" stroke-linecap="round" stroke-opacity="0.15" />
+
+  <!-- Multiple Project Tower Models on Exhibition Plinth -->
+  <rect x="100" y="55" width="40" height="95" rx="2" fill="#FFFFFF" stroke="#111111" stroke-width="1.75" />
+  <rect x="108" y="65" width="10" height="8" rx="1" fill="#E85D3F" fill-opacity="0.15" stroke="#E85D3F" stroke-width="1" />
+  <rect x="122" y="65" width="10" height="8" rx="1" fill="#111111" fill-opacity="0.05" stroke="#111111" stroke-width="1" />
+  <rect x="108" y="80" width="10" height="8" rx="1" fill="#111111" fill-opacity="0.05" stroke="#111111" stroke-width="1" />
+  <rect x="122" y="80" width="10" height="8" rx="1" fill="#E85D3F" fill-opacity="0.15" stroke="#E85D3F" stroke-width="1" />
+  <rect x="108" y="95" width="10" height="8" rx="1" fill="#111111" fill-opacity="0.05" stroke="#111111" stroke-width="1" />
+  <rect x="122" y="95" width="10" height="8" rx="1" fill="#111111" fill-opacity="0.05" stroke="#111111" stroke-width="1" />
+
+  <rect x="145" y="70" width="50" height="80" rx="2" fill="#FFFFFF" stroke="#111111" stroke-width="1.5" />
+  <rect x="155" y="80" width="12" height="10" rx="1" fill="#111111" fill-opacity="0.05" />
+  <rect x="173" y="80" width="12" height="10" rx="1" fill="#111111" fill-opacity="0.05" />
+
+  <!-- Buyer Exploring / Observing with Magnifying Filter -->
+  <circle cx="58" cy="92" r="8" fill="#111111" />
+  <path d="M44 150V124C44 116 51 110 58 110C65 110 72 116 72 124V150" fill="#111111" stroke="#111111" stroke-width="1.75" />
+  
+  <!-- Binoculars / Lens of Inquiry -->
+  <circle cx="78" cy="100" r="9" fill="#FFFFFF" stroke="#E85D3F" stroke-width="1.75" />
+  <line x1="84" y1="107" x2="94" y2="117" stroke="#E85D3F" stroke-width="2" stroke-linecap="round" />
+</svg>

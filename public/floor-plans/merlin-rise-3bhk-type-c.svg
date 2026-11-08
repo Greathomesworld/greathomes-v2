@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="100%" height="100%">
+  <defs>
+    <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+      <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#f1f5f9" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="800" height="600" fill="#ffffff"/>
+  <rect width="800" height="600" fill="url(#grid)"/>
+
+  <rect x="20" y="20" width="760" height="560" fill="none" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="25" y="25" width="750" height="40" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="40" y="50" font-family="'Manrope', sans-serif" font-size="14" font-weight="700" fill="#0f172a">3 BHK GRANDE — TYPE C DUAL BALCONY (930 SQ.FT. CARPET)</text>
+  <text x="750" y="50" font-family="'Inter', sans-serif" font-size="11" font-weight="600" fill="#64748b" text-anchor="end">SCALE: 1:100 | NTS</text>
+
+  <g transform="translate(730, 100)">
+    <circle cx="0" cy="0" r="16" fill="none" stroke="#94a3b8" stroke-width="1.5"/>
+    <polygon points="0,-14 4,0 0,-4" fill="#E85D3F"/>
+    <polygon points="0,-4 -4,0 0,-14" fill="#cbd5e1"/>
+    <text x="0" y="-18" font-family="'Manrope', sans-serif" font-size="10" font-weight="800" fill="#E85D3F" text-anchor="middle">N</text>
+  </g>
+
+  <rect x="70" y="85" width="620" height="435" fill="#f8fafc" stroke="#1e293b" stroke-width="4"/>
+
+  <!-- Living & Dining -->
+  <rect x="70" y="85" width="300" height="250" fill="#ffffff" stroke="#334155" stroke-width="2"/>
+  <text x="220" y="180" font-family="'Manrope', sans-serif" font-size="13" font-weight="700" fill="#1e293b" text-anchor="middle">LIVING &amp; DINING</text>
+  <text x="220" y="200" font-family="'Inter', sans-serif" font-size="11" fill="#64748b" text-anchor="middle">22'6" × 13'0" (292 sq.ft.)</text>
+
+  <!-- Living Balcony -->
+  <rect x="70" y="335" width="300" height="90" fill="#fef2f2" stroke="#334155" stroke-width="2"/>
+  <line x1="70" y1="425" x2="370" y2="425" stroke="#E85D3F" stroke-width="2" stroke-dasharray="4,4"/>
+  <text x="220" y="380" font-family="'Manrope', sans-serif" font-size="12" font-weight="700" fill="#b91c1c" text-anchor="middle">LIVING SUNDECK</text>
+  <text x="220" y="400" font-family="'Inter', sans-serif" font-size="10" fill="#dc2626" text-anchor="middle">13'6" × 5'0"</text>
+
+  <!-- Master Suite with Private Balcony -->
+  <rect x="370" y="85" width="320" height="250" fill="#ffffff" stroke="#334155" stroke-width="2"/>
+  <text x="480" y="160" font-family="'Manrope', sans-serif" font-size="12" font-weight="700" fill="#1e293b" text-anchor="middle">MASTER BEDROOM</text>
+  <text x="480" y="180" font-family="'Inter', sans-serif" font-size="10" fill="#64748b" text-anchor="middle">14'6" × 12'6"</text>
+  <!-- Bedroom private deck -->
+  <rect x="580" y="85" width="110" height="150" fill="#fef2f2" stroke="#334155" stroke-width="2"/>
+  <text x="635" y="150" font-family="'Manrope', sans-serif" font-size="10" font-weight="700" fill="#b91c1c" text-anchor="middle">PVT DECK</text>
+
+  <!-- Attached Master Bath -->
+  <rect x="370" y="335" width="140" height="90" fill="#f8fafc" stroke="#334155" stroke-width="2"/>
+  <text x="440" y="380" font-family="'Manrope', sans-serif" font-size="11" font-weight="700" fill="#1e293b" text-anchor="middle">M. BATH</text>
+  <text x="440" y="400" font-family="'Inter', sans-serif" font-size="10" fill="#64748b" text-anchor="middle">8'6" × 5'0"</text>
+
+  <!-- Bedroom 2 -->
+  <rect x="510" y="335" width="180" height="185" fill="#ffffff" stroke="#334155" stroke-width="2"/>
+  <text x="600" y="415" font-family="'Manrope', sans-serif" font-size="11" font-weight="700" fill="#1e293b" text-anchor="middle">BEDROOM 2</text>
+  <text x="600" y="435" font-family="'Inter', sans-serif" font-size="10" fill="#64748b" text-anchor="middle">12'0" × 11'6"</text>
+
+  <!-- Kitchen & Bedroom 3 -->
+  <rect x="70" y="425" width="160" height="95" fill="#f8fafc" stroke="#334155" stroke-width="2"/>
+  <text x="150" y="475" font-family="'Manrope', sans-serif" font-size="11" font-weight="700" fill="#1e293b" text-anchor="middle">KITCHEN</text>
+
+  <rect x="230" y="425" width="140" height="95" fill="#ffffff" stroke="#334155" stroke-width="2"/>
+  <text x="300" y="475" font-family="'Manrope', sans-serif" font-size="11" font-weight="700" fill="#1e293b" text-anchor="middle">BEDROOM 3</text>
+
+  <rect x="370" y="425" width="140" height="95" fill="#f8fafc" stroke="#334155" stroke-width="2"/>
+  <text x="440" y="475" font-family="'Manrope', sans-serif" font-size="11" font-weight="700" fill="#1e293b" text-anchor="middle">BATH</text>
+
+  <g transform="translate(35, 545)">
+    <text x="0" y="0" font-family="'Manrope', sans-serif" font-size="11" font-weight="700" fill="#334155">CARPET AREA: 930 SQ.FT.</text>
+    <text x="180" y="0" font-family="'Inter', sans-serif" font-size="11" fill="#64748b">BUILT-UP AREA: 1,130 SQ.FT.</text>
+    <text x="360" y="0" font-family="'Inter', sans-serif" font-size="11" fill="#64748b">SUPER BUILT-UP: 1,390 SQ.FT.</text>
+    <text x="700" y="0" font-family="'Manrope', sans-serif" font-size="11" font-weight="800" fill="#0f172a" text-anchor="end">GREAT HOMES VERIFIED ARCHITECTURAL PLAN</text>
+  </g>
+</svg>

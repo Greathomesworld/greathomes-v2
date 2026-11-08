@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" fill="none" class="gh-illustration gh-illustration-market-insight">
+  <rect width="240" height="180" rx="12" fill="#FAFAF8" class="gh-ill-bg" />
+  <circle cx="160" cy="55" r="32" fill="#E85D3F" fill-opacity="0.06" />
+  <path d="M20 150H220" stroke="#111111" stroke-width="1.75" stroke-linecap="round" stroke-opacity="0.15" />
+
+  <!-- Market Trends Analytics Graph Board -->
+  <rect x="45" y="45" width="105" height="85" rx="3" fill="#FFFFFF" stroke="#111111" stroke-width="1.75" />
+  <line x1="60" y1="115" x2="135" y2="115" stroke="#111111" stroke-width="1.25" stroke-opacity="0.3" />
+  <line x1="60" y1="90" x2="135" y2="90" stroke="#111111" stroke-width="1.25" stroke-dasharray="2 2" stroke-opacity="0.2" />
+  <line x1="60" y1="65" x2="135" y2="65" stroke="#111111" stroke-width="1.25" stroke-dasharray="2 2" stroke-opacity="0.2" />
+
+  <!-- Rising Price Trendline (Terracotta Signature) -->
+  <path d="M60 110L80 95L100 102L135 60" stroke="#E85D3F" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" />
+  <circle cx="60" cy="110" r="3" fill="#E85D3F" />
+  <circle cx="80" cy="95" r="3" fill="#E85D3F" />
+  <circle cx="100" cy="102" r="3" fill="#E85D3F" />
+  <circle cx="135" cy="60" r="4" fill="#E85D3F" stroke="#FFFFFF" stroke-width="1.5" />
+
+  <!-- Growth Indicator Arrow -->
+  <polygon points="135,52 142,62 131,64" fill="#E85D3F" />
+
+  <!-- Urban Skyline Silhouette in Background -->
+  <rect x="165" y="75" width="30" height="65" rx="1" fill="#111111" fill-opacity="0.06" stroke="#111111" stroke-width="1.5" />
+  <rect x="172" y="85" width="6" height="8" rx="0.5" fill="#111111" fill-opacity="0.1" />
+  <rect x="172" y="100" width="6" height="8" rx="0.5" fill="#111111" fill-opacity="0.1" />
+</svg>

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" fill="none" class="gh-illustration gh-illustration-account">
+  <rect width="240" height="180" rx="12" fill="#FAFAF8" class="gh-ill-bg" />
+  <circle cx="120" cy="85" r="50" fill="#E85D3F" fill-opacity="0.06" />
+  <path d="M20 150H220" stroke="#111111" stroke-width="1.75" stroke-linecap="round" stroke-opacity="0.15" />
+
+  <!-- Customer Profile Silhouette / Card Frame -->
+  <rect x="80" y="45" width="80" height="95" rx="4" fill="#FFFFFF" stroke="#111111" stroke-width="1.75" />
+  
+  <!-- Profile Avatar Badge -->
+  <circle cx="120" cy="75" r="14" fill="#E85D3F" fill-opacity="0.12" stroke="#E85D3F" stroke-width="1.5" />
+  <circle cx="120" cy="72" r="5" fill="#E85D3F" />
+  <path d="M111 85C111 81 115 78 120 78C125 78 129 81 129 85" fill="#E85D3F" />
+
+  <!-- Profile Identity & Verified Check -->
+  <rect x="95" y="98" width="50" height="6" rx="1" fill="#111111" />
+  <rect x="105" y="110" width="30" height="4" rx="1" fill="#111111" fill-opacity="0.3" />
+
+  <!-- Small Ambient Home Outline -->
+  <path d="M42 145V110L62 95L82 110V145H42Z" fill="#FFFFFF" stroke="#111111" stroke-width="1.5" />
+  <rect x="54" y="120" width="12" height="10" rx="1" fill="#111111" fill-opacity="0.05" />
+
+  <!-- Verified Badge on Profile -->
+  <circle cx="148" cy="55" r="8" fill="#218C5A" stroke="#FFFFFF" stroke-width="1.5" />
+  <path d="M145 55L147 57L152 52" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+</svg>

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" fill="none" class="gh-illustration gh-illustration-developer-assistance">
+  <rect width="240" height="180" rx="12" fill="#FAFAF8" class="gh-ill-bg" />
+  <circle cx="180" cy="50" r="32" fill="#E85D3F" fill-opacity="0.06" />
+  <path d="M20 150H220" stroke="#111111" stroke-width="1.75" stroke-linecap="round" stroke-opacity="0.15" />
+
+  <!-- Developer Allotment Document / Deed -->
+  <rect x="135" y="45" width="55" height="72" rx="3" fill="#FFFFFF" stroke="#111111" stroke-width="1.75" />
+  <path d="M172 45L190 63H172V45Z" fill="#111111" fill-opacity="0.06" stroke="#111111" stroke-width="1.5" stroke-linejoin="round" />
+  <line x1="148" y1="62" x2="164" y2="62" stroke="#111111" stroke-width="1.5" stroke-linecap="round" />
+  <line x1="148" y1="74" x2="178" y2="74" stroke="#111111" stroke-width="1.25" stroke-linecap="round" />
+  <line x1="148" y1="84" x2="178" y2="84" stroke="#111111" stroke-width="1.25" stroke-linecap="round" />
+  <line x1="148" y1="94" x2="168" y2="94" stroke="#111111" stroke-width="1.25" stroke-linecap="round" />
+  
+  <!-- Stamp / Seal (Great Homes Terracotta) -->
+  <circle cx="170" cy="100" r="9" fill="#E85D3F" fill-opacity="0.15" stroke="#E85D3F" stroke-width="1.5" />
+  <path d="M166 100L169 103L175 97" stroke="#E85D3F" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+
+  <!-- Advisor & Buyer Across Consultation Table -->
+  <rect x="75" y="132" width="60" height="18" rx="2" fill="#FFFFFF" stroke="#111111" stroke-width="1.5" />
+
+  <!-- Advisor (Left) -->
+  <circle cx="58" cy="98" r="7.5" fill="#111111" />
+  <path d="M46 150V126C46 120 51 116 58 116C65 116 70 120 70 126V150" fill="#111111" stroke="#111111" stroke-width="1.5" />
+  <path d="M68 126L85 128" stroke="#111111" stroke-width="1.5" stroke-linecap="round" />
+
+  <!-- Buyer (Right) -->
+  <circle cx="115" cy="98" r="7.5" fill="#111111" />
+  <path d="M103 150V126C103 120 108 116 115 116C122 116 127 120 127 126V150" fill="#FFFFFF" stroke="#111111" stroke-width="1.5" />
+  <path d="M106 126L95 128" stroke="#111111" stroke-width="1.5" stroke-linecap="round" />
+</svg>

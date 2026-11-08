@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" fill="none" class="gh-illustration gh-illustration-site-visit">
+  <rect width="240" height="180" rx="12" fill="#FAFAF8" class="gh-ill-bg" />
+  <circle cx="65" cy="50" r="30" fill="#E85D3F" fill-opacity="0.06" />
+  <path d="M20 150H220" stroke="#111111" stroke-width="1.75" stroke-linecap="round" stroke-opacity="0.15" />
+
+  <!-- Site Visit Destination Building -->
+  <rect x="135" y="50" width="65" height="100" rx="3" fill="#FFFFFF" stroke="#111111" stroke-width="1.75" />
+  <rect x="147" y="62" width="16" height="14" rx="1" fill="#111111" fill-opacity="0.05" stroke="#111111" stroke-width="1.25" />
+  <rect x="171" y="62" width="16" height="14" rx="1" fill="#E85D3F" fill-opacity="0.15" stroke="#E85D3F" stroke-width="1.25" />
+  <rect x="147" y="86" width="16" height="14" rx="1" fill="#111111" fill-opacity="0.05" stroke="#111111" stroke-width="1.25" />
+  <rect x="171" y="86" width="16" height="14" rx="1" fill="#111111" fill-opacity="0.05" stroke="#111111" stroke-width="1.25" />
+  <rect x="158" y="118" width="18" height="32" rx="1" fill="#111111" />
+
+  <!-- Site Visit Schedule Calendar Accent -->
+  <rect x="42" y="42" width="46" height="42" rx="3" fill="#FFFFFF" stroke="#111111" stroke-width="1.75" />
+  <rect x="42" y="42" width="46" height="12" rx="2" fill="#E85D3F" />
+  <line x1="53" y1="36" x2="53" y2="44" stroke="#111111" stroke-width="2" stroke-linecap="round" />
+  <line x1="77" y1="36" x2="77" y2="44" stroke="#111111" stroke-width="2" stroke-linecap="round" />
+  <circle cx="56" cy="64" r="2.5" fill="#111111" />
+  <circle cx="65" cy="64" r="2.5" fill="#111111" />
+  <circle cx="74" cy="64" r="2.5" fill="#111111" />
+  <circle cx="56" cy="74" r="2.5" fill="#111111" />
+  <circle cx="65" cy="74" r="3" fill="#E85D3F" />
+  <circle cx="74" cy="74" r="2.5" fill="#218C5A" />
+
+  <!-- Buyer & Advisor Walking to Site -->
+  <circle cx="52" cy="112" r="6.5" fill="#111111" />
+  <path d="M42 150V130C42 124 47 121 52 121C57 121 62 124 62 130V150" fill="#111111" stroke="#111111" stroke-width="1.5" />
+  <circle cx="85" cy="108" r="7.5" fill="#111111" />
+  <path d="M72 150V126C72 119 78 115 85 115C92 115 98 119 98 126V150" fill="#FFFFFF" stroke="#111111" stroke-width="1.75" />
+  <!-- Guiding Arm -->
+  <path d="M92 128L115 120" stroke="#E85D3F" stroke-width="1.75" stroke-linecap="round" />
+  <polygon points="115,116 122,120 115,124" fill="#E85D3F" />
+</svg>

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" fill="none" class="gh-illustration gh-illustration-project-review">
+  <rect width="240" height="180" rx="12" fill="#FAFAF8" class="gh-ill-bg" />
+  <circle cx="165" cy="55" r="32" fill="#E85D3F" fill-opacity="0.06" />
+  <path d="M20 150H220" stroke="#111111" stroke-width="1.75" stroke-linecap="round" stroke-opacity="0.15" />
+
+  <!-- Architectural Tower Inspection -->
+  <rect x="50" y="50" width="55" height="100" rx="2" fill="#FFFFFF" stroke="#111111" stroke-width="1.75" />
+  <rect x="60" y="62" width="14" height="12" rx="1" fill="#111111" fill-opacity="0.05" />
+  <rect x="80" y="62" width="14" height="12" rx="1" fill="#111111" fill-opacity="0.05" />
+  <rect x="60" y="82" width="14" height="12" rx="1" fill="#111111" fill-opacity="0.05" />
+  <rect x="80" y="82" width="14" height="12" rx="1" fill="#111111" fill-opacity="0.05" />
+
+  <!-- Editorial Review Checklist / Inspection Tablet -->
+  <rect x="125" y="42" width="70" height="95" rx="3" fill="#FFFFFF" stroke="#111111" stroke-width="1.75" />
+  
+  <!-- Review Checklist Rows -->
+  <circle cx="140" cy="62" r="5" fill="#218C5A" />
+  <path d="M138 62L140 64L143 60" stroke="#FFFFFF" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" />
+  <line x1="152" y1="62" x2="182" y2="62" stroke="#111111" stroke-width="1.5" stroke-linecap="round" />
+
+  <circle cx="140" cy="80" r="5" fill="#218C5A" />
+  <path d="M138 80L140 82L143 78" stroke="#FFFFFF" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" />
+  <line x1="152" y1="80" x2="182" y2="80" stroke="#111111" stroke-width="1.5" stroke-linecap="round" />
+
+  <circle cx="140" cy="98" r="5" fill="#E85D3F" />
+  <path d="M138 98L140 100L143 96" stroke="#FFFFFF" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" />
+  <line x1="152" y1="98" x2="182" y2="98" stroke="#111111" stroke-width="1.5" stroke-linecap="round" />
+
+  <!-- Star Rating Accent -->
+  <polygon points="140,118 142,123 147,123 143,126 145,131 140,128 135,131 137,126 133,123 138,123" fill="#E85D3F" />
+  <polygon points="152,118 154,123 159,123 155,126 157,131 152,128 147,131 149,126 145,123 150,123" fill="#E85D3F" />
+  <polygon points="164,118 166,123 171,123 167,126 169,131 164,128 159,131 161,126 157,123 162,123" fill="#E85D3F" />
+</svg>

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" fill="none" class="gh-illustration gh-illustration-under-construction">
+  <rect width="240" height="180" rx="12" fill="#FAFAF8" class="gh-ill-bg" />
+  <circle cx="160" cy="50" r="30" fill="#E85D3F" fill-opacity="0.06" />
+  <path d="M20 150H220" stroke="#111111" stroke-width="1.75" stroke-linecap="round" stroke-opacity="0.15" />
+
+  <!-- Structure with Concrete Columns & Floor Slabs Under Construction -->
+  <rect x="55" y="70" width="70" height="80" rx="2" fill="#FFFFFF" stroke="#111111" stroke-width="1.75" />
+  <line x1="55" y1="95" x2="125" y2="95" stroke="#111111" stroke-width="1.5" />
+  <line x1="55" y1="120" x2="125" y2="120" stroke="#111111" stroke-width="1.5" />
+  <line x1="90" y1="70" x2="90" y2="150" stroke="#111111" stroke-width="1.5" />
+
+  <!-- Exposed Rebar / Concrete Framing Pillars on Top -->
+  <line x1="62" y1="50" x2="62" y2="70" stroke="#E85D3F" stroke-width="2" stroke-linecap="round" />
+  <line x1="88" y1="46" x2="88" y2="70" stroke="#E85D3F" stroke-width="2" stroke-linecap="round" />
+  <line x1="118" y1="52" x2="118" y2="70" stroke="#E85D3F" stroke-width="2" stroke-linecap="round" />
+
+  <!-- Scaffolding / Construction Grid Geometry -->
+  <path d="M140 40V150H175V40" stroke="#111111" stroke-width="1.5" />
+  <line x1="140" y1="65" x2="175" y2="65" stroke="#111111" stroke-width="1.25" />
+  <line x1="140" y1="90" x2="175" y2="90" stroke="#111111" stroke-width="1.25" />
+  <line x1="140" y1="115" x2="175" y2="115" stroke="#111111" stroke-width="1.25" />
+  <line x1="140" y1="40" x2="175" y2="65" stroke="#111111" stroke-width="1.25" stroke-dasharray="2 2" />
+  <line x1="140" y1="65" x2="175" y2="90" stroke="#111111" stroke-width="1.25" stroke-dasharray="2 2" />
+  <line x1="140" y1="90" x2="175" y2="115" stroke="#111111" stroke-width="1.25" stroke-dasharray="2 2" />
+
+  <!-- Milestone Flag / Quality Measure -->
+  <path d="M175 40L195 48L175 56" fill="#E85D3F" stroke="#E85D3F" stroke-width="1.5" stroke-linejoin="round" />
+</svg>

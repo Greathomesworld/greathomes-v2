@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" fill="none" class="gh-illustration gh-illustration-no-brokerage">
+  <rect width="240" height="180" rx="12" fill="#FAFAF8" class="gh-ill-bg" />
+  <circle cx="120" cy="85" r="50" fill="#218C5A" fill-opacity="0.06" />
+  <path d="M20 150H220" stroke="#111111" stroke-width="1.75" stroke-linecap="round" stroke-opacity="0.15" />
+
+  <!-- Shield of Trust with Zero Fee Guarantee -->
+  <path d="M120 40C145 40 165 48 165 65C165 105 135 128 120 135C105 128 75 105 75 65C75 48 95 40 120 40Z" fill="#FFFFFF" stroke="#111111" stroke-width="2" stroke-linejoin="round" />
+  
+  <!-- Inner Badge (0% Brokerage Highlight) -->
+  <circle cx="120" cy="82" r="26" fill="#218C5A" fill-opacity="0.1" stroke="#218C5A" stroke-width="1.75" />
+  
+  <!-- "0%" Bold Mathematical Geometry -->
+  <text x="120" y="89" font-family="var(--font-manrope), sans-serif" font-size="20" font-weight="700" fill="#218C5A" text-anchor="middle" dominant-baseline="middle">0%</text>
+
+  <!-- Developer Direct Key & Handshake Accent -->
+  <path d="M45 130L65 130M55 120L55 140" stroke="#E85D3F" stroke-width="1.5" stroke-linecap="round" />
+  <path d="M185 130L195 130" stroke="#218C5A" stroke-width="2" stroke-linecap="round" />
+  <circle cx="190" cy="120" r="3" fill="#218C5A" />
+</svg>

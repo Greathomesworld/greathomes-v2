@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" fill="none" class="gh-illustration gh-illustration-rera">
+  <rect width="240" height="180" rx="12" fill="#FAFAF8" class="gh-ill-bg" />
+  <circle cx="155" cy="90" r="45" fill="#218C5A" fill-opacity="0.06" />
+  <path d="M20 150H220" stroke="#111111" stroke-width="1.75" stroke-linecap="round" stroke-opacity="0.15" />
+
+  <!-- Background Verified Project Structure -->
+  <rect x="40" y="55" width="55" height="95" rx="2" fill="#FFFFFF" stroke="#111111" stroke-width="1.5" />
+  <rect x="50" y="68" width="14" height="12" rx="1" fill="#111111" fill-opacity="0.05" />
+  <rect x="70" y="68" width="14" height="12" rx="1" fill="#111111" fill-opacity="0.05" />
+  <rect x="50" y="88" width="14" height="12" rx="1" fill="#111111" fill-opacity="0.05" />
+  <rect x="70" y="88" width="14" height="12" rx="1" fill="#111111" fill-opacity="0.05" />
+
+  <!-- Official RERA Regulatory Certificate Document -->
+  <rect x="105" y="35" width="80" height="105" rx="4" fill="#FFFFFF" stroke="#111111" stroke-width="2" />
+  <rect x="115" y="48" width="35" height="8" rx="1" fill="#111111" />
+  <line x1="115" y1="65" x2="175" y2="65" stroke="#111111" stroke-width="1.5" stroke-linecap="round" />
+  <line x1="115" y1="75" x2="175" y2="75" stroke="#111111" stroke-width="1.5" stroke-linecap="round" />
+  <line x1="115" y1="85" x2="155" y2="85" stroke="#111111" stroke-width="1.5" stroke-linecap="round" />
+
+  <!-- Prominent Green RERA Verification Badge with Shield & Checkmark -->
+  <circle cx="150" cy="115" r="18" fill="#218C5A" stroke="#FFFFFF" stroke-width="2" />
+  <path d="M142 115L147 120L158 109" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+
+  <!-- Seal Ribbon Detail -->
+  <path d="M144 133L144 145L150 140L156 145L156 133" fill="#218C5A" stroke="#218C5A" stroke-width="1.25" stroke-linejoin="round" />
+</svg>

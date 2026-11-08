@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" fill="none" class="gh-illustration gh-illustration-buy-resale">
+  <rect width="240" height="180" rx="12" fill="#FAFAF8" class="gh-ill-bg" />
+  <circle cx="70" cy="55" r="30" fill="#E85D3F" fill-opacity="0.08" />
+  <path d="M20 150H220" stroke="#111111" stroke-width="1.75" stroke-linecap="round" stroke-opacity="0.15" />
+  
+  <!-- Modern Resale Home / Villa Structure -->
+  <path d="M40 150V90L85 55L130 90V150H40Z" fill="#FFFFFF" stroke="#111111" stroke-width="1.75" stroke-linejoin="round" />
+  <path d="M85 55L130 90H170L135 55H85Z" fill="#111111" fill-opacity="0.04" stroke="#111111" stroke-width="1.75" stroke-linejoin="round" />
+  <path d="M130 90V150H170V90" fill="#FFFFFF" stroke="#111111" stroke-width="1.75" stroke-linejoin="round" />
+  
+  <!-- Windows & Modern Door -->
+  <rect x="58" y="95" width="22" height="20" rx="2" fill="#111111" fill-opacity="0.05" stroke="#111111" stroke-width="1.5" />
+  <line x1="69" y1="95" x2="69" y2="115" stroke="#111111" stroke-width="1.25" />
+  <line x1="58" y1="105" x2="80" y2="105" stroke="#111111" stroke-width="1.25" />
+  <rect x="96" y="112" width="18" height="38" rx="1" fill="#111111" />
+
+  <!-- Owner Handover Key & Ring (Terracotta Accent) -->
+  <circle cx="165" cy="55" r="14" fill="#FFFFFF" stroke="#E85D3F" stroke-width="2" />
+  <circle cx="165" cy="55" r="6" fill="#E85D3F" fill-opacity="0.15" stroke="#E85D3F" stroke-width="1.5" />
+  <path d="M179 55H208V63H202V55H196V61H190V55H179" stroke="#E85D3F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+
+  <!-- Buyer Silhouette (Editorial Minimal) -->
+  <circle cx="188" cy="108" r="7" fill="#111111" />
+  <path d="M176 150V130C176 123 181 119 188 119C195 119 200 123 200 130V150" fill="#111111" stroke="#111111" stroke-width="1.5" stroke-linejoin="round" />
+  <path d="M176 130L168 138" stroke="#111111" stroke-width="1.5" stroke-linecap="round" />
+</svg>
