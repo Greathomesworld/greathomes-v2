@@ -52,14 +52,94 @@ export interface ImageTransformOptions {
   quality?: number;
 }
 
-const HIGH_DETAIL_CATEGORIES = [
+export interface CompressionProfile {
+  quality: number;
+  effort: number;
+  smartSubsample: boolean;
+  alphaQuality?: number;
+  lossless?: boolean;
+}
+
+export const FLOOR_PLAN_CATEGORIES = [
   'FLOOR_PLANS',
   'FLOOR_PLAN',
   'MASTER_PLAN',
+] as const;
+
+export const LOCATION_MAP_CATEGORIES = [
   'LOCATION',
   'LOCATION_MAP',
   'CONNECTIVITY_MAP',
-];
+] as const;
+
+export const HERO_CATEGORIES = [
+  'HERO',
+  'HOMEPAGE_HERO',
+  'BANNER',
+  'FEATURED',
+] as const;
+
+/**
+ * Resolves the canonical, server-enforced compression profile for each media category.
+ * Approved in Great Homes V2 Phase 4A/4B.
+ */
+export function getCompressionProfileForCategory(
+  category: string,
+  isLogo: boolean = false
+): CompressionProfile {
+  const normCat = (category || 'OTHER').toUpperCase().trim();
+
+  const isLogoCategory =
+    isLogo ||
+    normCat === 'LOGO' ||
+    normCat.endsWith('_LOGO') ||
+    normCat === 'BRAND';
+
+  // Raster Developer Logos & Identity Assets: Q90, Effort 6, alphaQuality: 100, Lossy
+  if (isLogoCategory) {
+    return {
+      quality: 90,
+      effort: 6,
+      smartSubsample: true,
+      alphaQuality: 100,
+      lossless: false,
+    };
+  }
+
+  // Location Maps & Connectivity Guides: Q85, Effort 6, smartSubsample: true
+  if ((LOCATION_MAP_CATEGORIES as readonly string[]).includes(normCat)) {
+    return {
+      quality: 85,
+      effort: 6,
+      smartSubsample: true,
+    };
+  }
+
+  // Architectural Floor Plans & CAD Layouts: Q82, Effort 6, smartSubsample: true
+  if ((FLOOR_PLAN_CATEGORIES as readonly string[]).includes(normCat)) {
+    return {
+      quality: 82,
+      effort: 6,
+      smartSubsample: true,
+    };
+  }
+
+  // Homepage Hero & Major Elevation Visuals: Q82, Effort 6, smartSubsample: true
+  if ((HERO_CATEGORIES as readonly string[]).includes(normCat)) {
+    return {
+      quality: 82,
+      effort: 6,
+      smartSubsample: true,
+    };
+  }
+
+  // Standard Property Photographs (Exterior, Interior, Amenities, Resale/Rental Photos): Q78, Effort 6, smartSubsample: true
+  return {
+    quality: 78,
+    effort: 6,
+    smartSubsample: true,
+  };
+}
 
 /**
  * Checks whether an existing media asset is a single-derivative watermarked WebP asset
@@ -236,8 +316,12 @@ export class MediaProcessingService {
         throw new Error('Media validation failed: Logo dimensions are invalid.');
       }
 
-      const isLogo = normalizedCategory === 'LOGO' || normalizedCategory.endsWith('_LOGO');
+      const isLogo =
+        normalizedCategory === 'LOGO' ||
+        normalizedCategory.endsWith('_LOGO') ||
+        normalizedCategory === 'BRAND';
       const maxDim = isLogo ? 1600 : 2560;
+      const logoProfile = getCompressionProfileForCategory(normalizedCategory, true);
 
       const cleanLogoBuffer = await sharp(buffer)
         .rotate()
@@ -248,10 +332,11 @@ export class MediaProcessingService {
           withoutEnlargement: true,
         })
         .webp({
-          quality: 95,
-          alphaQuality: 100,
-          lossless: isLogo,
-          effort: 4,
+          quality: logoProfile.quality,
+          alphaQuality: logoProfile.alphaQuality ?? 100,
+          lossless: false,
+          effort: logoProfile.effort,
+          smartSubsample: logoProfile.smartSubsample,
         })
         .toBuffer();
 
@@ -323,8 +408,7 @@ export class MediaProcessingService {
     const finalWidth = masterMeta.width || rawWidth;
     const finalHeight = masterMeta.height || rawHeight;
 
-    const isHighDetail = HIGH_DETAIL_CATEGORIES.includes(normalizedCategory);
-    const webpQuality = isHighDetail ? 92 : 85;
+    const compressionProfile = getCompressionProfileForCategory(normalizedCategory, false);
 
     // Enforce mandatory watermark regardless of client watermarkOptions.mode
     const mustWatermark = isMandatoryWatermarkCategory(
@@ -347,7 +431,9 @@ export class MediaProcessingService {
       {
         ...watermarkOptions,
         mode: 'ON',
-        quality: webpQuality,
+        quality: compressionProfile.quality,
+        effort: compressionProfile.effort,
+        smartSubsample: compressionProfile.smartSubsample,
       }
     );
 
@@ -399,7 +485,7 @@ export class MediaProcessingService {
       });
     }
 
-    const quality = options.quality || 82;
+    const quality = options.quality || 78;
     switch (options.format) {
       case 'avif':
         pipeline = pipeline.avif({ quality, effort: 4 });
@@ -412,7 +498,7 @@ export class MediaProcessingService {
         break;
       case 'webp':
       default:
-        pipeline = pipeline.webp({ quality, effort: 4 });
+        pipeline = pipeline.webp({ quality, effort: 6, smartSubsample: true });
         break;
     }
 

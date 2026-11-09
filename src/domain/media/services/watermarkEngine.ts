@@ -361,7 +361,11 @@ export class WatermarkEngine {
   async applyWatermark(
     imageBuffer: Buffer,
     outputFormat: 'webp' | 'avif' | 'jpeg' = 'webp',
-    options?: WatermarkOptions & { quality?: number }
+    options?: WatermarkOptions & {
+      quality?: number;
+      effort?: number;
+      smartSubsample?: boolean;
+    }
   ): Promise<Buffer> {
     const config: Required<WatermarkOptions> = {
       ...DEFAULT_WATERMARK_CONFIG,
@@ -401,9 +405,15 @@ export class WatermarkEngine {
     ]);
 
     const quality = options?.quality;
+    const effort = options?.effort ?? 6;
+    const smartSubsample = options?.smartSubsample ?? true;
 
     if (outputFormat === 'webp') {
-      pipeline = pipeline.webp({ quality: quality ?? 85, effort: 4 });
+      pipeline = pipeline.webp({
+        quality: quality ?? 78,
+        effort,
+        smartSubsample,
+      });
     } else if (outputFormat === 'avif') {
       pipeline = pipeline.avif({ quality: quality ?? 80, effort: 4 });
     } else {

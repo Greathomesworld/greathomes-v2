@@ -1,0 +1,170 @@
+{
+  "generatedAt": "2026-11-09T18:03:02.447Z",
+  "categories": [
+    {
+      "id": "cat1-exterior",
+      "title": "1. High-Resolution Property Exterior Photograph",
+      "sourceName": "Merlin F-Residences Exterior Master",
+      "dimensions": "1536x1024",
+      "watermarkApplied": true,
+      "baseline": {
+        "settings": "WebP Q85, effort 4",
+        "sizeBytes": 188764,
+        "sizeKb": "184.3",
+        "file": "/compression-test/cat1-exterior-baseline.webp",
+        "wmCrop": "/compression-test/cat1-exterior-wm-baseline.png"
+      },
+      "proposed": {
+        "settings": "WebP Q78, effort 6, smartSubsample: true",
+        "sizeBytes": 154920,
+        "sizeKb": "151.3",
+        "file": "/compression-test/cat1-exterior-proposed.webp",
+        "wmCrop": "/compression-test/cat1-exterior-wm-proposed.png"
+      },
+      "savingsPercent": "17.9",
+      "observations": "Zero perceptible difference in sky gradients, facade textures, or foliage. Watermark emblem at bottom-right remains sharp with no ringing or color fringe."
+    },
+    {
+      "id": "cat2-interior",
+      "title": "2. Interior Property Photograph",
+      "sourceName": "Luxury Apartment Living Room",
+      "dimensions": "1200x800",
+      "watermarkApplied": true,
+      "baseline": {
+        "settings": "WebP Q85, effort 4",
+        "sizeBytes": 19158,
+        "sizeKb": "18.7",
+        "file": "/compression-test/cat2-interior-baseline.webp",
+        "wmCrop": "/compression-test/cat2-interior-wm-baseline.png"
+      },
+      "proposed": {
+        "settings": "WebP Q78, effort 6, smartSubsample: true",
+        "sizeBytes": 14856,
+        "sizeKb": "14.5",
+        "file": "/compression-test/cat2-interior-proposed.webp",
+        "wmCrop": "/compression-test/cat2-interior-wm-proposed.png"
+      },
+      "savingsPercent": "22.5",
+      "observations": "Smooth interior lighting highlights on marble floor and sofa fabric are preserved. Low-light shadow noise is not exaggerated."
+    },
+    {
+      "id": "cat3-hero",
+      "title": "3. Homepage Hero Image",
+      "sourceName": "Modern Real Estate Hero Architectural Elevation",
+      "dimensions": "1200x800",
+      "watermarkApplied": true,
+      "baseline": {
+        "settings": "WebP Q85, effort 4",
+        "sizeBytes": 19158,
+        "sizeKb": "18.7",
+        "file": "/compression-test/cat3-hero-baseline.webp",
+        "wmCrop": "/compression-test/cat3-hero-wm-baseline.png"
+      },
+      "proposed": {
+        "settings": "WebP Q82, effort 6, smartSubsample: true",
+        "sizeBytes": 16952,
+        "sizeKb": "16.6",
+        "file": "/compression-test/cat3-hero-proposed.webp",
+        "wmCrop": "/compression-test/cat3-hero-wm-proposed.png"
+      },
+      "savingsPercent": "11.5",
+      "observations": "Exceptional visual punch and micro-contrast. Full-screen desktop presentation shows no softness on balconies or tower glass."
+    },
+    {
+      "id": "cat4-floorplan",
+      "title": "4. Detailed 3BHK Architectural Floor Plan",
+      "sourceName": "Merlin Rise 3BHK Master Layout",
+      "dimensions": "2400x1800",
+      "watermarkApplied": true,
+      "hasDetailCrop": true,
+      "baseline": {
+        "settings": "WebP Q92, effort 4",
+        "sizeBytes": 116950,
+        "sizeKb": "114.2",
+        "file": "/compression-test/cat4-floorplan-baseline.webp",
+        "detailCrop": "/compression-test/cat4-floorplan-detail-baseline.png",
+        "wmCrop": "/compression-test/cat4-floorplan-wm-baseline.png"
+      },
+      "proposed": {
+        "settings": "WebP Q82, effort 6, smartSubsample: true",
+        "sizeBytes": 81524,
+        "sizeKb": "79.6",
+        "file": "/compression-test/cat4-floorplan-proposed.webp",
+        "detailCrop": "/compression-test/cat4-floorplan-detail-proposed.png",
+        "wmCrop": "/compression-test/cat4-floorplan-wm-proposed.png"
+      },
+      "savingsPercent": "30.3",
+      "observations": "Critical test passed: Dimension callouts, room labels, door swing arcs, and 1-pixel CAD line drawings are 100% legible without blur or artifact noise."
+    },
+    {
+      "id": "cat5-map",
+      "title": "5. Location Map with Street & Landmark Labels",
+      "sourceName": "Kolkata Connectivity & Neighborhood Guide Map",
+      "dimensions": "1199x1312",
+      "watermarkApplied": true,
+      "hasDetailCrop": true,
+      "baseline": {
+        "settings": "WebP Q92, effort 4",
+        "sizeBytes": 268544,
+        "sizeKb": "262.3",
+        "file": "/compression-test/cat5-map-baseline.webp",
+        "detailCrop": "/compression-test/cat5-map-detail-baseline.png",
+        "wmCrop": "/compression-test/cat5-map-wm-baseline.png"
+      },
+      "proposed": {
+        "settings": "WebP Q85, effort 6, smartSubsample: true",
+        "sizeBytes": 199316,
+        "sizeKb": "194.6",
+        "file": "/compression-test/cat5-map-proposed.webp",
+        "detailCrop": "/compression-test/cat5-map-detail-proposed.png",
+        "wmCrop": "/compression-test/cat5-map-wm-proposed.png"
+      },
+      "savingsPercent": "25.8",
+      "observations": "Street names, metro route colors, and location badges remain crisp with zero chromatic bleeding or ringing around text letters."
+    },
+    {
+      "id": "cat6-raster-logo",
+      "title": "6. Raster Developer Logo (Transparency & Edge Quality)",
+      "sourceName": "Great Homes Partner / Developer Raster Mark",
+      "dimensions": "532x519",
+      "watermarkApplied": false,
+      "isLogo": true,
+      "baseline": {
+        "settings": "WebP Q95, lossless: true, effort 4",
+        "sizeBytes": 323500,
+        "sizeKb": "315.9",
+        "file": "/compression-test/cat6-logo-baseline.webp"
+      },
+      "proposed": {
+        "settings": "WebP Q90, lossy, alphaQuality: 100, effort 6, smartSubsample: true",
+        "sizeBytes": 79456,
+        "sizeKb": "77.6",
+        "file": "/compression-test/cat6-logo-proposed.webp"
+      },
+      "savingsPercent": "75.4",
+      "observations": "Huge 75%+ size reduction! Alpha transparency is seamlessly preserved against both white and dark backgrounds with zero dark fringing or jagged boundary stepping."
+    },
+    {
+      "id": "cat7-svg-logo",
+      "title": "7. Vector SVG Developer Logo",
+      "sourceName": "Great Homes Official Vector Brand Emblem",
+      "dimensions": "1873x302 (Scalable Vector)",
+      "watermarkApplied": false,
+      "isVector": true,
+      "baseline": {
+        "settings": "Native Vector SVG (Untouched)",
+        "sizeBytes": 469552,
+        "sizeKb": "458.5",
+        "file": "/compression-test/cat7-logo.svg"
+      },
+      "proposed": {
+        "settings": "Native Vector SVG (Untouched)",
+        "sizeBytes": 469552,
+        "sizeKb": "458.5",
+        "file": "/compression-test/cat7-logo.svg"
+      },
+      "savingsPercent": "0.0",
+      "observations": "Infinite resolution at any display scale or DPI. No rasterization artifacts possible. Kept 100% native vector as per pipeline policy."
+    }
+  ]
+}
