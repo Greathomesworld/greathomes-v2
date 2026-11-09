@@ -106,9 +106,6 @@ export default function (phase) {
         ],
       },
     },
-    eslint: {
-      ignoreDuringBuilds: true,
-    },
     transpilePackages: ['motion'],
   };
 

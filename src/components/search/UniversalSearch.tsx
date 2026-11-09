@@ -522,13 +522,13 @@ export function UniversalSearch({
             {/* Empty State */}
             {query && !hasSuggestions && !loading && (
               <div className="p-6 text-center text-neutral-500">
-                <p className="text-sm">No exact suggestions found for "{query}".</p>
+                <p className="text-sm">No exact suggestions found for &quot;{query}&quot;.</p>
                 <button
                   type="button"
                   onClick={handleSearchSubmit}
                   className="mt-3 inline-flex items-center space-x-2 text-xs font-semibold text-white bg-[#E85D3F] px-4 py-2 rounded-lg hover:bg-[#D44E32] transition-colors cursor-pointer"
                 >
-                  <span>Search all results for "{query}"</span>
+                  <span>Search all results for &quot;{query}&quot;</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>

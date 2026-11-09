@@ -15,11 +15,23 @@ import {
 
 const BASE_URL = 'https://greathomes.co.in';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 86400; // Cache for 24 hours
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  if (!getDb()) {
-    await ensureSeedData();
-  }
   const now = new Date();
+  let hasDb = false;
+  try {
+    const db = getDb();
+    if (db) {
+      hasDb = true;
+    } else {
+      await ensureSeedData();
+    }
+  } catch {
+    // If DATABASE_URL is not provided (e.g. during offline build prerendering), safe static fallback will be used
+    hasDb = false;
+  }
 
   const staticRoutes: MetadataRoute.Sitemap = [
     {

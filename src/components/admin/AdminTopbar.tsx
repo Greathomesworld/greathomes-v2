@@ -12,7 +12,17 @@ export function AdminTopbar({ onOpenMobileMenu }: AdminTopbarProps) {
   const router = useRouter();
   const { role, displayName, logout } = useAdminAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const roleLabels: Record<StaffRole, string> = { SUPER_ADMIN: 'Super Admin', ADMIN: 'Operations Admin', CONTENT_MANAGER: 'Content Manager', PROPERTY_MANAGER: 'Property Manager', SALES: 'Sales Specialist', ANALYST: 'Intelligence Analyst' };
+  const roleLabels: Record<StaffRole, string> = {
+    SUPER_ADMIN: 'Super Admin',
+    ADMIN: 'Operations Admin',
+    SALES_MANAGER: 'Sales Manager',
+    SALES_EXECUTIVE: 'Sales Executive',
+    TELECALLER: 'Telecaller',
+    CONTENT_MANAGER: 'Content Manager',
+    PROPERTY_MANAGER: 'Property Manager',
+    SALES: 'Sales Specialist',
+    ANALYST: 'Intelligence Analyst',
+  };
   const handleLogout = () => { setShowUserMenu(false); logout(); router.replace('/admin/login'); router.refresh(); };
   return (
     <header className="h-16 bg-white border-b border-neutral-200/80 px-4 md:px-6 flex items-center justify-between shrink-0 sticky top-0 z-30 shadow-2xs">

@@ -4,6 +4,7 @@ import { marketIntelligenceService } from '@/src/domain/marketIntelligence/servi
 import { Breadcrumbs } from '@/src/components/navigation/Breadcrumbs';
 import { LocationsDirectoryClient } from '@/src/components/locations/LocationsDirectoryClient';
 
+export const dynamic = 'force-dynamic';
 export const revalidate = 300;
 
 export const metadata: Metadata = {

@@ -15,7 +15,7 @@ export default function NotFound() {
             404 — Page Not Found
           </h1>
           <p className="text-sm text-neutral-600 font-body leading-relaxed">
-            The property page or link you are looking for doesn't exist or may have been moved.
+            The property page or link you are looking for doesn&apos;t exist or may have been moved.
           </p>
         </div>
 

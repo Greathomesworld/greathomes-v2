@@ -312,7 +312,7 @@ export function LocationMapPicker({
           ))}
         </select>
         <p className="text-xs text-neutral-500 font-body mt-1">
-          Mandatory for standalone marketplace residences. Binds the listing to Kolkata's canonical location hierarchy.
+          Mandatory for standalone marketplace residences. Binds the listing to Kolkata&apos;s canonical location hierarchy.
         </p>
       </div>
 

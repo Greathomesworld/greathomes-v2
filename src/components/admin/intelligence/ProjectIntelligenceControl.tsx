@@ -315,7 +315,7 @@ export function ProjectIntelligenceControl({ projectId, project, onRefresh }: Pr
                 </h4>
               </div>
               <p className="text-xs text-neutral-500 mt-0.5">
-                Authored points appended to the "Why Consider" section.
+                Authored points appended to the &quot;Why Consider&quot; section.
               </p>
             </div>
             <button
@@ -420,7 +420,7 @@ export function ProjectIntelligenceControl({ projectId, project, onRefresh }: Pr
                 </h4>
               </div>
               <p className="text-xs text-neutral-500 mt-0.5">
-                Authored considerations appended to the "Things to Keep in Mind" section.
+                Authored considerations appended to the &quot;Things to Keep in Mind&quot; section.
               </p>
             </div>
             <button

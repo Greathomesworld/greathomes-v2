@@ -1,4 +1,4 @@
-import type { StaffRole } from '../domain/auth/roles';
+import { ALLOWED_STAFF_ROLES, type StaffRole } from '../domain/auth/roles';
 import { getRoleCapabilities, type StaffCapability, type StaffSessionContext } from '../domain/auth/capabilityModel';
 
 const LEGACY_ROLE_KEY = 'gh_staff_role';
@@ -8,7 +8,7 @@ const LEGACY_TOKEN_KEY = 'gh_staff_token';
 export function getStoredStaffRole(): StaffRole | null {
   if (typeof window === 'undefined') return null;
   const value = localStorage.getItem(LEGACY_ROLE_KEY);
-  return value && ['SUPER_ADMIN', 'ADMIN', 'CONTENT_MANAGER', 'PROPERTY_MANAGER', 'SALES', 'ANALYST'].includes(value) ? value as StaffRole : null;
+  return value && ALLOWED_STAFF_ROLES.includes(value as StaffRole) ? value as StaffRole : null;
 }
 export function getStoredStaffToken(): string | null { return null; }
 export function setStaffSession(_role: StaffRole): void {
@@ -26,6 +26,9 @@ export function getAdminHeaders(): HeadersInit { return { 'Content-Type': 'appli
 const ROLE_NAMES: Record<StaffRole, string> = {
   SUPER_ADMIN: 'Super Administrator',
   ADMIN: 'Operations Admin',
+  SALES_MANAGER: 'Sales Manager',
+  SALES_EXECUTIVE: 'Sales Executive',
+  TELECALLER: 'Telecaller',
   CONTENT_MANAGER: 'Content Manager',
   PROPERTY_MANAGER: 'Property Manager',
   SALES: 'Sales Specialist',

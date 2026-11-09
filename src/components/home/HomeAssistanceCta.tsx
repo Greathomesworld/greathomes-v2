@@ -81,7 +81,7 @@ export function HomeAssistanceCta() {
 
               {/* Supporting Copy */}
               <p className="text-sm sm:text-base lg:text-lg text-neutral-300 font-body leading-relaxed max-w-xl">
-                Tell us what you're looking for. Our property advisors will help
+                Tell us what you&apos;re looking for. Our property advisors will help
                 you evaluate, compare, and visit the right homes across Kolkata
                 — with zero buyer brokerage on new developer bookings.
               </p>
