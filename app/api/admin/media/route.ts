@@ -7,6 +7,7 @@ import { resaleListingRepository } from '@/src/domain/projects/repositories/resa
 import { rentalListingRepository } from '@/src/domain/projects/repositories/rentalRepository';
 import { ensureSeedData } from '@/src/infrastructure/seed';
 import { extractRequestContext, withCorrelationHeaders } from '@/src/lib/requestContext';
+import { normalizeMediaPublicUrl, normalizeMediaAssetUrls } from '@/src/lib/mediaUtils';
 
 export async function GET(req: NextRequest) {
   const reqContext = extractRequestContext(req);
@@ -65,6 +66,7 @@ export async function GET(req: NextRequest) {
 
         for (const m of mediaList) {
           const proj = projMap.get(m.projectId);
+          const normalizedUrl = normalizeMediaPublicUrl(m.url) || m.url;
           legacyItems.push({
             id: m.id,
             mediaId: m.mediaId || null,
@@ -74,15 +76,15 @@ export async function GET(req: NextRequest) {
             entitySlug: proj?.slug || '',
             mediaType: m.mediaType,
             category: m.category,
-            url: m.url,
-            originalUrl: m.url,
-            thumbnailUrl: m.url,
-            webpUrl: m.url,
+            url: normalizedUrl,
+            originalUrl: normalizedUrl,
+            thumbnailUrl: normalizedUrl,
+            webpUrl: normalizedUrl,
             altText: m.altText || null,
             caption: m.caption || null,
             sortOrder: m.sortOrder,
             isFeatured: m.isFeatured,
-            watermarkApplied: m.url?.endsWith('public_wm.webp') || false,
+            watermarkApplied: normalizedUrl?.endsWith('public_wm.webp') || false,
             processingStatus: 'READY',
             createdAt: m.createdAt,
             updatedAt: m.updatedAt,
@@ -103,6 +105,7 @@ export async function GET(req: NextRequest) {
 
         for (const m of mediaList) {
           const dev = devMap.get(m.developerId);
+          const normalizedUrl = normalizeMediaPublicUrl(m.url) || m.url;
           legacyItems.push({
             id: m.id,
             entityType: 'DEVELOPER',
@@ -111,10 +114,10 @@ export async function GET(req: NextRequest) {
             entitySlug: dev?.slug || '',
             mediaType: m.mediaType,
             category: m.category,
-            url: m.url,
-            originalUrl: m.url,
-            thumbnailUrl: m.url,
-            webpUrl: m.url,
+            url: normalizedUrl,
+            originalUrl: normalizedUrl,
+            thumbnailUrl: normalizedUrl,
+            webpUrl: normalizedUrl,
             altText: null,
             caption: null,
             sortOrder: m.sortOrder,
@@ -136,6 +139,7 @@ export async function GET(req: NextRequest) {
         for (const r of targetListings) {
           const media = await resaleListingRepository.findMediaByListingId(r.id);
           for (const m of media) {
+            const normalizedUrl = normalizeMediaPublicUrl(m.url) || m.url;
             legacyItems.push({
               id: m.id,
               entityType: 'RESALE',
@@ -144,15 +148,15 @@ export async function GET(req: NextRequest) {
               entitySlug: r.slug || r.id,
               mediaType: m.mediaType,
               category: m.category,
-              url: m.url,
-              originalUrl: m.url,
-              thumbnailUrl: m.url,
-              webpUrl: m.url,
+              url: normalizedUrl,
+              originalUrl: normalizedUrl,
+              thumbnailUrl: normalizedUrl,
+              webpUrl: normalizedUrl,
               altText: m.altText || null,
               caption: m.caption || null,
               sortOrder: m.sortOrder,
               isFeatured: m.isFeatured,
-              watermarkApplied: m.url?.endsWith('public_wm.webp') || false,
+              watermarkApplied: normalizedUrl?.endsWith('public_wm.webp') || false,
               processingStatus: 'READY',
               createdAt: m.createdAt,
               updatedAt: m.updatedAt,
@@ -170,6 +174,7 @@ export async function GET(req: NextRequest) {
         for (const r of targetListings) {
           const media = await rentalListingRepository.findMediaByListingId(r.id);
           for (const m of media) {
+            const normalizedUrl = normalizeMediaPublicUrl(m.url) || m.url;
             legacyItems.push({
               id: m.id,
               entityType: 'RENTAL',
@@ -178,15 +183,15 @@ export async function GET(req: NextRequest) {
               entitySlug: r.slug || r.id,
               mediaType: m.mediaType,
               category: m.category,
-              url: m.url,
-              originalUrl: m.url,
-              thumbnailUrl: m.url,
-              webpUrl: m.url,
+              url: normalizedUrl,
+              originalUrl: normalizedUrl,
+              thumbnailUrl: normalizedUrl,
+              webpUrl: normalizedUrl,
               altText: m.altText || null,
               caption: m.caption || null,
               sortOrder: m.sortOrder,
               isFeatured: m.isFeatured,
-              watermarkApplied: m.url?.endsWith('public_wm.webp') || false,
+              watermarkApplied: normalizedUrl?.endsWith('public_wm.webp') || false,
               processingStatus: 'READY',
               createdAt: m.createdAt,
               updatedAt: m.updatedAt,
@@ -255,7 +260,9 @@ export async function GET(req: NextRequest) {
     const boundedLimit = Math.min(Math.max(1, limit), 100);
     const total = mergedList.length;
     const startIndex = (page - 1) * boundedLimit;
-    const paginatedItems = mergedList.slice(startIndex, startIndex + boundedLimit);
+    const paginatedItems = mergedList
+      .slice(startIndex, startIndex + boundedLimit)
+      .map((item) => normalizeMediaAssetUrls(item));
 
     const response = NextResponse.json({
       success: true,

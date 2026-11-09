@@ -873,7 +873,11 @@ export class ProjectIntelligenceService {
     if (!project) {
       throw new NotFoundError(`Project with id '${projectId}' not found`);
     }
-    return await this.mediaRepository.findByProjectId(projectId);
+    const items = await this.mediaRepository.findByProjectId(projectId);
+    return items.map((m) => ({
+      ...m,
+      url: normalizeMediaPublicUrl(m.url) || m.url,
+    }));
   }
 
   /**

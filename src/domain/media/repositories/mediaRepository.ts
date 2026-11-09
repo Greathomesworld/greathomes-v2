@@ -16,6 +16,7 @@ import {
   TEST_DB_FILE,
   TEST_ENTITY_MEDIA_FILE,
 } from '@/src/lib/testIsolationContext';
+import { normalizeMediaPublicUrl, normalizeMediaAssetUrls } from '@/src/lib/mediaUtils';
 
 export interface MediaAsset {
   id: string;
@@ -88,7 +89,24 @@ if (!globalForMedia.__ghMediaAssets) {
   globalForMedia.__ghMediaAssets = new Map<string, MediaAsset>();
 }
 
-function mapRowToMediaAsset(row: typeof mediaAssets.$inferSelect): MediaAsset {
+export function mapRowToMediaAsset(row: typeof mediaAssets.$inferSelect): MediaAsset {
+  const rawVariants = (row.variants as unknown as MediaVariantSet) || undefined;
+  const normalizedVariants = rawVariants
+    ? {
+        ...rawVariants,
+        original: normalizeMediaPublicUrl(rawVariants.original) || rawVariants.original,
+        webp: normalizeMediaPublicUrl(rawVariants.webp) || rawVariants.webp,
+        avif: rawVariants.avif
+          ? normalizeMediaPublicUrl(rawVariants.avif) || rawVariants.avif
+          : undefined,
+        thumbnail: normalizeMediaPublicUrl(rawVariants.thumbnail) || rawVariants.thumbnail,
+        watermarkedWebp: rawVariants.watermarkedWebp
+          ? normalizeMediaPublicUrl(rawVariants.watermarkedWebp) || rawVariants.watermarkedWebp
+          : undefined,
+        publicUrl: normalizeMediaPublicUrl(rawVariants.publicUrl) || rawVariants.publicUrl,
+      }
+    : undefined;
+
   return {
     id: row.id,
     entityType: (row.entityType as MediaAsset['entityType']) || 'PROJECT',
@@ -102,23 +120,30 @@ function mapRowToMediaAsset(row: typeof mediaAssets.$inferSelect): MediaAsset {
     fileSizeBytes: row.fileSizeBytes,
     storageProvider: (row.storageProvider as 'local' | 's3') || 'local',
     storageKey: row.storageKey,
-    url: row.url,
-    originalUrl: row.originalUrl,
-    thumbnailUrl: row.thumbnailUrl || undefined,
-    webpUrl: row.webpUrl || undefined,
-    avifUrl: row.avifUrl || undefined,
-    watermarkedUrl: row.watermarkedUrl || undefined,
+    url: normalizeMediaPublicUrl(row.url) || row.url,
+    originalUrl: normalizeMediaPublicUrl(row.originalUrl) || row.originalUrl,
+    thumbnailUrl: row.thumbnailUrl
+      ? normalizeMediaPublicUrl(row.thumbnailUrl) || row.thumbnailUrl
+      : undefined,
+    webpUrl: row.webpUrl ? normalizeMediaPublicUrl(row.webpUrl) || row.webpUrl : undefined,
+    avifUrl: row.avifUrl ? normalizeMediaPublicUrl(row.avifUrl) || row.avifUrl : undefined,
+    watermarkedUrl: row.watermarkedUrl
+      ? normalizeMediaPublicUrl(row.watermarkedUrl) || row.watermarkedUrl
+      : undefined,
     watermarkApplied: row.watermarkApplied,
     altText: row.altText,
     caption: row.caption,
     sortOrder: row.sortOrder,
     isFeatured: row.isFeatured,
     processingStatus: (row.processingStatus as MediaAsset['processingStatus']) || 'READY',
-    variants: (row.variants as unknown as MediaVariantSet) || undefined,
+    variants: normalizedVariants,
     createdAt: row.createdAt ? row.createdAt.toISOString() : new Date().toISOString(),
     updatedAt: row.updatedAt ? row.updatedAt.toISOString() : new Date().toISOString(),
   };
 }
+
+export const mapRowToAsset = mapRowToMediaAsset;
+
 
 export class MediaRepository {
   private get store(): Map<string, MediaAsset> {
@@ -217,7 +242,8 @@ export class MediaRepository {
         console.error('[MediaRepository] Postgres findById error:', err);
       }
     }
-    return this.store.get(id) || null;
+    const mem = this.store.get(id);
+    return mem ? normalizeMediaAssetUrls(mem) : null;
   }
 
   async update(id: string, updates: Partial<MediaAsset>): Promise<MediaAsset | null> {
@@ -423,7 +449,7 @@ export class MediaRepository {
 
     const total = all.length;
     const start = (page - 1) * limit;
-    const items = all.slice(start, start + limit);
+    const items = all.slice(start, start + limit).map((item) => normalizeMediaAssetUrls(item));
 
     return { items, total, page, limit };
   }

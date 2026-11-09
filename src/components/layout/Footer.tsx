@@ -165,7 +165,7 @@ export function Footer() {
             </span>
             <span>· Verified Kolkata Residential Property Discovery</span>
           </div>
-          <p>© {currentYear} Great Homes. All rights reserved.</p>
+          <p suppressHydrationWarning>© {currentYear} Great Homes. All rights reserved.</p>
         </div>
       </div>
     </footer>

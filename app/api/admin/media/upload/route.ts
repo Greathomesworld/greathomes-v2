@@ -12,6 +12,7 @@ import { getStorageProvider } from '@/src/domain/media/storage/storageProvider';
 import { auditService } from '@/src/domain/audit/auditService';
 import { extractRequestContext, withCorrelationHeaders } from '@/src/lib/requestContext';
 import { isTestIsolationActive } from '@/src/lib/testIsolationContext';
+import { normalizeMediaAssetUrls } from '@/src/lib/mediaUtils';
 
 export async function POST(req: NextRequest) {
   const reqContext = extractRequestContext(req);
@@ -651,22 +652,36 @@ export async function POST(req: NextRequest) {
       }
     );
 
+    const normalizedSaved = normalizeMediaAssetUrls(saved);
+    const normalizedProjectMedia = createdProjectMedia
+      ? normalizeMediaAssetUrls(createdProjectMedia)
+      : createdProjectMedia;
+    const normalizedDeveloperMedia = createdDeveloperMedia
+      ? normalizeMediaAssetUrls(createdDeveloperMedia)
+      : createdDeveloperMedia;
+    const normalizedResaleMedia = createdResaleMedia
+      ? normalizeMediaAssetUrls(createdResaleMedia)
+      : createdResaleMedia;
+    const normalizedRentalMedia = createdRentalMedia
+      ? normalizeMediaAssetUrls(createdRentalMedia)
+      : createdRentalMedia;
+
     const response = NextResponse.json(
       {
         success: true,
         data: {
-          ...saved,
-          projectMedia: createdProjectMedia,
-          developerMedia: createdDeveloperMedia,
-          resaleMedia: createdResaleMedia,
-          rentalMedia: createdRentalMedia,
+          ...normalizedSaved,
+          projectMedia: normalizedProjectMedia,
+          developerMedia: normalizedDeveloperMedia,
+          resaleMedia: normalizedResaleMedia,
+          rentalMedia: normalizedRentalMedia,
           configuration: updatedConfiguration,
         },
-        media: saved,
-        projectMedia: createdProjectMedia,
-        developerMedia: createdDeveloperMedia,
-        resaleMedia: createdResaleMedia,
-        rentalMedia: createdRentalMedia,
+        media: normalizedSaved,
+        projectMedia: normalizedProjectMedia,
+        developerMedia: normalizedDeveloperMedia,
+        resaleMedia: normalizedResaleMedia,
+        rentalMedia: normalizedRentalMedia,
         configuration: updatedConfiguration,
       },
       { status: 201 }

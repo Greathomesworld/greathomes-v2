@@ -21,6 +21,7 @@ import {
   CoordinateSource,
   ProjectLocationStatus,
 } from "../viewModels/projectLocationViewModel";
+import { normalizeMediaPublicUrl } from "@/src/lib/mediaUtils";
 
 export interface BoundedDeveloperDto {
   id: string;
@@ -473,7 +474,7 @@ export function toPublicProjectDto(
         configurationId: m.configurationId,
         mediaType: m.mediaType,
         category: m.category,
-        url: m.url,
+        url: normalizeMediaPublicUrl(m.url) || m.url,
         altText: m.altText,
         caption: m.caption,
         sortOrder: m.sortOrder,
@@ -572,7 +573,7 @@ export function toPublicProjectDto(
       configurationId: m.configurationId,
       mediaType: m.mediaType,
       category: m.category,
-      url: m.url,
+      url: normalizeMediaPublicUrl(m.url) || m.url,
       altText: m.altText,
       caption: m.caption,
       sortOrder: m.sortOrder,

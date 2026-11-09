@@ -282,6 +282,7 @@ export function UniversalSearch({
         role="combobox"
         aria-expanded={isDropdownOpen}
         aria-haspopup="listbox"
+        aria-controls={listboxId}
         aria-owns={listboxId}
         className="relative bg-white rounded-2xl shadow-md border border-neutral-200/90 p-2.5 sm:p-3 lg:p-3.5 transition-all focus-within:ring-2 focus-within:ring-[#E85D3F]/60 focus-within:border-[#E85D3F]"
       >

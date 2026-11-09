@@ -114,14 +114,12 @@ export default function RootLayout({
   };
 
   return (
-    <html lang="en" className={`${fjallaOne.variable} ${plusJakartaSans.variable} ${inter.variable}`}>
-      <head>
+    <html lang="en" className={`${fjallaOne.variable} ${plusJakartaSans.variable} ${inter.variable}`} suppressHydrationWarning>
+      <body className="flex min-h-screen flex-col bg-background text-foreground font-body antialiased" suppressHydrationWarning>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
-      </head>
-      <body className="flex min-h-screen flex-col bg-background text-foreground font-body antialiased">
         <VisitorTelemetryProvider>
           <EnquiryProvider>
             <CustomerAuthProvider>

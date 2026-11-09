@@ -8,6 +8,7 @@ import {
   GetObjectCommand,
 } from '@aws-sdk/client-s3';
 import { isTestIsolationActive, TEST_STORAGE_DIR, ensureTestSandboxDir } from '@/src/lib/testIsolationContext';
+import { getActiveMediaPublicBaseUrl, normalizeMediaPublicUrl } from '@/src/lib/mediaUtils';
 
 export interface StoragePutOptions {
   contentType: string;
@@ -147,16 +148,41 @@ export class S3StorageProvider implements StorageProvider {
   private publicBaseUrl: string;
 
   constructor() {
-    const endpoint = process.env.S3_ENDPOINT || process.env.R2_ENDPOINT || '';
-    const region = process.env.S3_REGION || 'auto';
-    const accessKeyId = process.env.S3_ACCESS_KEY_ID || process.env.R2_ACCESS_KEY_ID || '';
-    const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY || process.env.R2_SECRET_ACCESS_KEY || '';
-    this.bucket = process.env.S3_BUCKET || process.env.R2_BUCKET || 'greathomes-media';
-    this.publicBaseUrl = (process.env.MEDIA_PUBLIC_BASE_URL || process.env.S3_PUBLIC_URL || '').replace(/\/+$/, '');
+    const endpoint = (process.env.S3_ENDPOINT || process.env.R2_ENDPOINT || '').trim();
+    const region = (process.env.S3_REGION || 'auto').trim();
+    const accessKeyId = (process.env.S3_ACCESS_KEY_ID || process.env.R2_ACCESS_KEY_ID || '').trim();
+    const secretAccessKey = (
+      process.env.S3_SECRET_ACCESS_KEY ||
+      process.env.R2_SECRET_ACCESS_KEY ||
+      ''
+    ).trim();
+    const bucket = (process.env.S3_BUCKET || process.env.R2_BUCKET || '').trim();
+
+    const missing: string[] = [];
+    if (!endpoint) missing.push('S3_ENDPOINT (or R2_ENDPOINT)');
+    if (!bucket) missing.push('S3_BUCKET (or R2_BUCKET)');
+    if (!accessKeyId) missing.push('S3_ACCESS_KEY_ID (or R2_ACCESS_KEY_ID)');
+    if (!secretAccessKey) missing.push('S3_SECRET_ACCESS_KEY (or R2_SECRET_ACCESS_KEY)');
+
+    if (missing.length > 0) {
+      throw new Error(
+        `[StorageProvider] S3/R2 storage configuration is incomplete. Missing required environment variables: ${missing.join(', ')}. Refusing to fall back to ephemeral local storage or a default bucket name.`
+      );
+    }
+
+    this.bucket = bucket;
+    const configuredPublicUrl = (
+      process.env.MEDIA_PUBLIC_BASE_URL ||
+      process.env.S3_PUBLIC_URL ||
+      getActiveMediaPublicBaseUrl()
+    )
+      .trim()
+      .replace(/\/+$/, '');
+    this.publicBaseUrl = normalizeMediaPublicUrl(configuredPublicUrl) || configuredPublicUrl;
 
     this.client = new S3Client({
       region,
-      endpoint: endpoint || undefined,
+      endpoint,
       credentials: {
         accessKeyId,
         secretAccessKey,
@@ -251,9 +277,10 @@ export class S3StorageProvider implements StorageProvider {
   getPublicUrl(key: string): string {
     const normalized = key.replace(/(\.\.(\/|\\|$))+/g, '').replace(/^\/+/, '');
     if (this.publicBaseUrl) {
-      return `${this.publicBaseUrl}/${normalized}`;
+      const candidate = `${this.publicBaseUrl}/${normalized}`;
+      return normalizeMediaPublicUrl(candidate) || candidate;
     }
-    return `https://${this.bucket}.s3.amazonaws.com/${normalized}`;
+    return `${getActiveMediaPublicBaseUrl()}/${normalized}`;
   }
 
   async getSignedUrl(key: string, _expiresInSeconds = 3600): Promise<string> {
@@ -274,18 +301,23 @@ export function getStorageProvider(): StorageProvider {
 
   if (cachedProvider) return cachedProvider;
 
-  const providerType = (process.env.STORAGE_PROVIDER || 'local').toLowerCase();
-  const hasS3Credentials = Boolean(
-    (process.env.S3_ACCESS_KEY_ID || process.env.R2_ACCESS_KEY_ID) &&
-      (process.env.S3_SECRET_ACCESS_KEY || process.env.R2_SECRET_ACCESS_KEY)
-  );
+  const rawProvider = (process.env.STORAGE_PROVIDER || '').trim().toLowerCase();
+  const isProduction = process.env.NODE_ENV === 'production';
+  const providerType = rawProvider || (isProduction ? 's3' : 'local');
 
-  if ((providerType === 's3' || providerType === 'r2') && hasS3Credentials) {
+  if (providerType === 's3' || providerType === 'r2') {
+    // Fail explicitly if S3/R2 configuration is missing — never silently fall back to LocalStorageProvider
     cachedProvider = new S3StorageProvider();
-  } else {
-    cachedProvider = new LocalStorageProvider();
+    return cachedProvider;
   }
 
+  if (isProduction && providerType === 'local' && process.env.ALLOW_LOCAL_STORAGE_IN_PRODUCTION !== 'true') {
+    throw new Error(
+      '[StorageProvider] LocalStorageProvider is disabled in production to prevent ephemeral /uploads/ media records. Set STORAGE_PROVIDER=s3 with valid Cloudflare R2 credentials.'
+    );
+  }
+
+  cachedProvider = new LocalStorageProvider();
   return cachedProvider;
 }
 
@@ -297,8 +329,12 @@ export function getStorageProviderForAsset(providerName?: string): StorageProvid
   if (isTestIsolationActive()) {
     return getStorageProvider();
   }
+  if (providerName === 's3') {
+    return new S3StorageProvider();
+  }
   if (providerName === 'local') {
     return new LocalStorageProvider();
   }
   return getStorageProvider();
 }
+

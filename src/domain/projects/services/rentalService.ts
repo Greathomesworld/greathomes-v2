@@ -1084,7 +1084,11 @@ export class RentalService {
   }
 
   async findMediaByListingId(listingId: string) {
-    return await this.repo.findMediaByListingId(listingId);
+    const items = await this.repo.findMediaByListingId(listingId);
+    return items.map((m: any) => ({
+      ...m,
+      url: normalizeMediaPublicUrl(m.url) || m.url,
+    }));
   }
 
   async addMedia(listingId: string, mediaData: any) {

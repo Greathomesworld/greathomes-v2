@@ -88,9 +88,11 @@ export function HomeHero({ popularLocations }: HomeHeroProps = {}) {
     return `${basePath}?${params.toString()}`;
   };
 
-  const animateProps = prefersReducedMotion
-    ? { initial: { opacity: 1, y: 0 }, animate: { opacity: 1, y: 0 } }
-    : { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.45, ease: 'easeOut' as const } };
+  const animateProps = {
+    initial: false as const,
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: prefersReducedMotion ? 0 : 0.45, ease: 'easeOut' as const },
+  };
 
   return (
     <section className="relative z-20 w-full bg-[#FAFAF8] text-[#111111] min-h-[580px] sm:min-h-[620px] lg:min-h-[660px] flex items-center border-b border-neutral-200/80">
@@ -134,9 +136,9 @@ export function HomeHero({ popularLocations }: HomeHeroProps = {}) {
 
           {/* 3. Centred Universal Search Component */}
           <motion.div
-            {...(prefersReducedMotion
-              ? { initial: { opacity: 1 }, animate: { opacity: 1 } }
-              : { initial: { opacity: 0, y: 14 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.45, delay: 0.1, ease: 'easeOut' as const } })}
+            initial={false}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: prefersReducedMotion ? 0 : 0.45, delay: prefersReducedMotion ? 0 : 0.1, ease: 'easeOut' }}
             className="w-full max-w-3xl lg:max-w-4xl mx-auto pt-1 relative z-30"
           >
             <UniversalSearch
@@ -151,9 +153,9 @@ export function HomeHero({ popularLocations }: HomeHeroProps = {}) {
 
           {/* 4. Centred Popular Location Shortcuts */}
           <motion.div
-            {...(prefersReducedMotion
-              ? { initial: { opacity: 1 }, animate: { opacity: 1 } }
-              : { initial: { opacity: 0 }, animate: { opacity: 1 }, transition: { duration: 0.4, delay: 0.2 } })}
+            initial={false}
+            animate={{ opacity: 1 }}
+            transition={{ duration: prefersReducedMotion ? 0 : 0.4, delay: prefersReducedMotion ? 0 : 0.2 }}
             className="flex flex-wrap items-center justify-center gap-2 sm:gap-2.5 text-xs font-body pt-1"
           >
             <span className="text-neutral-700 font-display font-semibold mr-1 text-xs">

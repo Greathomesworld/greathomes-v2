@@ -1,18 +1,16 @@
+import { normalizeMediaPublicUrl } from '@/src/lib/mediaUtils';
+
 export interface ImageLoaderProps {
   src: string;
   width: number;
   quality?: number;
 }
 
-const R2_PUBLIC_BASE = 'https://pub-8e680bcad96e4b29adac1756755a344b.r2.dev';
-const FALLBACK_PROJECT_IMAGE =
-  '/uploads/media/project/f09fdaff-63f0-4783-9d82-1acc642460bb/cfb31520-cda5-4060-ac01-01ffd76d8179/public_wm.webp';
-
 /**
  * Custom Next.js Image Loader that resolves responsive image URLs directly
- * against edge CDNs (Unsplash, Cloudflare R2, local static/fallback routes)
- * without proxying outbound fetches through the Node.js server process,
- * preventing upstream ECONNRESET / timeout crashes on `/_next/image`.
+ * against edge CDNs (Cloudflare R2, Unsplash, local static/upload routes)
+ * via the canonical `normalizeMediaPublicUrl()` resolver without proxying
+ * outbound fetches through `/_next/image`.
  */
 export default function greatHomesImageLoader({
   src,
@@ -22,20 +20,20 @@ export default function greatHomesImageLoader({
   const q = quality || 75;
 
   if (!src || typeof src !== 'string') {
-    return `${FALLBACK_PROJECT_IMAGE}?w=${width}&q=${q}`;
+    return '';
   }
 
-  let normalizedSrc = src.trim();
-
-  // Rewrite legacy custom media domain to the active Cloudflare R2 public bucket
-  if (normalizedSrc.startsWith('https://media.greathomes.co.in/')) {
-    normalizedSrc = normalizedSrc.replace(
-      'https://media.greathomes.co.in/',
-      `${R2_PUBLIC_BASE}/`
-    );
-  } else if (normalizedSrc.startsWith('https://cdn.greathomes.in/')) {
-    normalizedSrc = FALLBACK_PROJECT_IMAGE;
+  const trimmed = src.trim();
+  if (!trimmed) {
+    return '';
   }
+
+  // Pass data/blob URIs through untouched
+  if (trimmed.startsWith('data:') || trimmed.startsWith('blob:')) {
+    return trimmed;
+  }
+
+  const normalizedSrc = normalizeMediaPublicUrl(trimmed) || trimmed;
 
   // Optimize Unsplash images directly via Unsplash's native Imgix CDN parameters
   if (normalizedSrc.startsWith('https://images.unsplash.com/')) {
@@ -54,6 +52,20 @@ export default function greatHomesImageLoader({
     }
   }
 
+  // Avoid appending duplicate w/q parameters if already present in query string
+  if (normalizedSrc.startsWith('http://') || normalizedSrc.startsWith('https://')) {
+    try {
+      const parsed = new URL(normalizedSrc);
+      parsed.searchParams.set('w', String(width));
+      parsed.searchParams.set('q', String(q));
+      return parsed.toString();
+    } catch {
+      const separator = normalizedSrc.includes('?') ? '&' : '?';
+      return `${normalizedSrc}${separator}w=${width}&q=${q}`;
+    }
+  }
+
   const separator = normalizedSrc.includes('?') ? '&' : '?';
   return `${normalizedSrc}${separator}w=${width}&q=${q}`;
 }
+
