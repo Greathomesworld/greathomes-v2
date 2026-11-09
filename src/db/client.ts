@@ -842,6 +842,9 @@ export function isPostgresRequired(): boolean {
   if (process.env.PERSISTENCE_PROVIDER === 'memory') {
     return false;
   }
+  if (process.env.NEXT_PHASE === 'phase-production-build' && !process.env.DATABASE_URL) {
+    return false;
+  }
   return process.env.PERSISTENCE_PROVIDER === 'postgres' || process.env.NODE_ENV === 'production';
 }
 

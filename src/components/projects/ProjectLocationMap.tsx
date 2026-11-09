@@ -145,7 +145,7 @@ export function ProjectLocationMap({
         setMapStatus('error');
       }
     }
-  }, [lat, lng, hasValidCoords, markerTitle, defaultZoom, nearbyMarkersKey]);
+  }, [lat, lng, hasValidCoords, markerTitle, defaultZoom]);
 
   useEffect(() => {
     if (!hasValidCoords || lat === null || lng === null || !mapContainerRef.current) {

@@ -13,7 +13,7 @@ interface PropertyDetailTabsProps {
 }
 
 export function PropertyDetailTabs({ hasProject, hasSimilar }: PropertyDetailTabsProps) {
-  const tabs: PropertySectionTab[] = [
+  const tabs = React.useMemo<PropertySectionTab[]>(() => [
     { id: 'overview', label: 'Overview' },
     { id: 'specifications', label: 'Specifications' },
     { id: 'amenities', label: 'Amenities' },
@@ -21,7 +21,7 @@ export function PropertyDetailTabs({ hasProject, hasSimilar }: PropertyDetailTab
     ...(hasProject ? [{ id: 'project', label: 'Project' }] : []),
     { id: 'verification', label: 'Verification' },
     ...(hasSimilar ? [{ id: 'similar-properties', label: 'Similar Properties' }] : []),
-  ];
+  ], [hasProject, hasSimilar]);
 
   const [activeTab, setActiveTab] = useState<string>('overview');
 
@@ -41,7 +41,7 @@ export function PropertyDetailTabs({ hasProject, hasSimilar }: PropertyDetailTab
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [hasProject, hasSimilar]);
+  }, [tabs]);
 
   const scrollToSection = (id: string) => {
     setActiveTab(id);
