@@ -788,13 +788,21 @@ export function ProjectFloorPlanViewer({
 
           <span className="text-white/30">·</span>
           <span>
-            From:{' '}
-            <strong className="text-white font-semibold font-display">
-              {activeConfig.startingPriceFormatted}
-            </strong>
+            {activeConfig.priceOnRequest ? (
+              <strong className="text-white font-semibold font-display">
+                Price on Request
+              </strong>
+            ) : (
+              <>
+                From:{' '}
+                <strong className="text-white font-semibold font-display">
+                  {activeConfig.startingPriceFormatted}
+                </strong>
+              </>
+            )}
           </span>
 
-          {activeConfig.hasRate && activeConfig.rateDisplay && (
+          {!activeConfig.priceOnRequest && activeConfig.hasRate && activeConfig.rateDisplay && (
             <>
               <span className="text-white/30">·</span>
               <span className="text-white/70 font-display">

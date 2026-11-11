@@ -45,22 +45,25 @@ export class NewBookingService {
       mediaMap.set(m.id, m.url);
     }
 
-    // 3. Compose public DTOs
+    // 3. Compose public DTOs (configurations from getConfigurationsByProjectId(projectId, false) already mask PoR prices)
     const result: PublicNewBookingConfigurationDto[] = [];
     for (const config of configurations) {
       const av = availabilityMap.get(config.id);
       const status: ConfigurationAvailabilityStatus = av ? av.availabilityStatus : 'AVAILABLE'; // Default to AVAILABLE if unset
       const lastVerified = av ? av.lastVerifiedAt.toISOString() : new Date().toISOString();
+      const isPor = Boolean(config.priceOnRequest) || Boolean(project.priceOnRequest) || !(config.price && config.price > 0);
 
       let effectiveRate = 0;
-      try {
-        effectiveRate = calculateEffectivePricePerSqft(config.price, config.priceBasis, {
-          carpetArea: config.carpetArea,
-          builtUpArea: config.builtUpArea,
-          superBuiltUpArea: config.superBuiltUpArea,
-        });
-      } catch {
-        effectiveRate = 0;
+      if (!isPor) {
+        try {
+          effectiveRate = calculateEffectivePricePerSqft(config.price, config.priceBasis, {
+            carpetArea: config.carpetArea,
+            builtUpArea: config.builtUpArea,
+            superBuiltUpArea: config.superBuiltUpArea,
+          });
+        } catch {
+          effectiveRate = 0;
+        }
       }
 
       const floorPlanUrl = config.floorPlanMediaId ? mediaMap.get(config.floorPlanMediaId) || null : null;
@@ -73,9 +76,10 @@ export class NewBookingService {
         carpetArea: config.carpetArea,
         builtUpArea: config.builtUpArea,
         superBuiltUpArea: config.superBuiltUpArea,
-        price: config.price,
+        price: isPor ? 0 : config.price,
         priceBasis: config.priceBasis,
-        effectivePricePerSqft: effectiveRate,
+        priceOnRequest: isPor,
+        effectivePricePerSqft: isPor ? 0 : effectiveRate,
         availabilityStatus: status,
         lastVerifiedAt: lastVerified,
         floorPlanMediaId: config.floorPlanMediaId,

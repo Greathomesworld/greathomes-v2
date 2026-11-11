@@ -4,9 +4,13 @@ import {
   ValidationError,
   DuplicateConfigurationError,
   NotFoundError,
+  UnauthorizedError,
 } from '@/src/domain/projects/services/projectIntelligenceService';
-import { verifyInternalStaff } from '@/src/domain/auth/authorizationBoundary';
+import { verifyStaffCapability } from '@/src/domain/auth/capabilities';
 import { ensureSeedData } from '@/src/infrastructure/seed';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET(
   request: NextRequest,
@@ -33,11 +37,11 @@ export async function POST(
   request: NextRequest,
   props: { params: Promise<{ id: string }> }
 ) {
-  const auth = await verifyInternalStaff(request);
+  const auth = await verifyStaffCapability(request, 'MANAGE_CONFIGURATIONS');
   if (!auth.authorized) {
     return NextResponse.json(
       { error: auth.error || 'Unauthorized' },
-      { status: auth.statusCode || 401 }
+      { status: auth.status || auth.statusCode || 401 }
     );
   }
 
@@ -49,6 +53,9 @@ export async function POST(
     const configuration = await projectIntelligenceService.createConfiguration(id, body, true);
     return NextResponse.json(configuration, { status: 201 });
   } catch (error: any) {
+    if (error instanceof UnauthorizedError || error?.name === 'UnauthorizedError') {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
     if (error instanceof NotFoundError) {
       return NextResponse.json({ error: error.message }, { status: 404 });
     }
@@ -64,3 +71,4 @@ export async function POST(
     );
   }
 }
+

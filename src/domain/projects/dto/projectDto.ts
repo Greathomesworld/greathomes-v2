@@ -22,6 +22,10 @@ import {
   ProjectLocationStatus,
 } from "../viewModels/projectLocationViewModel";
 import { normalizeMediaPublicUrl } from "@/src/lib/mediaUtils";
+import {
+  isConfigurationPriceOnRequest,
+  comparePricesWithPorLast,
+} from "@/src/lib/priceUtils";
 
 export interface BoundedDeveloperDto {
   id: string;
@@ -58,6 +62,7 @@ export interface PublicProjectConfigurationDto {
   superBuiltUpArea?: number | null;
   price: number;
   priceBasis: PriceBasis;
+  priceOnRequest?: boolean;
   effectivePricePerSqft: number;
   floorPlanMediaId?: string | null;
   floorPlans?: PublicProjectMediaDto[];
@@ -111,6 +116,7 @@ export interface PublicProjectPricingSummary {
   maximumPrice: number | null;
   lowestEffectivePricePerSqft: number | null;
   priceBasis: PriceBasis | null;
+  priceOnRequest?: boolean;
 }
 
 export interface PublicProjectReraDto {
@@ -149,6 +155,8 @@ export interface PublicProjectDto {
   status: ProjectStatus;
   lifecycleStatus: ProjectLifecycleStatus;
   featured: boolean;
+  priceOnRequest?: boolean;
+  manualStartingPrice?: number | null;
   developer: BoundedDeveloperDto;
   location: BoundedLocationDto;
   pricing: PublicProjectPricingSummary;
@@ -210,8 +218,8 @@ export function calculateEffectivePricePerSqft(
     superBuiltUpArea?: number | null;
   }
 ): number {
-  if (!price || price <= 0) {
-    throw new ValidationError("Invalid price: price must be a positive number");
+  if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) {
+    throw new ValidationError("Invalid price: price must be a positive finite number");
   }
 
   let applicableArea: number | null | undefined = null;
@@ -219,19 +227,19 @@ export function calculateEffectivePricePerSqft(
   switch (priceBasis) {
     case 'CARPET_AREA':
       applicableArea = areas.carpetArea;
-      if (!applicableArea || applicableArea <= 0) {
+      if (applicableArea === undefined || applicableArea === null || !Number.isFinite(applicableArea) || applicableArea <= 0) {
         throw new ValidationError("Missing or invalid carpet area for CARPET_AREA price basis");
       }
       break;
     case 'BUILT_UP_AREA':
       applicableArea = areas.builtUpArea;
-      if (!applicableArea || applicableArea <= 0) {
+      if (applicableArea === undefined || applicableArea === null || !Number.isFinite(applicableArea) || applicableArea <= 0) {
         throw new ValidationError("Missing or invalid built-up area for BUILT_UP_AREA price basis");
       }
       break;
     case 'SUPER_BUILT_UP_AREA':
       applicableArea = areas.superBuiltUpArea;
-      if (!applicableArea || applicableArea <= 0) {
+      if (applicableArea === undefined || applicableArea === null || !Number.isFinite(applicableArea) || applicableArea <= 0) {
         throw new ValidationError("Missing or invalid super built-up area for SUPER_BUILT_UP_AREA price basis");
       }
       break;
@@ -239,57 +247,105 @@ export function calculateEffectivePricePerSqft(
       throw new ValidationError(`Invalid price basis: ${priceBasis}`);
   }
 
+  const rate = price / applicableArea;
+  if (!Number.isFinite(rate) || rate <= 0) {
+    throw new ValidationError("Calculated effective price per sq ft is invalid");
+  }
+
   // Exact derived effective rate rounded to nearest integer (rupees/sq.ft)
-  return Math.round(price / applicableArea);
+  return Math.round(rate);
 }
 
 /**
- * Derives project-level price summary from configurations.
+ * Derives project-level public price summary from project and configurations.
+ * Enforces Price on Request visibility rules:
+ * 1. Project-level `priceOnRequest === true` hides all public project pricing.
+ * 2. Configurations marked `priceOnRequest === true` are excluded from min/max/rate calculations.
+ * 3. If configurations exist and ALL are Price on Request, the project is treated as Price on Request
+ *    and NEVER falls back to `project.startingPrice`.
+ * 4. If no configurations exist, `project.startingPrice` is used only when `project.priceOnRequest` is false.
  */
 export function deriveProjectPricingSummary(
   project: Project,
   configurations: (ProjectConfiguration | PublicProjectConfigurationDto)[]
 ): PublicProjectPricingSummary {
+  if (project.priceOnRequest) {
+    return {
+      startingPrice: null,
+      maximumPrice: null,
+      lowestEffectivePricePerSqft: null,
+      priceBasis: null,
+      priceOnRequest: true,
+    };
+  }
+
   if (!configurations || configurations.length === 0) {
-    const fallbackStarting = project.startingPrice ? Math.round(project.startingPrice) : null;
+    const fallbackStarting =
+      project.startingPrice && Number.isFinite(project.startingPrice) && project.startingPrice > 0
+        ? Math.round(project.startingPrice)
+        : null;
     return {
       startingPrice: fallbackStarting,
       maximumPrice: fallbackStarting,
       lowestEffectivePricePerSqft: null,
       priceBasis: null,
+      priceOnRequest: fallbackStarting === null,
     };
   }
 
-  const prices = configurations.map(c => c.price).filter(p => p > 0);
-  const effectiveRates = configurations.map(c => {
-    if ('effectivePricePerSqft' in c && typeof (c as any).effectivePricePerSqft === 'number') {
-      return (c as any).effectivePricePerSqft;
-    }
-    try {
-      return calculateEffectivePricePerSqft(c.price, c.priceBasis, {
-        carpetArea: c.carpetArea,
-        builtUpArea: c.builtUpArea,
-        superBuiltUpArea: c.superBuiltUpArea,
-      });
-    } catch {
-      return null;
-    }
-  }).filter((r): r is number => r !== null && r > 0);
+  const visibleConfigs = configurations.filter(
+    (c) => !isConfigurationPriceOnRequest(c, project)
+  );
 
-  const startingPrice = prices.length > 0
-    ? Math.min(...prices)
-    : (typeof project.startingPrice === 'number' && project.startingPrice > 0
-        ? Math.round(project.startingPrice)
-        : null);
-  const maximumPrice = prices.length > 0 ? Math.max(...prices) : (project.startingPrice ? Math.round(project.startingPrice) : null);
+  // Critical privacy rule: When configurations exist and ALL are Price on Request,
+  // do NOT fall back to project.startingPrice.
+  if (visibleConfigs.length === 0) {
+    return {
+      startingPrice: null,
+      maximumPrice: null,
+      lowestEffectivePricePerSqft: null,
+      priceBasis: null,
+      priceOnRequest: true,
+    };
+  }
+
+  const prices = visibleConfigs
+    .map((c) => c.price)
+    .filter((p): p is number => typeof p === 'number' && Number.isFinite(p) && p > 0);
+
+  const effectiveRates = visibleConfigs
+    .map((c) => {
+      if (
+        'effectivePricePerSqft' in c &&
+        typeof (c as any).effectivePricePerSqft === 'number' &&
+        Number.isFinite((c as any).effectivePricePerSqft) &&
+        (c as any).effectivePricePerSqft > 0
+      ) {
+        return (c as any).effectivePricePerSqft;
+      }
+      try {
+        return calculateEffectivePricePerSqft(c.price, c.priceBasis, {
+          carpetArea: c.carpetArea,
+          builtUpArea: c.builtUpArea,
+          superBuiltUpArea: c.superBuiltUpArea,
+        });
+      } catch {
+        return null;
+      }
+    })
+    .filter((r): r is number => r !== null && Number.isFinite(r) && r > 0);
+
+  const startingPrice = prices.length > 0 ? Math.min(...prices) : null;
+  const maximumPrice = prices.length > 0 ? Math.max(...prices) : null;
   const lowestEffectivePricePerSqft = effectiveRates.length > 0 ? Math.min(...effectiveRates) : null;
-  const priceBasis = configurations[0]?.priceBasis ?? null;
+  const priceBasis = visibleConfigs[0]?.priceBasis ?? null;
 
   return {
     startingPrice,
     maximumPrice,
     lowestEffectivePricePerSqft,
     priceBasis,
+    priceOnRequest: startingPrice === null,
   };
 }
 
@@ -444,8 +500,10 @@ export function toPublicProjectDto(
   amenities: { amenity: Amenity; isFeatured: boolean; sortOrder: number }[] = [],
   faqs: ProjectFaq[] = [],
   reraRecord?: ProjectRera | null,
-  considerations: ProjectConsideration[] = []
+  considerations: ProjectConsideration[] = [],
+  options?: { includeInternalPricing?: boolean }
 ): PublicProjectDto {
+  const includeInternalPricing = Boolean(options?.includeInternalPricing);
   const reraStatus: ReraStatus = reraRecord?.status ?? project.reraStatus ?? 'NOT_PROVIDED';
   const registrationNumber = reraRecord?.registrationNumber ?? project.reraRegistrationNumber ?? undefined;
   const authority = reraRecord?.authority ?? (registrationNumber ? 'WBRERA' : undefined);
@@ -453,11 +511,25 @@ export function toPublicProjectDto(
 
   // Transform configurations with derived effective rates and configuration-specific floor plans
   const configDtos: PublicProjectConfigurationDto[] = configurations.map(c => {
-    const effectivePricePerSqft = calculateEffectivePricePerSqft(c.price, c.priceBasis, {
-      carpetArea: c.carpetArea,
-      builtUpArea: c.builtUpArea,
-      superBuiltUpArea: c.superBuiltUpArea,
-    });
+    const isPorForPublic = isConfigurationPriceOnRequest(c, project);
+    let internalEffectiveRate = 0;
+
+    if (typeof c.price === 'number' && Number.isFinite(c.price) && c.price > 0) {
+      try {
+        internalEffectiveRate = calculateEffectivePricePerSqft(c.price, c.priceBasis, {
+          carpetArea: c.carpetArea,
+          builtUpArea: c.builtUpArea,
+          superBuiltUpArea: c.superBuiltUpArea,
+        });
+      } catch (err: any) {
+        if (!isPorForPublic) {
+          console.warn(
+            `[toPublicProjectDto] Warning: Unable to calculate effective price for configuration '${c.name}' (id: ${c.id}) in project '${project.id}': ${err.message}`
+          );
+        }
+        internalEffectiveRate = 0;
+      }
+    }
 
     const configFloorPlans: PublicProjectMediaDto[] = media
       .filter(m => m.category === 'FLOOR_PLANS' && (m.configurationId === c.id || (c.floorPlanMediaId && (m.id === c.floorPlanMediaId || m.mediaId === c.floorPlanMediaId))))
@@ -481,6 +553,14 @@ export function toPublicProjectDto(
         isFeatured: m.isFeatured,
       }));
 
+    const exposedPrice = includeInternalPricing ? c.price : isPorForPublic ? 0 : c.price;
+    const exposedEffectiveRate = includeInternalPricing
+      ? internalEffectiveRate
+      : isPorForPublic
+        ? 0
+        : internalEffectiveRate;
+    const exposedPorFlag = includeInternalPricing ? Boolean(c.priceOnRequest) : isPorForPublic;
+
     return {
       id: c.id,
       name: c.name,
@@ -488,16 +568,17 @@ export function toPublicProjectDto(
       carpetArea: c.carpetArea,
       builtUpArea: c.builtUpArea,
       superBuiltUpArea: c.superBuiltUpArea,
-      price: c.price,
+      price: exposedPrice,
       priceBasis: c.priceBasis,
-      effectivePricePerSqft,
+      priceOnRequest: exposedPorFlag,
+      effectivePricePerSqft: exposedEffectiveRate,
       floorPlanMediaId: c.floorPlanMediaId,
       floorPlans: configFloorPlans,
       availability: c.availability ?? 'AVAILABLE',
     };
   });
 
-  const pricing = deriveProjectPricingSummary(project, configDtos);
+  const pricing = deriveProjectPricingSummary(project, configurations);
   const configurationsSummary = deriveConfigurationsSummary(configDtos);
   const rawPossessionStatus =
     (project as { possessionStatus?: string | null }).possessionStatus ?? project.possession ?? null;
@@ -626,7 +707,7 @@ export function toPublicProjectDto(
   // Resolve coordinate precedence (project override vs location fallback)
   const resolvedCoords = resolveProjectCoordinates(project, location);
 
-  return {
+  const result: PublicProjectDto = {
     id: project.id,
     name: project.name,
     slug: project.slug,
@@ -636,6 +717,9 @@ export function toPublicProjectDto(
     status: project.status,
     lifecycleStatus,
     featured: project.featured ?? false,
+    priceOnRequest: includeInternalPricing
+      ? Boolean(project.priceOnRequest)
+      : Boolean(project.priceOnRequest || pricing.priceOnRequest),
     latitude: resolvedCoords.latitude,
     longitude: resolvedCoords.longitude,
     projectLatitude: project.latitude !== undefined && project.latitude !== null ? Number(project.latitude) : null,
@@ -686,14 +770,20 @@ export function toPublicProjectDto(
     possessionStatus: rawPossessionStatus,
     possessionDate: rawPossessionDateStr,
     snapshot,
-    // Backwards compatibility top-level fields
-    startingPrice: pricing.startingPrice ?? project.startingPrice ?? undefined,
+    // Backwards compatibility top-level fields (strictly uses public pricing.startingPrice; never leaks hidden project.startingPrice)
+    startingPrice: pricing.startingPrice ?? undefined,
     hasVerifiedReraBadge,
     reraStatus,
     reraRegistrationNumber: registrationNumber,
     createdAt: project.createdAt instanceof Date ? project.createdAt.toISOString() : String(project.createdAt),
     updatedAt: project.updatedAt instanceof Date ? project.updatedAt.toISOString() : String(project.updatedAt),
   };
+
+  if (includeInternalPricing) {
+    result.manualStartingPrice = project.startingPrice ?? null;
+  }
+
+  return result;
 }
 
 /**
@@ -701,6 +791,7 @@ export function toPublicProjectDto(
  * 1. Numerical bedroom count ascending (2 BHK, 3 BHK, 4 BHK, 5 BHK)
  * 2. Extracted bedroom count from name if bedroomCount is omitted
  * 3. Non-BHK (Studio, Duplex, Penthouse, Villa) sorted by bedroom count or price or stable name
+ * 4. Secondary sort: valid positive prices ascending, with Price on Request items sorted after priced items
  */
 export function sortConfigurations(configs: PublicProjectConfigurationDto[]): PublicProjectConfigurationDto[] {
   return [...configs].sort((a, b) => {
@@ -720,10 +811,15 @@ export function sortConfigurations(configs: PublicProjectConfigurationDto[]): Pu
       return 1;
     }
 
-    // Secondary sort: starting price if both defined
-    if (a.price && b.price && a.price !== b.price) {
-      return a.price - b.price;
-    }
+    // Secondary sort: starting price ascending, with PoR / zero price items placed after priced items
+    const priceCmp = comparePricesWithPorLast(
+      a.price,
+      b.price,
+      'asc',
+      Boolean(a.priceOnRequest),
+      Boolean(b.priceOnRequest)
+    );
+    if (priceCmp !== 0) return priceCmp;
 
     // Tertiary stable fallback: alphabetical name
     return a.name.localeCompare(b.name);
@@ -778,7 +874,7 @@ export interface ConfigurationCardAreaInfo {
  * Derives consumer-facing area & price rate breakdown according to canonical Phase 05F.5.1 specification:
  * 1. Carpet Area (mandatory primary if available)
  * 2. Exactly ONE applicable secondary area (Built-up OR Super Built-up)
- * 3. Price rate with explicitly labeled basis matching canonical price_basis
+ * 3. Price rate with explicitly labeled basis matching canonical price_basis (omitted when Price on Request)
  */
 export function getConfigurationCardAreaInfo(
   config: PublicProjectConfigurationDto
@@ -836,15 +932,16 @@ export function getConfigurationCardAreaInfo(
     hasRequiredRateArea = Boolean(basisArea && basisArea > 0);
   }
 
+  const isPor = Boolean(config.priceOnRequest) || !(config.price && config.price > 0);
   let derivedRate: number | null = null;
-  if (hasRequiredRateArea && config.price && config.price > 0 && basisArea) {
+  if (!isPor && hasRequiredRateArea && config.price && config.price > 0 && basisArea) {
     derivedRate = Math.round(config.price / basisArea);
-  } else if (config.effectivePricePerSqft && config.effectivePricePerSqft > 0 && hasRequiredRateArea) {
+  } else if (!isPor && config.effectivePricePerSqft && config.effectivePricePerSqft > 0 && hasRequiredRateArea) {
     derivedRate = config.effectivePricePerSqft;
   }
 
   const rateDisplay =
-    hasRequiredRateArea && derivedRate && derivedRate > 0
+    !isPor && hasRequiredRateArea && derivedRate && derivedRate > 0
       ? `₹${derivedRate.toLocaleString('en-IN')}/sq.ft. · ${rateBasisLabel}`
       : null;
 
@@ -860,8 +957,8 @@ export function getConfigurationCardAreaInfo(
 /**
  * Formats configuration starting price with clean INR denominations (Crores/Lakhs)
  */
-export function formatStartingPrice(price?: number | null): string {
-  if (!price || price <= 0) return 'Price on Request';
+export function formatStartingPrice(price?: number | null, priceOnRequest?: boolean): string {
+  if (priceOnRequest || !price || price <= 0) return 'Price on Request';
   if (price >= 10000000) {
     const cr = (price / 10000000).toFixed(2).replace(/\.00$/, '');
     return `₹${cr} Cr onwards`;
@@ -872,4 +969,5 @@ export function formatStartingPrice(price?: number | null): string {
   }
   return `₹${price.toLocaleString('en-IN')} onwards`;
 }
+
 

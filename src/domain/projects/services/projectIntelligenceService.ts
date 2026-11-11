@@ -36,8 +36,23 @@ import {
   ValidationError,
 } from "../dto/projectDto";
 import { normalizeMediaPublicUrl } from "@/src/lib/mediaUtils";
+import {
+  parseIndianCurrencyPrice,
+  parsePositiveAreaSqft,
+  isConfigurationPriceOnRequest,
+  comparePricesWithPorLast,
+} from "@/src/lib/priceUtils";
 
 export { ValidationError };
+
+export class UnauthorizedError extends Error {
+  status = 403;
+  statusCode = 403;
+  constructor(message = "Forbidden: Insufficient permissions for this operation") {
+    super(message);
+    this.name = "UnauthorizedError";
+  }
+}
 
 export class NotFoundError extends Error {
   constructor(message: string) {
@@ -71,6 +86,7 @@ export interface CreateProjectInput {
   lifecycleStatus?: ProjectLifecycleStatus;
   propertyType: PropertyType;
   startingPrice?: number;
+  priceOnRequest?: boolean;
   projectArea?: string | null;
   towerCount?: number | null;
   totalUnits?: number | null;
@@ -97,6 +113,7 @@ export interface UpdateProjectInput {
   lifecycleStatus?: ProjectLifecycleStatus;
   propertyType?: PropertyType;
   startingPrice?: number;
+  priceOnRequest?: boolean;
   projectArea?: string | null;
   towerCount?: number | null;
   totalUnits?: number | null;
@@ -117,8 +134,9 @@ export interface CreateConfigurationInput {
   carpetArea?: number | null;
   builtUpArea?: number | null;
   superBuiltUpArea?: number | null;
-  price: number;
+  price?: number | string | null;
   priceBasis: PriceBasis;
+  priceOnRequest?: boolean;
   floorPlanMediaId?: string | null;
   availability?: string;
 }
@@ -148,6 +166,8 @@ export interface ProjectListOptions {
   locationId?: string;
   propertyType?: PropertyType;
   featured?: boolean;
+  minPrice?: number;
+  maxPrice?: number;
   sort?: string; // 'name:asc' | 'name:desc' | 'price:asc' | 'price:desc' | 'createdAt:desc' | 'createdAt:asc'
 }
 
@@ -209,6 +229,13 @@ export class ProjectIntelligenceService {
       delete: async () => true,
       reorder: async () => {},
     };
+
+    const configRepoWithMedia = this.configurationRepository as unknown as {
+      setMediaRepository?: (mediaRepo: ProjectMediaRepository) => void;
+    };
+    if (typeof configRepoWithMedia.setMediaRepository === 'function') {
+      configRepoWithMedia.setMediaRepository(this.mediaRepository);
+    }
   }
 
   /**
@@ -350,6 +377,7 @@ export class ProjectIntelligenceService {
       lifecycleStatus,
       propertyType: data.propertyType,
       startingPrice: data.startingPrice,
+      priceOnRequest: Boolean(data.priceOnRequest),
       projectArea: data.projectArea ?? null,
       towerCount: data.towerCount ?? null,
       totalUnits: data.totalUnits ?? null,
@@ -394,6 +422,9 @@ export class ProjectIntelligenceService {
     await this.validateProjectInput(data, true, id);
 
     const updatePayload: Partial<Project> = { ...data };
+    if (data.priceOnRequest !== undefined) {
+      updatePayload.priceOnRequest = Boolean(data.priceOnRequest);
+    }
     if (data.lifecycleStatus) {
       updatePayload.isPublished = data.lifecycleStatus === 'PUBLISHED';
     } else if (data.isPublished !== undefined) {
@@ -449,7 +480,10 @@ export class ProjectIntelligenceService {
   /**
    * Builds the bounded PublicProjectDto for a single project.
    */
-  private async buildPublicProjectDto(project: Project): Promise<PublicProjectDto | null> {
+  private async buildPublicProjectDto(
+    project: Project,
+    isInternalStaff = false
+  ): Promise<PublicProjectDto | null> {
     const [developer, location, configurations, media, amenities, faqs, rera, considerations, devMedia] = await Promise.all([
       this.developerRepository.findById(project.developerId),
       this.locationRepository.findById(project.locationId),
@@ -492,7 +526,8 @@ export class ProjectIntelligenceService {
       amenities,
       faqs,
       rera,
-      considerations
+      considerations,
+      { includeInternalPricing: isInternalStaff }
     );
   }
 
@@ -514,7 +549,7 @@ export class ProjectIntelligenceService {
       return null;
     }
 
-    return this.buildPublicProjectDto(project);
+    return this.buildPublicProjectDto(project, isInternalStaff);
   }
 
   /**
@@ -535,7 +570,7 @@ export class ProjectIntelligenceService {
       return null;
     }
 
-    return this.buildPublicProjectDto(project);
+    return this.buildPublicProjectDto(project, isInternalStaff);
   }
 
   /**
@@ -572,26 +607,52 @@ export class ProjectIntelligenceService {
       filter.lifecycleStatus = options.lifecycleStatus;
     }
 
-    let all = await this.projectRepository.list(filter);
+    const all = await this.projectRepository.list(filter);
 
-    // Controlled sorting whitelist
+    const validDtos: PublicProjectDto[] = [];
+    for (const project of all) {
+      const dto = await this.buildPublicProjectDto(project, isInternalStaff);
+      if (dto) {
+        if (options.minPrice !== undefined || options.maxPrice !== undefined) {
+          if (dto.pricing.priceOnRequest || dto.pricing.startingPrice === null || dto.pricing.startingPrice <= 0) {
+            continue;
+          }
+          if (options.minPrice !== undefined && dto.pricing.startingPrice < options.minPrice) {
+            continue;
+          }
+          if (options.maxPrice !== undefined && dto.pricing.startingPrice > options.maxPrice) {
+            continue;
+          }
+        }
+        validDtos.push(dto);
+      }
+    }
+
+    // Controlled sorting whitelist using resolved public pricing so PoR projects ALWAYS sort last
+    // and never leak internal starting prices via sort order.
     const sort = options.sort || 'createdAt:desc';
-    all.sort((a, b) => {
+    validDtos.sort((a, b) => {
       switch (sort) {
         case 'name:asc':
           return a.name.localeCompare(b.name);
         case 'name:desc':
           return b.name.localeCompare(a.name);
-        case 'price:asc': {
-          const pA = a.startingPrice ?? Number.MAX_SAFE_INTEGER;
-          const pB = b.startingPrice ?? Number.MAX_SAFE_INTEGER;
-          return pA - pB;
-        }
-        case 'price:desc': {
-          const pA = a.startingPrice ?? 0;
-          const pB = b.startingPrice ?? 0;
-          return pB - pA;
-        }
+        case 'price:asc':
+          return comparePricesWithPorLast(
+            a.pricing.startingPrice,
+            b.pricing.startingPrice,
+            'asc',
+            Boolean(a.pricing.priceOnRequest),
+            Boolean(b.pricing.priceOnRequest)
+          );
+        case 'price:desc':
+          return comparePricesWithPorLast(
+            a.pricing.startingPrice,
+            b.pricing.startingPrice,
+            'desc',
+            Boolean(a.pricing.priceOnRequest),
+            Boolean(b.pricing.priceOnRequest)
+          );
         case 'createdAt:asc':
           return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         case 'createdAt:desc':
@@ -599,14 +660,6 @@ export class ProjectIntelligenceService {
           return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       }
     });
-
-    const validDtos: PublicProjectDto[] = [];
-    for (const project of all) {
-      const dto = await this.buildPublicProjectDto(project);
-      if (dto) {
-        validDtos.push(dto);
-      }
-    }
 
     const total = validDtos.length;
     const totalPages = Math.ceil(total / limit) || 1;
@@ -654,8 +707,12 @@ export class ProjectIntelligenceService {
   async createConfiguration(
     projectId: string,
     data: CreateConfigurationInput,
-    isInternalStaff = false
+    isInternalStaff = true
   ): Promise<PublicProjectConfigurationDto> {
+    if (!isInternalStaff) {
+      throw new UnauthorizedError("Forbidden: Only authorized internal staff may create configurations.");
+    }
+
     const project = await this.projectRepository.findById(projectId);
     if (!project) {
       throw new NotFoundError(`Project with id '${projectId}' not found`);
@@ -666,7 +723,22 @@ export class ProjectIntelligenceService {
       throw new ValidationError("Configuration name is required");
     }
 
-    if (!data.price || typeof data.price !== 'number' || data.price <= 0) {
+    const isPor = Boolean(data.priceOnRequest);
+    const hasPriceInput =
+      data.price !== undefined &&
+      data.price !== null &&
+      !(typeof data.price === 'string' && data.price.trim() === '') &&
+      data.price !== 0 &&
+      data.price !== '0';
+
+    let parsedPrice = 0;
+    if (hasPriceInput) {
+      const candidate = parseIndianCurrencyPrice(data.price as unknown as string | number);
+      if (candidate === null || candidate <= 0) {
+        throw new ValidationError("Price must be a positive number greater than 0");
+      }
+      parsedPrice = candidate;
+    } else if (!isPor) {
       throw new ValidationError("Price must be a positive number greater than 0");
     }
 
@@ -676,27 +748,66 @@ export class ProjectIntelligenceService {
       );
     }
 
-    // Area checks for negative values
-    if (data.carpetArea !== undefined && data.carpetArea !== null && data.carpetArea <= 0) {
-      throw new ValidationError("Carpet area must be greater than 0 if specified");
+    const carpetArea = parsePositiveAreaSqft(data.carpetArea);
+    if (carpetArea === null) {
+      throw new ValidationError("Carpet area is mandatory and must be greater than 0");
     }
-    if (data.builtUpArea !== undefined && data.builtUpArea !== null && data.builtUpArea <= 0) {
-      throw new ValidationError("Built-up area must be greater than 0 if specified");
+
+    let builtUpArea: number | undefined = undefined;
+    if (
+      data.builtUpArea !== undefined &&
+      data.builtUpArea !== null &&
+      !(typeof data.builtUpArea === 'string' && (data.builtUpArea as string).trim() === '')
+    ) {
+      const parsedBu = parsePositiveAreaSqft(data.builtUpArea);
+      if (parsedBu === null) {
+        throw new ValidationError("Built-up area must be greater than 0 if specified");
+      }
+      builtUpArea = parsedBu;
     }
-    if (data.superBuiltUpArea !== undefined && data.superBuiltUpArea !== null && data.superBuiltUpArea <= 0) {
-      throw new ValidationError("Super built-up area must be greater than 0 if specified");
+
+    let superBuiltUpArea: number | undefined = undefined;
+    if (
+      data.superBuiltUpArea !== undefined &&
+      data.superBuiltUpArea !== null &&
+      !(typeof data.superBuiltUpArea === 'string' && (data.superBuiltUpArea as string).trim() === '')
+    ) {
+      const parsedSbu = parsePositiveAreaSqft(data.superBuiltUpArea);
+      if (parsedSbu === null) {
+        throw new ValidationError("Super built-up area must be greater than 0 if specified");
+      }
+      superBuiltUpArea = parsedSbu;
     }
-    if (data.bedroomCount !== undefined && data.bedroomCount !== null && data.bedroomCount < 0) {
-      throw new ValidationError("Bedroom count cannot be negative");
+
+    let bedroomCount: number | undefined = undefined;
+    if (
+      data.bedroomCount !== undefined &&
+      data.bedroomCount !== null &&
+      !(typeof data.bedroomCount === 'string' && (data.bedroomCount as string).trim() === '')
+    ) {
+      const parsedBhk = typeof data.bedroomCount === 'number' ? data.bedroomCount : Number(data.bedroomCount);
+      if (!Number.isInteger(parsedBhk) || parsedBhk < 0) {
+        throw new ValidationError("Bedroom count cannot be negative");
+      }
+      bedroomCount = parsedBhk;
     }
 
     // Verify required area exists for selected price basis
-    // calculateEffectivePricePerSqft will throw if missing
-    const effectiveRate = calculateEffectivePricePerSqft(data.price, data.priceBasis, {
-      carpetArea: data.carpetArea,
-      builtUpArea: data.builtUpArea,
-      superBuiltUpArea: data.superBuiltUpArea,
-    });
+    if (data.priceBasis === 'BUILT_UP_AREA' && (!builtUpArea || builtUpArea <= 0)) {
+      throw new ValidationError("Missing or invalid built-up area for BUILT_UP_AREA price basis");
+    }
+    if (data.priceBasis === 'SUPER_BUILT_UP_AREA' && (!superBuiltUpArea || superBuiltUpArea <= 0)) {
+      throw new ValidationError("Missing or invalid super built-up area for SUPER_BUILT_UP_AREA price basis");
+    }
+
+    const effectiveRate =
+      parsedPrice > 0
+        ? calculateEffectivePricePerSqft(parsedPrice, data.priceBasis, {
+            carpetArea,
+            builtUpArea,
+            superBuiltUpArea,
+          })
+        : 0;
 
     // Check for duplicate configurations (same normalized name in this project)
     const duplicates = await this.configurationRepository.findDuplicates(projectId, data.name);
@@ -709,12 +820,13 @@ export class ProjectIntelligenceService {
     const configuration = await this.configurationRepository.create({
       projectId,
       name: data.name.trim(),
-      bedroomCount: data.bedroomCount,
-      carpetArea: data.carpetArea,
-      builtUpArea: data.builtUpArea,
-      superBuiltUpArea: data.superBuiltUpArea,
-      price: data.price,
+      bedroomCount,
+      carpetArea,
+      builtUpArea,
+      superBuiltUpArea,
+      price: parsedPrice,
       priceBasis: data.priceBasis,
+      priceOnRequest: isPor,
       floorPlanMediaId: data.floorPlanMediaId,
       availability: data.availability ?? 'AVAILABLE',
     });
@@ -728,6 +840,7 @@ export class ProjectIntelligenceService {
       superBuiltUpArea: configuration.superBuiltUpArea,
       price: configuration.price,
       priceBasis: configuration.priceBasis,
+      priceOnRequest: Boolean(configuration.priceOnRequest),
       effectivePricePerSqft: effectiveRate,
       floorPlanMediaId: configuration.floorPlanMediaId,
       availability: configuration.availability ?? 'AVAILABLE',
@@ -736,9 +849,11 @@ export class ProjectIntelligenceService {
 
   /**
    * Retrieves all configurations for a project.
+   * Masks hidden prices and effective rates when `isInternalStaff` is false.
    */
   async getConfigurationsByProjectId(
-    projectId: string
+    projectId: string,
+    isInternalStaff = false
   ): Promise<PublicProjectConfigurationDto[]> {
     const project = await this.projectRepository.findById(projectId);
     if (!project) {
@@ -747,11 +862,26 @@ export class ProjectIntelligenceService {
 
     const configs = await this.configurationRepository.findByProjectId(projectId);
     return configs.map(c => {
-      const effectiveRate = calculateEffectivePricePerSqft(c.price, c.priceBasis, {
-        carpetArea: c.carpetArea,
-        builtUpArea: c.builtUpArea,
-        superBuiltUpArea: c.superBuiltUpArea,
-      });
+      const isPorForPublic = isConfigurationPriceOnRequest(c, project);
+      let effectiveRate = 0;
+      if (typeof c.price === 'number' && Number.isFinite(c.price) && c.price > 0) {
+        try {
+          effectiveRate = calculateEffectivePricePerSqft(c.price, c.priceBasis, {
+            carpetArea: c.carpetArea,
+            builtUpArea: c.builtUpArea,
+            superBuiltUpArea: c.superBuiltUpArea,
+          });
+        } catch (err: any) {
+          if (!isPorForPublic) {
+            console.warn(`[getConfigurationsByProjectId] Configuration '${c.name}' rate calculation warning: ${err.message}`);
+          }
+          effectiveRate = 0;
+        }
+      }
+
+      const exposedPrice = isInternalStaff ? c.price : isPorForPublic ? 0 : c.price;
+      const exposedRate = isInternalStaff ? effectiveRate : isPorForPublic ? 0 : effectiveRate;
+      const exposedPor = isInternalStaff ? Boolean(c.priceOnRequest) : isPorForPublic;
 
       return {
         id: c.id,
@@ -760,9 +890,10 @@ export class ProjectIntelligenceService {
         carpetArea: c.carpetArea,
         builtUpArea: c.builtUpArea,
         superBuiltUpArea: c.superBuiltUpArea,
-        price: c.price,
+        price: exposedPrice,
         priceBasis: c.priceBasis,
-        effectivePricePerSqft: effectiveRate,
+        priceOnRequest: exposedPor,
+        effectivePricePerSqft: exposedRate,
         floorPlanMediaId: c.floorPlanMediaId,
         availability: c.availability ?? 'AVAILABLE',
       };
@@ -770,13 +901,14 @@ export class ProjectIntelligenceService {
   }
 
   /**
-   * Retrieves all project configurations across all projects with canonical project metadata.
+   * Retrieves all project configurations across all projects with canonical project metadata (admin-only).
    */
   async getAllConfigurationsWithProjects(): Promise<Array<{
     id: string;
     projectId: string;
     projectName: string;
     projectSlug: string;
+    projectPriceOnRequest?: boolean;
     developerName?: string | null;
     locationName?: string | null;
     name: string;
@@ -786,6 +918,7 @@ export class ProjectIntelligenceService {
     superBuiltUpArea?: number | null;
     price: number;
     priceBasis: PriceBasis;
+    priceOnRequest: boolean;
     effectivePricePerSqft: number;
     floorPlanMediaId?: string | null;
     floorPlanCount: number;
@@ -828,14 +961,16 @@ export class ProjectIntelligenceService {
     return allConfigs.map(c => {
       const project = projectMap.get(c.projectId);
       let effectiveRate = 0;
-      try {
-        effectiveRate = calculateEffectivePricePerSqft(c.price, c.priceBasis, {
-          carpetArea: c.carpetArea,
-          builtUpArea: c.builtUpArea,
-          superBuiltUpArea: c.superBuiltUpArea,
-        });
-      } catch {
-        effectiveRate = 0;
+      if (typeof c.price === 'number' && Number.isFinite(c.price) && c.price > 0) {
+        try {
+          effectiveRate = calculateEffectivePricePerSqft(c.price, c.priceBasis, {
+            carpetArea: c.carpetArea,
+            builtUpArea: c.builtUpArea,
+            superBuiltUpArea: c.superBuiltUpArea,
+          });
+        } catch {
+          effectiveRate = 0;
+        }
       }
 
       const fpCount = (floorPlanCountByConfigId.get(c.id) || 0) + (c.floorPlanMediaId ? 1 : 0);
@@ -845,6 +980,7 @@ export class ProjectIntelligenceService {
         projectId: c.projectId,
         projectName: project?.name || 'Unknown Project',
         projectSlug: project?.slug || '',
+        projectPriceOnRequest: Boolean(project?.priceOnRequest),
         developerName: project?.developerId ? devMap.get(project.developerId) || null : null,
         locationName: project?.locationId ? locMap.get(project.locationId) || null : null,
         name: c.name,
@@ -854,6 +990,7 @@ export class ProjectIntelligenceService {
         superBuiltUpArea: c.superBuiltUpArea ?? null,
         price: c.price,
         priceBasis: c.priceBasis,
+        priceOnRequest: Boolean(c.priceOnRequest),
         effectivePricePerSqft: effectiveRate,
         floorPlanMediaId: c.floorPlanMediaId ?? null,
         floorPlanCount: fpCount,
@@ -905,6 +1042,17 @@ export class ProjectIntelligenceService {
 
     const configs = await this.configurationRepository.findByProjectId(projectId);
     for (const c of configs) {
+      if (c.priceOnRequest && (!c.price || c.price <= 0)) {
+        // Price on Request configuration without an internal price is valid if required basis area exists
+        if (!c.carpetArea || c.carpetArea <= 0) {
+          issues.push(`Configuration '${c.name}' has invalid area/pricing: Missing or invalid carpet area`);
+        } else if (c.priceBasis === 'BUILT_UP_AREA' && (!c.builtUpArea || c.builtUpArea <= 0)) {
+          issues.push(`Configuration '${c.name}' has invalid area/pricing: Missing or invalid built-up area for BUILT_UP_AREA price basis`);
+        } else if (c.priceBasis === 'SUPER_BUILT_UP_AREA' && (!c.superBuiltUpArea || c.superBuiltUpArea <= 0)) {
+          issues.push(`Configuration '${c.name}' has invalid area/pricing: Missing or invalid super built-up area for SUPER_BUILT_UP_AREA price basis`);
+        }
+        continue;
+      }
       try {
         calculateEffectivePricePerSqft(c.price, c.priceBasis, {
           carpetArea: c.carpetArea,
@@ -926,38 +1074,172 @@ export class ProjectIntelligenceService {
     };
   }
 
-  async updateConfiguration(id: string, data: Partial<ProjectConfiguration>, isInternalStaff = false): Promise<PublicProjectConfigurationDto> {
+  async updateConfiguration(
+    id: string,
+    data: Partial<ProjectConfiguration>,
+    isInternalStaff = true,
+    expectedProjectId?: string
+  ): Promise<PublicProjectConfigurationDto> {
+    if (!isInternalStaff) {
+      throw new UnauthorizedError("Forbidden: Only authorized internal staff may update configurations.");
+    }
+
     const existing = await this.configurationRepository.findById(id);
     if (!existing) throw new NotFoundError(`Configuration with id '${id}' not found`);
 
-    if (data.name !== undefined && (!data.name || !data.name.trim())) {
-      throw new ValidationError("Configuration name is required");
-    }
-    if (data.price !== undefined && (typeof data.price !== 'number' || data.price <= 0)) {
-      throw new ValidationError("Price must be a positive number greater than 0");
-    }
-    if (data.priceBasis !== undefined && !VALID_PRICE_BASES.includes(data.priceBasis)) {
-      throw new ValidationError(`Invalid price basis`);
+    if (expectedProjectId && existing.projectId !== expectedProjectId) {
+      throw new ValidationError(`Configuration '${id}' does not belong to project '${expectedProjectId}'.`);
     }
 
-    const price = data.price ?? existing.price;
-    const priceBasis = data.priceBasis ?? existing.priceBasis;
-    const areas = {
-      carpetArea: data.carpetArea !== undefined ? data.carpetArea : existing.carpetArea,
-      builtUpArea: data.builtUpArea !== undefined ? data.builtUpArea : existing.builtUpArea,
-      superBuiltUpArea: data.superBuiltUpArea !== undefined ? data.superBuiltUpArea : existing.superBuiltUpArea,
-    };
+    let normalizedName = existing.name;
+    if (data.name !== undefined) {
+      if (typeof data.name !== 'string' || !data.name.trim()) {
+        throw new ValidationError("Configuration name is required");
+      }
+      normalizedName = data.name.trim();
+    }
 
-    const effectiveRate = calculateEffectivePricePerSqft(price, priceBasis, areas);
+    const targetPriceOnRequest =
+      data.priceOnRequest !== undefined
+        ? Boolean(data.priceOnRequest)
+        : Boolean(existing.priceOnRequest);
 
-    if (data.name !== undefined && data.name.trim().toLowerCase() !== existing.name.trim().toLowerCase()) {
-      const duplicates = await this.configurationRepository.findDuplicates(existing.projectId, data.name, id);
-      if (duplicates.length > 0) {
-        throw new ValidationError(`A configuration named '${data.name}' already exists in this project.`);
+    let price = existing.price;
+    if (data.price !== undefined) {
+      const rawPrice = data.price as unknown;
+      const isClearingPrice =
+        rawPrice === null ||
+        (typeof rawPrice === 'string' && rawPrice.trim() === '') ||
+        rawPrice === 0 ||
+        rawPrice === '0';
+
+      if (isClearingPrice && targetPriceOnRequest) {
+        // Preserve existing positive internal price unless none existed
+        price = existing.price > 0 ? existing.price : 0;
+      } else {
+        const parsedPrice = parseIndianCurrencyPrice(rawPrice as string | number);
+        if (parsedPrice === null || parsedPrice <= 0) {
+          throw new ValidationError("Price must be a positive number greater than 0");
+        }
+        price = parsedPrice;
       }
     }
 
-    const updated = await this.configurationRepository.update(id, data);
+    if (!targetPriceOnRequest && (!price || !Number.isFinite(price) || price <= 0)) {
+      throw new ValidationError(
+        "A valid positive price is required before disabling Price on Request."
+      );
+    }
+
+    let priceBasis = existing.priceBasis;
+    if (data.priceBasis !== undefined) {
+      if (!VALID_PRICE_BASES.includes(data.priceBasis)) {
+        throw new ValidationError(`Invalid price basis. Must be one of: ${VALID_PRICE_BASES.join(', ')}`);
+      }
+      priceBasis = data.priceBasis;
+    }
+
+    let carpetArea = existing.carpetArea;
+    if (data.carpetArea !== undefined) {
+      const parsedCarpet = parsePositiveAreaSqft(data.carpetArea);
+      if (parsedCarpet === null) {
+        throw new ValidationError("Carpet area is mandatory and must be greater than 0.");
+      }
+      carpetArea = parsedCarpet;
+    } else if (carpetArea === undefined || carpetArea === null || !Number.isFinite(carpetArea) || carpetArea <= 0) {
+      throw new ValidationError("Carpet area is mandatory and must be greater than 0.");
+    }
+
+    let builtUpArea: number | undefined | null = existing.builtUpArea;
+    if (data.builtUpArea !== undefined) {
+      if (
+        data.builtUpArea === null ||
+        (typeof data.builtUpArea === 'string' && (data.builtUpArea as string).trim() === '')
+      ) {
+        builtUpArea = null;
+      } else {
+        const parsedBu = parsePositiveAreaSqft(data.builtUpArea);
+        if (parsedBu === null) {
+          throw new ValidationError("Built-up area must be greater than 0 if specified.");
+        }
+        builtUpArea = parsedBu;
+      }
+    }
+
+    let superBuiltUpArea: number | undefined | null = existing.superBuiltUpArea;
+    if (data.superBuiltUpArea !== undefined) {
+      if (
+        data.superBuiltUpArea === null ||
+        (typeof data.superBuiltUpArea === 'string' && (data.superBuiltUpArea as string).trim() === '')
+      ) {
+        superBuiltUpArea = null;
+      } else {
+        const parsedSbu = parsePositiveAreaSqft(data.superBuiltUpArea);
+        if (parsedSbu === null) {
+          throw new ValidationError("Super built-up area must be greater than 0 if specified.");
+        }
+        superBuiltUpArea = parsedSbu;
+      }
+    }
+
+    let bedroomCount: number | undefined | null = existing.bedroomCount;
+    if (data.bedroomCount !== undefined) {
+      if (
+        data.bedroomCount === null ||
+        (typeof data.bedroomCount === 'string' && (data.bedroomCount as string).trim() === '')
+      ) {
+        bedroomCount = null;
+      } else {
+        const parsedBhk = typeof data.bedroomCount === 'number' ? data.bedroomCount : Number(data.bedroomCount);
+        if (!Number.isInteger(parsedBhk) || parsedBhk < 0) {
+          throw new ValidationError("Bedroom count cannot be negative.");
+        }
+        bedroomCount = parsedBhk;
+      }
+    }
+
+    if (priceBasis === 'BUILT_UP_AREA' && (!builtUpArea || builtUpArea <= 0)) {
+      throw new ValidationError("Missing or invalid built-up area for BUILT_UP_AREA price basis");
+    }
+    if (priceBasis === 'SUPER_BUILT_UP_AREA' && (!superBuiltUpArea || superBuiltUpArea <= 0)) {
+      throw new ValidationError("Missing or invalid super built-up area for SUPER_BUILT_UP_AREA price basis");
+    }
+
+    const areas = {
+      carpetArea,
+      builtUpArea: builtUpArea ?? undefined,
+      superBuiltUpArea: superBuiltUpArea ?? undefined,
+    };
+
+    const effectiveRate =
+      price > 0 ? calculateEffectivePricePerSqft(price, priceBasis, areas) : 0;
+
+    if (data.name !== undefined && normalizedName.toLowerCase() !== existing.name.trim().toLowerCase()) {
+      const duplicates = await this.configurationRepository.findDuplicates(existing.projectId, normalizedName, id);
+      if (duplicates.length > 0) {
+        throw new ValidationError(`A configuration named '${normalizedName}' already exists in this project.`);
+      }
+    }
+
+    const updatePayload: Partial<ProjectConfiguration> = {
+      ...data,
+      name: normalizedName,
+      price,
+      priceBasis,
+      priceOnRequest: targetPriceOnRequest,
+      carpetArea,
+    };
+    if (data.builtUpArea !== undefined) {
+      updatePayload.builtUpArea = (builtUpArea ?? null) as unknown as number | undefined;
+    }
+    if (data.superBuiltUpArea !== undefined) {
+      updatePayload.superBuiltUpArea = (superBuiltUpArea ?? null) as unknown as number | undefined;
+    }
+    if (data.bedroomCount !== undefined) {
+      updatePayload.bedroomCount = (bedroomCount ?? null) as unknown as number | undefined;
+    }
+
+    const updated = await this.configurationRepository.update(id, updatePayload);
     if (!updated) throw new NotFoundError(`Configuration with id '${id}' not found`);
 
     return {
@@ -969,15 +1251,25 @@ export class ProjectIntelligenceService {
       superBuiltUpArea: updated.superBuiltUpArea,
       price: updated.price,
       priceBasis: updated.priceBasis,
+      priceOnRequest: Boolean(updated.priceOnRequest),
       effectivePricePerSqft: effectiveRate,
       floorPlanMediaId: updated.floorPlanMediaId,
       availability: updated.availability ?? 'AVAILABLE',
     };
   }
 
-  async deleteConfiguration(id: string, isInternalStaff = false): Promise<boolean> {
+  async deleteConfiguration(id: string, isInternalStaff = true, expectedProjectId?: string): Promise<boolean> {
+    if (!isInternalStaff) {
+      throw new UnauthorizedError("Forbidden: Only authorized internal staff may delete configurations.");
+    }
+
     const existing = await this.configurationRepository.findById(id);
     if (!existing) throw new NotFoundError(`Configuration with id '${id}' not found`);
+
+    if (expectedProjectId && existing.projectId !== expectedProjectId) {
+      throw new ValidationError(`Configuration '${id}' does not belong to project '${expectedProjectId}'.`);
+    }
+
     return await this.configurationRepository.delete(id);
   }
 

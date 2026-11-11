@@ -47,7 +47,7 @@ export class EditorialService {
             name: p.name,
             slug: p.slug,
             status: p.status,
-            startingPrice: p.startingPrice !== undefined && p.startingPrice !== null ? String(p.startingPrice) : null,
+            startingPrice: !p.priceOnRequest && p.startingPrice !== undefined && p.startingPrice !== null ? String(p.startingPrice) : null,
           };
         }
       }
@@ -61,18 +61,16 @@ export class EditorialService {
       }
     } else if (db) {
       if (article.projectId) {
-        const [p] = await db
-          .select({
-            id: projects.id,
-            name: projects.name,
-            slug: projects.slug,
-            status: projects.status,
-            startingPrice: projects.startingPrice,
-          })
-          .from(projects)
-          .where(eq(projects.id, article.projectId))
-          .limit(1);
-        if (p) project = p;
+        const p = await projectRepository.findById(article.projectId);
+        if (p) {
+          project = {
+            id: p.id,
+            name: p.name,
+            slug: p.slug,
+            status: p.status,
+            startingPrice: !p.priceOnRequest && p.startingPrice !== undefined && p.startingPrice !== null ? String(p.startingPrice) : null,
+          };
+        }
       }
 
       if (article.developerId) {
@@ -102,7 +100,7 @@ export class EditorialService {
             name: p.name,
             slug: p.slug,
             status: p.status,
-            startingPrice: p.startingPrice ?? null,
+            startingPrice: !p.priceOnRequest ? (p.startingPrice ?? null) : null,
           };
         }
       }

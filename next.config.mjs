@@ -95,7 +95,14 @@ export default function (phase) {
         },
       ],
     },
+    serverExternalPackages: [
+      '@aws-sdk/client-s3',
+      '@aws-sdk/s3-request-presigner',
+      'sharp',
+      'pg',
+    ],
     experimental: {
+      optimizePackageImports: ['lucide-react', 'recharts'],
       serverActions: {
         allowedOrigins: [
           '*.run.app',

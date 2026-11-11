@@ -105,12 +105,16 @@ export function NewBookingSection({ configurations }: NewBookingSectionProps) {
                     <span className="font-medium">{config.builtUpArea} sq.ft.</span>
                   </div>
                 )}
-                <div className="flex justify-between pt-1">
-                  <span className="text-[var(--color-foreground)]/60">Effective Rate:</span>
-                  <span className="text-[var(--color-accent)] font-semibold">
-                    ₹{config.effectivePricePerSqft.toLocaleString('en-IN')}/sq.ft.
-                  </span>
-                </div>
+                {typeof config.effectivePricePerSqft === 'number' &&
+                Number.isFinite(config.effectivePricePerSqft) &&
+                config.effectivePricePerSqft > 0 ? (
+                  <div className="flex justify-between pt-1">
+                    <span className="text-[var(--color-foreground)]/60">Effective Rate:</span>
+                    <span className="text-[var(--color-accent)] font-semibold">
+                      ₹{config.effectivePricePerSqft.toLocaleString('en-IN')}/sq.ft.
+                    </span>
+                  </div>
+                ) : null}
               </div>
             </div>
 

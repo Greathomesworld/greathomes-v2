@@ -31,6 +31,7 @@ export interface ProjectConfigurationViewModel {
   superBuiltUpArea: number | null;
   startingPrice: number;
   startingPriceFormatted: string;
+  priceOnRequest: boolean;
   priceBasis: PriceBasis;
   effectivePricePerSqft: number | null;
   rateDisplay: string | null; // e.g. "₹8,450/sq.ft. · Carpet"
@@ -202,6 +203,8 @@ export function mapDtoToConfigurationViewModel(
 
   const typologyCategory = extractTypologyCategory(dto);
 
+  const isPor = Boolean(dto.priceOnRequest) || !dto.price || dto.price <= 0;
+
   return {
     id: dto.id,
     projectId,
@@ -211,13 +214,14 @@ export function mapDtoToConfigurationViewModel(
     carpetArea: dto.carpetArea ?? null,
     builtUpArea: dto.builtUpArea ?? null,
     superBuiltUpArea: dto.superBuiltUpArea ?? null,
-    startingPrice: dto.price ?? 0,
-    startingPriceFormatted: formatStartingPrice(dto.price),
+    startingPrice: isPor ? 0 : (dto.price ?? 0),
+    startingPriceFormatted: isPor ? 'Price on Request' : formatStartingPrice(dto.price),
+    priceOnRequest: isPor,
     priceBasis: dto.priceBasis,
-    effectivePricePerSqft: dto.effectivePricePerSqft ?? null,
-    rateDisplay: areaInfo.rateDisplay,
+    effectivePricePerSqft: isPor ? null : (dto.effectivePricePerSqft ?? null),
+    rateDisplay: isPor ? null : areaInfo.rateDisplay,
     rateBasisLabel: areaInfo.rateBasisLabel,
-    hasRate: Boolean(areaInfo.rateDisplay),
+    hasRate: !isPor && Boolean(areaInfo.rateDisplay),
     carpetAreaDisplay: areaInfo.carpetAreaDisplay,
     secondaryAreaLabel: areaInfo.secondaryAreaLabel,
     secondaryAreaDisplay: areaInfo.secondaryAreaDisplay,

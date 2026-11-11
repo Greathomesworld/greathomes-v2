@@ -60,7 +60,9 @@ export function ProjectConfigurationCard({
       requestSiteVisit: false,
       title: projectName ? `${config.name} at ${projectName}` : config.name,
       priceDisplay: config.startingPriceFormatted,
-      subtitle: `${config.carpetAreaDisplay || 'Verified'} Carpet Area · Starting ${config.startingPriceFormatted}`,
+      subtitle: config.priceOnRequest
+        ? `${config.carpetAreaDisplay || 'Verified'} Carpet Area · Price on Request`
+        : `${config.carpetAreaDisplay || 'Verified'} Carpet Area · Starting ${config.startingPriceFormatted}`,
     });
   };
 
@@ -166,24 +168,26 @@ export function ProjectConfigurationCard({
         <div className="pt-3 border-t border-[var(--color-border)]/60 flex items-end justify-between gap-2">
           <div>
             <p className="text-[10px] text-[var(--color-foreground)]/50 uppercase tracking-wider font-display font-medium">
-              Starting From
+              {config.priceOnRequest ? 'Pricing' : 'Starting From'}
             </p>
             <p className="text-base font-bold font-display text-[var(--color-foreground)] tracking-tight">
               {config.startingPriceFormatted}
             </p>
           </div>
 
-          <div className="text-right">
-            {config.hasRate && config.rateDisplay ? (
-              <span className="inline-block px-2.5 py-1 rounded bg-black/[0.04] text-[11px] font-semibold text-[var(--color-foreground)]/80 font-display">
-                {config.rateDisplay}
-              </span>
-            ) : (
-              <span className="inline-block text-[11px] text-[var(--color-foreground)]/50 font-body">
-                Rate on Request
-              </span>
-            )}
-          </div>
+          {!config.priceOnRequest && (
+            <div className="text-right">
+              {config.hasRate && config.rateDisplay ? (
+                <span className="inline-block px-2.5 py-1 rounded bg-black/[0.04] text-[11px] font-semibold text-[var(--color-foreground)]/80 font-display">
+                  {config.rateDisplay}
+                </span>
+              ) : (
+                <span className="inline-block text-[11px] text-[var(--color-foreground)]/50 font-body">
+                  Rate on Request
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Card-Level Action CTAs */}

@@ -193,6 +193,21 @@ export default function AdminProjectsPage() {
       header: 'Pricing',
       cell: (item) => {
         const startingPrice = item.pricing?.startingPrice;
+        const isPor = Boolean(item.priceOnRequest || item.pricing?.priceOnRequest);
+        if (isPor) {
+          return (
+            <div className="space-y-0.5">
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 font-display">
+                Price on Request
+              </span>
+              {item.manualStartingPrice && item.manualStartingPrice > 0 && (
+                <span className="block text-[11px] text-neutral-400 font-mono">
+                  Ref: ₹{(item.manualStartingPrice / 100000).toFixed(1)} L
+                </span>
+              )}
+            </div>
+          );
+        }
         if (!startingPrice) return <span className="text-neutral-500">On Request</span>;
         if (startingPrice >= 10000000) {
           return <span className="font-semibold text-neutral-950 font-display">₹{(startingPrice / 10000000).toFixed(2)} Cr+</span>;

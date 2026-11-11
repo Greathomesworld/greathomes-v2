@@ -3,6 +3,7 @@ import { projectIntelligenceService } from '@/src/domain/projects/services/proje
 import { projectRepository } from '@/src/infrastructure/repositories/projectProvider';
 import { ensureSeedData } from '@/src/infrastructure/seed';
 import { requireAnyCapability } from '@/src/domain/auth/capabilities';
+import { compareEffectiveRates, comparePricesWithPorLast } from '@/src/lib/priceUtils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -45,6 +46,7 @@ export async function GET(request: NextRequest) {
       name: p.name,
       slug: p.slug,
       status: p.status,
+      priceOnRequest: Boolean(p.priceOnRequest),
     }));
 
     // Filter configurations
@@ -88,13 +90,13 @@ export async function GET(request: NextRequest) {
         case 'name:desc':
           return b.name.localeCompare(a.name);
         case 'price:asc':
-          return a.price - b.price;
+          return comparePricesWithPorLast(a.price, b.price, 'asc');
         case 'price:desc':
-          return b.price - a.price;
+          return comparePricesWithPorLast(a.price, b.price, 'desc');
         case 'effectiveRate:asc':
-          return a.effectivePricePerSqft - b.effectivePricePerSqft;
+          return compareEffectiveRates(a.effectivePricePerSqft, b.effectivePricePerSqft, 'asc');
         case 'effectiveRate:desc':
-          return b.effectivePricePerSqft - a.effectivePricePerSqft;
+          return compareEffectiveRates(a.effectivePricePerSqft, b.effectivePricePerSqft, 'desc');
         case 'createdAt:asc':
           return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         case 'createdAt:desc':

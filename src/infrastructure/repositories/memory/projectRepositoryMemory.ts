@@ -27,6 +27,7 @@ export class ProjectRepositoryMemory implements ProjectRepository {
     const project: Project = {
       ...data,
       id: uuidv4(),
+      priceOnRequest: Boolean(data.priceOnRequest),
       lifecycleStatus: data.lifecycleStatus ?? (data.isPublished === false ? 'DRAFT' : 'PUBLISHED'),
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -104,7 +105,13 @@ export class ProjectRepositoryMemory implements ProjectRepository {
   async update(id: string, data: Partial<Project>): Promise<Project | null> {
     const index = this.projects.findIndex(p => p.id === id);
     if (index === -1) return null;
-    this.projects[index] = { ...this.projects[index], ...data, updatedAt: new Date() };
+    const existing = this.projects[index];
+    this.projects[index] = {
+      ...existing,
+      ...data,
+      priceOnRequest: data.priceOnRequest !== undefined ? Boolean(data.priceOnRequest) : Boolean(existing.priceOnRequest),
+      updatedAt: new Date(),
+    };
     return this.projects[index];
   }
 
@@ -118,6 +125,24 @@ export class ProjectRepositoryMemory implements ProjectRepository {
 
 export class ProjectConfigurationRepositoryMemory implements ProjectConfigurationRepository {
   private configurations: ProjectConfiguration[] = [];
+  private mediaRepo?: ProjectMediaRepositoryMemory;
+
+  constructor(mediaRepo?: ProjectMediaRepositoryMemory) {
+    this.mediaRepo = mediaRepo;
+  }
+
+  setMediaRepository(mediaRepo: ProjectMediaRepositoryMemory): void {
+    this.mediaRepo = mediaRepo;
+  }
+
+  private resolveMediaRepository(): ProjectMediaRepositoryMemory | undefined {
+    if (this.mediaRepo) return this.mediaRepo;
+    const globalRef = globalThis as unknown as { __ghProjectMediaRepo?: unknown };
+    if (globalRef.__ghProjectMediaRepo instanceof ProjectMediaRepositoryMemory) {
+      return globalRef.__ghProjectMediaRepo;
+    }
+    return undefined;
+  }
 
   async findAll(): Promise<ProjectConfiguration[]> {
     return [...this.configurations];
@@ -140,6 +165,7 @@ export class ProjectConfigurationRepositoryMemory implements ProjectConfiguratio
     const config: ProjectConfiguration = {
       ...data,
       id: uuidv4(),
+      priceOnRequest: Boolean(data.priceOnRequest),
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -150,15 +176,51 @@ export class ProjectConfigurationRepositoryMemory implements ProjectConfiguratio
   async update(id: string, data: Partial<ProjectConfiguration>): Promise<ProjectConfiguration | null> {
     const index = this.configurations.findIndex(c => c.id === id);
     if (index === -1) return null;
-    this.configurations[index] = { ...this.configurations[index], ...data, updatedAt: new Date() };
-    return this.configurations[index];
+
+    const existing = this.configurations[index];
+    const updated: ProjectConfiguration = {
+      ...existing,
+      ...data,
+      priceOnRequest: data.priceOnRequest !== undefined ? Boolean(data.priceOnRequest) : Boolean(existing.priceOnRequest),
+      carpetArea: data.carpetArea !== undefined ? (data.carpetArea ?? undefined) : existing.carpetArea,
+      builtUpArea: data.builtUpArea !== undefined ? (data.builtUpArea ?? undefined) : existing.builtUpArea,
+      superBuiltUpArea:
+        data.superBuiltUpArea !== undefined ? (data.superBuiltUpArea ?? undefined) : existing.superBuiltUpArea,
+      bedroomCount: data.bedroomCount !== undefined ? (data.bedroomCount ?? undefined) : existing.bedroomCount,
+      updatedAt: new Date(),
+    };
+
+    this.configurations[index] = updated;
+    return updated;
+  }
+
+  protected removeConfigurationAtIndex(index: number): void {
+    this.configurations.splice(index, 1);
   }
 
   async delete(id: string): Promise<boolean> {
     const index = this.configurations.findIndex(c => c.id === id);
     if (index === -1) return false;
-    this.configurations.splice(index, 1);
-    return true;
+
+    const targetConfig = this.configurations[index];
+    const mediaRepo = this.resolveMediaRepository();
+    const snapshots = mediaRepo ? mediaRepo.snapshotByConfigurationId(id) : [];
+
+    try {
+      if (mediaRepo) {
+        mediaRepo.disassociateConfiguration(id);
+      }
+      this.removeConfigurationAtIndex(index);
+      return true;
+    } catch (err) {
+      if (mediaRepo && snapshots.length > 0) {
+        mediaRepo.restoreConfigurationSnapshots(snapshots);
+      }
+      if (!this.configurations.some(c => c.id === targetConfig.id)) {
+        this.configurations.splice(index, 0, targetConfig);
+      }
+      throw err;
+    }
   }
 
   async findDuplicates(projectId: string, name: string, excludeId?: string): Promise<ProjectConfiguration[]> {
@@ -171,6 +233,50 @@ export class ProjectConfigurationRepositoryMemory implements ProjectConfiguratio
 
 export class ProjectMediaRepositoryMemory implements ProjectMediaRepository {
   private mediaList: ProjectMedia[] = [];
+
+  snapshotByConfigurationId(
+    configurationId: string
+  ): Array<{ id: string; configurationId?: string | null; updatedAt: Date }> {
+    return this.mediaList
+      .filter(m => m.configurationId === configurationId)
+      .map(m => ({
+        id: m.id,
+        configurationId: m.configurationId,
+        updatedAt: m.updatedAt,
+      }));
+  }
+
+  disassociateConfiguration(configurationId: string): number {
+    let count = 0;
+    const now = new Date();
+    for (let i = 0; i < this.mediaList.length; i++) {
+      if (this.mediaList[i].configurationId === configurationId) {
+        this.mediaList[i] = {
+          ...this.mediaList[i],
+          configurationId: undefined,
+          updatedAt: now,
+        };
+        count++;
+      }
+    }
+    return count;
+  }
+
+  restoreConfigurationSnapshots(
+    snapshots: Array<{ id: string; configurationId?: string | null; updatedAt: Date }>
+  ): void {
+    const map = new Map(snapshots.map(s => [s.id, s]));
+    for (let i = 0; i < this.mediaList.length; i++) {
+      const snap = map.get(this.mediaList[i].id);
+      if (snap) {
+        this.mediaList[i] = {
+          ...this.mediaList[i],
+          configurationId: snap.configurationId ?? undefined,
+          updatedAt: snap.updatedAt,
+        };
+      }
+    }
+  }
 
   async findByProjectId(projectId: string): Promise<ProjectMedia[]> {
     return this.mediaList.filter(m => m.projectId === projectId);
@@ -217,6 +323,7 @@ export class ProjectMediaRepositoryMemory implements ProjectMediaRepository {
     this.mediaList[index] = {
       ...this.mediaList[index],
       ...data,
+      configurationId: data.configurationId === null ? undefined : (data.configurationId !== undefined ? data.configurationId : this.mediaList[index].configurationId),
       updatedAt: new Date(),
     };
     return this.mediaList[index];

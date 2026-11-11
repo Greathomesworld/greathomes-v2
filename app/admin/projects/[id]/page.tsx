@@ -23,6 +23,7 @@ import { ProjectFloorPlanViewer } from '@/src/components/projects/ProjectFloorPl
 import { ProjectLocationMap } from '@/src/components/projects/ProjectLocationMap';
 import { isValidCoordinate, resolveProjectCoordinates } from '@/src/domain/projects/viewModels/projectLocationViewModel';
 import { ProjectIntelligenceControl } from '@/src/components/admin/intelligence/ProjectIntelligenceControl';
+import { parseIndianCurrencyPrice, parsePositiveAreaSqft } from '@/src/lib/priceUtils';
 
 function formatCoordinates(lat: number, lng: number): string {
   const latDir = lat >= 0 ? 'N' : 'S';
@@ -46,6 +47,7 @@ export default function ProjectDetailPage() {
   // Sub-items forms
   const [savingSub, setSavingSub] = useState(false);
   const [subError, setSubError] = useState<string | null>(null);
+  const [deletingConfigId, setDeletingConfigId] = useState<string | null>(null);
 
   // Floor Plan viewer modal states
   const [isFloorPlanViewerOpen, setIsFloorPlanViewerOpen] = useState(false);
@@ -56,21 +58,25 @@ export default function ProjectDetailPage() {
   const [editConfigName, setEditConfigName] = useState('');
   const [editConfigBhk, setEditConfigBhk] = useState('');
   const [editConfigPrice, setEditConfigPrice] = useState('');
+  const [editConfigPriceOnRequest, setEditConfigPriceOnRequest] = useState(false);
   const [editConfigPriceBasis, setEditConfigPriceBasis] = useState('CARPET_AREA');
   const [editConfigCarpet, setEditConfigCarpet] = useState('');
   const [editConfigBuiltUp, setEditConfigBuiltUp] = useState('');
   const [editConfigSuperBuiltUp, setEditConfigSuperBuiltUp] = useState('');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [editFieldErrors, setEditFieldErrors] = useState<Record<string, string>>({});
 
   // New config form states
   const [newConfigName, setNewConfigName] = useState('');
   const [newConfigBhk, setNewConfigBhk] = useState('');
   const [newConfigPrice, setNewConfigBhkPrice] = useState('');
+  const [newConfigPriceOnRequest, setNewConfigPriceOnRequest] = useState(false);
   const [newConfigPriceBasis, setNewConfigPriceBasis] = useState('CARPET_AREA');
   const [newConfigCarpet, setNewConfigCarpet] = useState('');
   const [newConfigBuiltUp, setNewConfigBuiltUp] = useState('');
   const [newConfigSuperBuiltUp, setNewConfigSuperBuiltUp] = useState('');
+  const [addFieldErrors, setAddFieldErrors] = useState<Record<string, string>>({});
 
   // New FAQ states
   const [newFaqQuestion, setNewFaqQuestion] = useState('');
@@ -136,13 +142,16 @@ export default function ProjectDetailPage() {
   const [dialogAction, setDialogAction] = useState<'publish' | 'archive' | null>(null);
   const [dialogLoading, setDialogLoading] = useState(false);
 
-  const fetchProjectData = async () => {
+  const fetchProjectData = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) {
+        setLoading(true);
+      }
       setError(null);
       
       const res = await fetch(`/api/projects/${id}`, {
         headers: getAdminHeaders(),
+        cache: 'no-store',
       });
       if (!res.ok) {
         throw new Error(`Failed to load project with ID: ${id}`);
@@ -238,16 +247,75 @@ export default function ProjectDetailPage() {
     e.preventDefault();
     setSavingSub(true);
     setSubError(null);
+    setAddFieldErrors({});
 
     try {
+      const fieldErrs: Record<string, string> = {};
+      if (!newConfigName.trim()) {
+        fieldErrs.name = 'Configuration name is required.';
+      }
+
+      let parsedPrice: number | null = null;
+      if (newConfigPrice.trim() !== '') {
+        parsedPrice = parseIndianCurrencyPrice(newConfigPrice);
+        if (parsedPrice === null) {
+          fieldErrs.price = 'Please enter a valid price (e.g. 8500000 or 85,00,000).';
+        }
+      } else if (newConfigPriceOnRequest) {
+        parsedPrice = 0;
+      } else {
+        fieldErrs.price = 'Please enter a valid price (e.g. 8500000 or 85,00,000) or enable Price on Request.';
+      }
+
+      const carpetVal = parsePositiveAreaSqft(newConfigCarpet);
+      if (carpetVal === null) {
+        fieldErrs.carpetArea = 'Carpet Area is mandatory and must be greater than 0.';
+      }
+
+      let builtUpVal: number | null = null;
+      if (newConfigBuiltUp.trim() !== '') {
+        builtUpVal = parsePositiveAreaSqft(newConfigBuiltUp);
+        if (builtUpVal === null) {
+          fieldErrs.builtUpArea = 'Built-up Area must be a valid number greater than 0.';
+        }
+      } else if (newConfigPriceBasis === 'BUILT_UP_AREA') {
+        fieldErrs.builtUpArea = 'Built-up Area is required when price basis is set to Built-up Area.';
+      }
+
+      let superBuiltUpVal: number | null = null;
+      if (newConfigSuperBuiltUp.trim() !== '') {
+        superBuiltUpVal = parsePositiveAreaSqft(newConfigSuperBuiltUp);
+        if (superBuiltUpVal === null) {
+          fieldErrs.superBuiltUpArea = 'Super Built-up Area must be a valid number greater than 0.';
+        }
+      } else if (newConfigPriceBasis === 'SUPER_BUILT_UP_AREA') {
+        fieldErrs.superBuiltUpArea = 'Super Built-up Area is required when price basis is set to Super Built-up Area.';
+      }
+
+      let bhkVal: number | null = null;
+      if (newConfigBhk.trim() !== '') {
+        const parsedBhk = Number(newConfigBhk.trim());
+        if (!Number.isInteger(parsedBhk) || parsedBhk < 0) {
+          fieldErrs.bedroomCount = 'Bedroom count must be a non-negative whole number.';
+        } else {
+          bhkVal = parsedBhk;
+        }
+      }
+
+      if (Object.keys(fieldErrs).length > 0) {
+        setAddFieldErrors(fieldErrs);
+        throw new Error(Object.values(fieldErrs)[0]);
+      }
+
       const body = {
-        name: newConfigName,
-        bedroomCount: newConfigBhk ? parseInt(newConfigBhk, 10) : null,
-        price: parseFloat(newConfigPrice),
+        name: newConfigName.trim(),
+        bedroomCount: bhkVal,
+        price: parsedPrice,
+        priceOnRequest: newConfigPriceOnRequest,
         priceBasis: newConfigPriceBasis,
-        carpetArea: newConfigCarpet ? parseFloat(newConfigCarpet) : null,
-        builtUpArea: newConfigBuiltUp ? parseFloat(newConfigBuiltUp) : null,
-        superBuiltUpArea: newConfigSuperBuiltUp ? parseFloat(newConfigSuperBuiltUp) : null,
+        carpetArea: carpetVal,
+        builtUpArea: builtUpVal,
+        superBuiltUpArea: superBuiltUpVal,
       };
 
       const res = await fetch(`/api/projects/${id}/configurations`, {
@@ -259,8 +327,8 @@ export default function ProjectDetailPage() {
         body: JSON.stringify(body),
       });
 
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json();
         throw new Error(data.error || 'Failed to add typology.');
       }
 
@@ -268,12 +336,14 @@ export default function ProjectDetailPage() {
       setNewConfigName('');
       setNewConfigBhk('');
       setNewConfigBhkPrice('');
+      setNewConfigPriceOnRequest(false);
       setNewConfigCarpet('');
       setNewConfigBuiltUp('');
       setNewConfigSuperBuiltUp('');
-      fetchProjectData();
+      setAddFieldErrors({});
+      await fetchProjectData(true);
     } catch (err: any) {
-      setSubError(err.message);
+      setSubError(err.message || 'Failed to add typology.');
     } finally {
       setSavingSub(false);
     }
@@ -284,12 +354,14 @@ export default function ProjectDetailPage() {
     setEditingConfig(config);
     setEditConfigName(config.name || '');
     setEditConfigBhk(config.bedroomCount != null ? config.bedroomCount.toString() : '');
-    setEditConfigPrice(config.price != null ? config.price.toString() : '');
+    setEditConfigPrice(config.price != null && config.price > 0 ? config.price.toString() : '');
+    setEditConfigPriceOnRequest(Boolean(config.priceOnRequest));
     setEditConfigPriceBasis(config.priceBasis || 'CARPET_AREA');
     setEditConfigCarpet(config.carpetArea != null ? config.carpetArea.toString() : '');
     setEditConfigBuiltUp(config.builtUpArea != null ? config.builtUpArea.toString() : '');
     setEditConfigSuperBuiltUp(config.superBuiltUpArea != null ? config.superBuiltUpArea.toString() : '');
     setEditError(null);
+    setEditFieldErrors({});
   };
 
   // Submit edit configuration
@@ -299,17 +371,78 @@ export default function ProjectDetailPage() {
 
     setIsSavingEdit(true);
     setEditError(null);
+    setEditFieldErrors({});
 
     try {
-      const body = {
-        name: editConfigName,
-        bedroomCount: editConfigBhk ? parseInt(editConfigBhk, 10) : null,
-        price: parseFloat(editConfigPrice),
+      const fieldErrs: Record<string, string> = {};
+      if (!editConfigName.trim()) {
+        fieldErrs.name = 'Configuration name is required.';
+      }
+
+      let parsedPrice: number | undefined = undefined;
+      if (editConfigPrice.trim() !== '') {
+        const p = parseIndianCurrencyPrice(editConfigPrice);
+        if (p === null) {
+          fieldErrs.price = 'Please enter a valid price (e.g. 8500000 or 85,00,000).';
+        } else {
+          parsedPrice = p;
+        }
+      } else if (!editConfigPriceOnRequest) {
+        fieldErrs.price = 'A valid positive price is required when Price on Request is disabled.';
+      }
+
+      const carpetVal = parsePositiveAreaSqft(editConfigCarpet);
+      if (carpetVal === null) {
+        fieldErrs.carpetArea = 'Carpet Area is mandatory and must be greater than 0.';
+      }
+
+      let builtUpVal: number | null = null;
+      if (editConfigBuiltUp.trim() !== '') {
+        builtUpVal = parsePositiveAreaSqft(editConfigBuiltUp);
+        if (builtUpVal === null) {
+          fieldErrs.builtUpArea = 'Built-up Area must be a valid number greater than 0.';
+        }
+      } else if (editConfigPriceBasis === 'BUILT_UP_AREA') {
+        fieldErrs.builtUpArea = 'Built-up Area is required when price basis is set to Built-up Area.';
+      }
+
+      let superBuiltUpVal: number | null = null;
+      if (editConfigSuperBuiltUp.trim() !== '') {
+        superBuiltUpVal = parsePositiveAreaSqft(editConfigSuperBuiltUp);
+        if (superBuiltUpVal === null) {
+          fieldErrs.superBuiltUpArea = 'Super Built-up Area must be a valid number greater than 0.';
+        }
+      } else if (editConfigPriceBasis === 'SUPER_BUILT_UP_AREA') {
+        fieldErrs.superBuiltUpArea = 'Super Built-up Area is required when price basis is set to Super Built-up Area.';
+      }
+
+      let bhkVal: number | null = null;
+      if (editConfigBhk.trim() !== '') {
+        const parsedBhk = Number(editConfigBhk.trim());
+        if (!Number.isInteger(parsedBhk) || parsedBhk < 0) {
+          fieldErrs.bedroomCount = 'Bedroom count must be a non-negative whole number.';
+        } else {
+          bhkVal = parsedBhk;
+        }
+      }
+
+      if (Object.keys(fieldErrs).length > 0) {
+        setEditFieldErrors(fieldErrs);
+        throw new Error(Object.values(fieldErrs)[0]);
+      }
+
+      const body: Record<string, any> = {
+        name: editConfigName.trim(),
+        bedroomCount: bhkVal,
+        priceOnRequest: editConfigPriceOnRequest,
         priceBasis: editConfigPriceBasis,
-        carpetArea: editConfigCarpet ? parseFloat(editConfigCarpet) : null,
-        builtUpArea: editConfigBuiltUp ? parseFloat(editConfigBuiltUp) : null,
-        superBuiltUpArea: editConfigSuperBuiltUp ? parseFloat(editConfigSuperBuiltUp) : null,
+        carpetArea: carpetVal,
+        builtUpArea: builtUpVal,
+        superBuiltUpArea: superBuiltUpVal,
       };
+      if (parsedPrice !== undefined) {
+        body.price = parsedPrice;
+      }
 
       const res = await fetch(`/api/projects/${id}/configurations/${editingConfig.id}`, {
         method: 'PATCH',
@@ -320,13 +453,31 @@ export default function ProjectDetailPage() {
         body: JSON.stringify(body),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok || data.error) {
         throw new Error(data.error || 'Failed to update configuration.');
       }
 
+      // Immediately update local project state so changes reflect without delay
+      setProject((prev: any) => {
+        if (!prev || !Array.isArray(prev.configurations)) return prev;
+        return {
+          ...prev,
+          configurations: prev.configurations.map((c: any) =>
+            c.id === editingConfig.id
+              ? {
+                  ...c,
+                  ...data,
+                  floorPlans: c.floorPlans || [],
+                }
+              : c
+          ),
+        };
+      });
+
       setEditingConfig(null);
-      fetchProjectData();
+      setEditFieldErrors({});
+      await fetchProjectData(true);
     } catch (err: any) {
       setEditError(err.message || 'Failed to update configuration.');
     } finally {
@@ -338,14 +489,20 @@ export default function ProjectDetailPage() {
   const handleDeleteConfig = async (configId: string) => {
     if (!confirm('Are you sure you want to delete this typology?')) return;
     try {
+      setDeletingConfigId(configId);
       const res = await fetch(`/api/projects/${id}/configurations/${configId}`, {
         method: 'DELETE',
         headers: getAdminHeaders(),
       });
-      if (!res.ok) throw new Error('Failed to delete configuration');
-      fetchProjectData();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to delete configuration');
+      }
+      await fetchProjectData(true);
     } catch (err: any) {
-      alert(err.message);
+      alert(err.message || 'Failed to delete configuration');
+    } finally {
+      setDeletingConfigId(null);
     }
   };
 
@@ -906,9 +1063,25 @@ export default function ProjectDetailPage() {
                   {project.status?.replace('_', ' ')}
                 </span>
               </div>
-              <div className="flex justify-between items-center py-1.5">
+              <div className="flex justify-between items-center py-1.5 border-b border-neutral-100">
                 <span className="text-xs font-medium text-neutral-500">Property</span>
                 <span className="text-xs uppercase font-mono text-neutral-700">{project.propertyType}</span>
+              </div>
+              <div className="flex justify-between items-center py-1.5">
+                <span className="text-xs font-medium text-neutral-500">Public Pricing</span>
+                {project.priceOnRequest ? (
+                  <span className="text-[10px] font-bold uppercase font-display bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded">
+                    Project PoR
+                  </span>
+                ) : project.pricing?.priceOnRequest ? (
+                  <span className="text-[10px] font-bold uppercase font-display bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded">
+                    All Configs PoR
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold uppercase font-display bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded">
+                    Publicly Priced
+                  </span>
+                )}
               </div>
             </div>
 
@@ -1198,20 +1371,20 @@ export default function ProjectDetailPage() {
                       <table className="w-full text-left text-sm border-collapse table-fixed">
                         <thead>
                           <tr className="border-b border-neutral-200/80 text-[11px] font-bold text-neutral-400 uppercase tracking-wider font-display bg-neutral-50/60">
-                            <th className="py-3.5 px-3 w-[18%] font-bold text-neutral-500 tracking-wider">Name</th>
+                            <th className="py-3.5 px-3 w-[16%] font-bold text-neutral-500 tracking-wider">Name</th>
                             <th className="py-3.5 px-2 w-[7%] text-center font-bold text-neutral-500 tracking-wider">BHK</th>
                             <th className="py-3.5 px-3 w-[18%] font-bold text-neutral-500 tracking-wider">Areas</th>
                             <th className="py-3.5 px-3 w-[11%] font-bold text-neutral-500 tracking-wider">Price Basis</th>
                             <th className="py-3.5 px-3 w-[12%] font-bold text-neutral-500 tracking-wider">Price</th>
                             <th className="py-3.5 px-3 w-[11%] font-bold text-neutral-500 tracking-wider">Effective Rate</th>
-                            <th className="py-3.5 px-3 w-[18%] font-bold text-neutral-500 tracking-wider">Floor Plans</th>
-                            <th className="py-3.5 px-2 w-[5%] text-right font-bold text-neutral-500 tracking-wider">Actions</th>
+                            <th className="py-3.5 px-3 w-[16%] font-bold text-neutral-500 tracking-wider">Floor Plans</th>
+                            <th className="py-3.5 px-2 w-[9%] text-right font-bold text-neutral-500 tracking-wider">Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-neutral-100">
                           {project.configurations.map((config: any) => (
                             <tr key={config.id} className="hover:bg-neutral-50/40 transition-colors align-top border-b border-neutral-100/50">
-                              <td className="py-4 px-3 w-[18%] min-w-0">
+                              <td className="py-4 px-3 w-[16%] min-w-0">
                                 <span className="font-bold text-neutral-900 font-display text-sm block leading-snug break-words">{config.name}</span>
                               </td>
                               <td className="py-4 px-2 w-[7%] text-center">
@@ -1250,29 +1423,36 @@ export default function ProjectDetailPage() {
                                 </span>
                               </td>
                               <td className="py-4 px-3 w-[12%] whitespace-nowrap">
-                                <span className="font-bold text-sm text-neutral-900 font-display">
-                                  ₹{config.price ? config.price.toLocaleString('en-IN') : '—'}
-                                </span>
+                                <div className="space-y-1">
+                                  <span className="font-bold text-sm text-neutral-900 font-display block">
+                                    {config.price && config.price > 0 ? `₹${config.price.toLocaleString('en-IN')}` : '—'}
+                                  </span>
+                                  {(config.priceOnRequest || project.priceOnRequest) && (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 font-display">
+                                      {project.priceOnRequest ? 'Project PoR' : 'Price on Request'}
+                                    </span>
+                                  )}
+                                </div>
                               </td>
                               <td className="py-4 px-3 w-[11%] whitespace-nowrap">
                                 <span className="text-xs font-medium text-neutral-500 font-mono">
-                                  {config.effectivePricePerSqft ? `₹${config.effectivePricePerSqft.toLocaleString('en-IN')}/sq.ft.` : '—'}
+                                  {config.effectivePricePerSqft && config.effectivePricePerSqft > 0 ? `₹${config.effectivePricePerSqft.toLocaleString('en-IN')}/sq.ft.` : '—'}
                                 </span>
                               </td>
-                              <td className="py-4 px-3 w-[18%] min-w-0">
+                              <td className="py-4 px-3 w-[16%] min-w-0">
                                 <TypologyFloorPlanControl
                                   projectId={project.id}
                                   projectName={project.name}
                                   configuration={config}
                                   projectMedia={project.media || []}
-                                  onUpdated={fetchProjectData}
+                                  onUpdated={() => fetchProjectData(true)}
                                   onOpenViewer={(configId) => {
                                     setViewerConfigId(configId);
                                     setIsFloorPlanViewerOpen(true);
                                   }}
                                 />
                               </td>
-                              <td className="py-4 px-2 w-[5%] text-right">
+                              <td className="py-4 px-2 w-[9%] text-right">
                                 <div className="flex items-center justify-end gap-1">
                                   <button
                                     type="button"
@@ -1285,12 +1465,17 @@ export default function ProjectDetailPage() {
                                   </button>
                                   <button
                                     type="button"
+                                    disabled={deletingConfigId === config.id}
                                     onClick={() => handleDeleteConfig(config.id)}
-                                    className="p-1.5 text-neutral-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition min-w-[36px] min-h-[36px] flex items-center justify-center"
+                                    className="p-1.5 text-neutral-500 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition min-w-[36px] min-h-[36px] flex items-center justify-center"
                                     title="Remove typology"
                                     aria-label="Remove typology"
                                   >
-                                    <Trash2 className="h-4 w-4" />
+                                    {deletingConfigId === config.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin text-rose-500" />
+                                    ) : (
+                                      <Trash2 className="h-4 w-4" />
+                                    )}
                                   </button>
                                 </div>
                               </td>
@@ -1322,11 +1507,16 @@ export default function ProjectDetailPage() {
                               </button>
                               <button
                                 type="button"
+                                disabled={deletingConfigId === config.id}
                                 onClick={() => handleDeleteConfig(config.id)}
-                                className="p-2 text-neutral-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition min-w-[44px] min-h-[44px] flex items-center justify-center"
+                                className="p-2 text-neutral-500 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition min-w-[44px] min-h-[44px] flex items-center justify-center"
                                 title="Remove typology"
                               >
-                                <Trash2 className="h-4 w-4" />
+                                {deletingConfigId === config.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin text-rose-500" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
                               </button>
                             </div>
                           </div>
@@ -1334,11 +1524,20 @@ export default function ProjectDetailPage() {
                           <div className="grid grid-cols-2 gap-2 text-xs bg-neutral-50 p-3 rounded-lg border border-neutral-100">
                             <div>
                               <span className="text-[10px] uppercase text-neutral-400 font-sans block">Price ({config.priceBasis || 'Basis'})</span>
-                              <span className="font-bold text-neutral-900 text-sm font-display">₹{config.price ? config.price.toLocaleString('en-IN') : '—'}</span>
+                              <span className="font-bold text-neutral-900 text-sm font-display block">
+                                {config.price && config.price > 0 ? `₹${config.price.toLocaleString('en-IN')}` : '—'}
+                              </span>
+                              {(config.priceOnRequest || project.priceOnRequest) && (
+                                <span className="inline-flex items-center mt-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 font-display">
+                                  {project.priceOnRequest ? 'Project PoR' : 'Price on Request'}
+                                </span>
+                              )}
                             </div>
                             <div>
                               <span className="text-[10px] uppercase text-neutral-400 font-sans block">Effective Rate</span>
-                              <span className="font-semibold text-neutral-700 font-mono">₹{config.effectivePricePerSqft ? `${config.effectivePricePerSqft.toLocaleString('en-IN')}/sq.ft.` : '—'}</span>
+                              <span className="font-semibold text-neutral-700 font-mono">
+                                {config.effectivePricePerSqft && config.effectivePricePerSqft > 0 ? `₹${config.effectivePricePerSqft.toLocaleString('en-IN')}/sq.ft.` : '—'}
+                              </span>
                             </div>
                           </div>
 
@@ -1379,15 +1578,21 @@ export default function ProjectDetailPage() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-600 mb-1 font-display">Config Name *</label>
+                    <label className="block text-xs font-semibold text-neutral-600 mb-1 font-display">
+                      Config Name <span className="text-rose-500">*</span>
+                    </label>
                     <input type="text" value={newConfigName} onChange={(e) => setNewConfigName(e.target.value)} placeholder="e.g. 3 BHK Luxury" className="w-full text-sm bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition" required />
+                    {addFieldErrors.name && <p className="text-[11px] text-rose-600 mt-1">{addFieldErrors.name}</p>}
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-neutral-600 mb-1 font-display">Bedroom Count (BHK)</label>
-                    <input type="number" value={newConfigBhk} onChange={(e) => setNewConfigBhk(e.target.value)} placeholder="e.g. 3" className="w-full text-sm bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition" />
+                    <input type="number" min="0" step="1" value={newConfigBhk} onChange={(e) => setNewConfigBhk(e.target.value)} placeholder="e.g. 3" className="w-full text-sm bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition" />
+                    {addFieldErrors.bedroomCount && <p className="text-[11px] text-rose-600 mt-1">{addFieldErrors.bedroomCount}</p>}
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-600 mb-1 font-display">Price Basis *</label>
+                    <label className="block text-xs font-semibold text-neutral-600 mb-1 font-display">
+                      Price Basis <span className="text-rose-500">*</span>
+                    </label>
                     <select value={newConfigPriceBasis} onChange={(e) => setNewConfigPriceBasis(e.target.value)} className="w-full text-sm bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition">
                       <option value="CARPET_AREA">Carpet Area</option>
                       <option value="BUILT_UP_AREA">Built-up Area</option>
@@ -1395,20 +1600,78 @@ export default function ProjectDetailPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-600 mb-1 font-display">Price (₹ INR) *</label>
-                    <input type="number" value={newConfigPrice} onChange={(e) => setNewConfigBhkPrice(e.target.value)} placeholder="e.g. 8500000" className="w-full text-sm bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition" required />
+                    <label className="block text-xs font-semibold text-neutral-600 mb-1 font-display">
+                      {newConfigPriceOnRequest ? 'Internal Price (₹ INR, Optional)' : 'Price (₹ INR)'}{' '}
+                      {!newConfigPriceOnRequest && <span className="text-rose-500">*</span>}
+                    </label>
+                    <input
+                      type="text"
+                      value={newConfigPrice}
+                      onChange={(e) => setNewConfigBhkPrice(e.target.value)}
+                      placeholder={newConfigPriceOnRequest ? 'Optional internal reference price' : 'e.g. 85,00,000'}
+                      className="w-full text-sm bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition font-mono"
+                      required={!newConfigPriceOnRequest}
+                    />
+                    {addFieldErrors.price && <p className="text-[11px] text-rose-600 mt-1">{addFieldErrors.price}</p>}
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-600 mb-1 font-display">Carpet Area (sq.ft.)</label>
-                    <input type="number" value={newConfigCarpet} onChange={(e) => setNewConfigCarpet(e.target.value)} placeholder="e.g. 1045" className="w-full text-sm bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition" />
+                    <label className="block text-xs font-semibold text-neutral-600 mb-1 font-display">
+                      Carpet Area (sq.ft.) <span className="text-rose-500">*</span>
+                    </label>
+                    <input type="number" step="any" min="0.01" value={newConfigCarpet} onChange={(e) => setNewConfigCarpet(e.target.value)} placeholder="e.g. 1045" className="w-full text-sm bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition" required />
+                    {addFieldErrors.carpetArea && <p className="text-[11px] text-rose-600 mt-1">{addFieldErrors.carpetArea}</p>}
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-600 mb-1 font-display">Built-up Area (sq.ft.)</label>
-                    <input type="number" value={newConfigBuiltUp} onChange={(e) => setNewConfigBuiltUp(e.target.value)} placeholder="e.g. 1210" className="w-full text-sm bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition" />
+                    <label className="block text-xs font-semibold text-neutral-600 mb-1 font-display">
+                      Built-up Area (sq.ft.){' '}
+                      {newConfigPriceBasis === 'BUILT_UP_AREA' && <span className="text-rose-500">*</span>}
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0.01"
+                      value={newConfigBuiltUp}
+                      onChange={(e) => setNewConfigBuiltUp(e.target.value)}
+                      placeholder="e.g. 1210"
+                      className="w-full text-sm bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition"
+                      required={newConfigPriceBasis === 'BUILT_UP_AREA'}
+                    />
+                    {addFieldErrors.builtUpArea && <p className="text-[11px] text-rose-600 mt-1">{addFieldErrors.builtUpArea}</p>}
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="block text-xs font-semibold text-neutral-600 mb-1 font-display">Super Built-up Area (sq.ft.)</label>
-                    <input type="number" value={newConfigSuperBuiltUp} onChange={(e) => setNewConfigSuperBuiltUp(e.target.value)} placeholder="e.g. 1420" className="w-full text-sm bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition" />
+                    <label className="block text-xs font-semibold text-neutral-600 mb-1 font-display">
+                      Super Built-up Area (sq.ft.){' '}
+                      {newConfigPriceBasis === 'SUPER_BUILT_UP_AREA' && <span className="text-rose-500">*</span>}
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0.01"
+                      value={newConfigSuperBuiltUp}
+                      onChange={(e) => setNewConfigSuperBuiltUp(e.target.value)}
+                      placeholder="e.g. 1420"
+                      className="w-full text-sm bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition"
+                      required={newConfigPriceBasis === 'SUPER_BUILT_UP_AREA'}
+                    />
+                    {addFieldErrors.superBuiltUpArea && <p className="text-[11px] text-rose-600 mt-1">{addFieldErrors.superBuiltUpArea}</p>}
+                  </div>
+                  <div className="sm:col-span-2 lg:col-span-4 pt-1">
+                    <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={newConfigPriceOnRequest}
+                        onChange={(e) => setNewConfigPriceOnRequest(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <div>
+                        <span className="text-xs font-bold text-neutral-800 font-display block">
+                          Mark Typology as Price on Request
+                        </span>
+                        <span className="text-[11px] text-neutral-500 font-sans block">
+                          Public visitors will see &ldquo;Price on Request&rdquo; for this typology. Any internal price entered above is preserved for staff only.
+                        </span>
+                      </div>
+                    </label>
                   </div>
                 </div>
 
@@ -2039,30 +2302,46 @@ export default function ProjectDetailPage() {
             <form onSubmit={handleUpdateConfig} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-semibold text-neutral-500 mb-1">Configuration Name *</label>
+                  <label className="block text-xs font-semibold text-neutral-500 mb-1">
+                    Configuration Name <span className="text-rose-500">*</span>
+                  </label>
                   <input
                     type="text"
                     value={editConfigName}
                     onChange={(e) => setEditConfigName(e.target.value)}
                     placeholder="e.g. 3 BHK Luxury Suite"
-                    className="w-full text-sm bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 focus:outline-hidden"
+                    className={`w-full text-sm bg-neutral-50 border ${
+                      editFieldErrors.name ? 'border-rose-400' : 'border-neutral-200'
+                    } rounded-lg p-2.5 focus:outline-hidden`}
                     required
                   />
+                  {editFieldErrors.name && (
+                    <p className="text-[11px] text-rose-600 mt-1">{editFieldErrors.name}</p>
+                  )}
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-neutral-500 mb-1">Bedroom Count (BHK)</label>
                   <input
                     type="number"
+                    min="0"
+                    step="1"
                     value={editConfigBhk}
                     onChange={(e) => setEditConfigBhk(e.target.value)}
                     placeholder="e.g. 3"
-                    className="w-full text-sm bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 focus:outline-hidden"
+                    className={`w-full text-sm bg-neutral-50 border ${
+                      editFieldErrors.bedroomCount ? 'border-rose-400' : 'border-neutral-200'
+                    } rounded-lg p-2.5 focus:outline-hidden`}
                   />
+                  {editFieldErrors.bedroomCount && (
+                    <p className="text-[11px] text-rose-600 mt-1">{editFieldErrors.bedroomCount}</p>
+                  )}
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-500 mb-1">Price Basis *</label>
+                  <label className="block text-xs font-semibold text-neutral-500 mb-1">
+                    Price Basis <span className="text-rose-500">*</span>
+                  </label>
                   <select
                     value={editConfigPriceBasis}
                     onChange={(e) => setEditConfigPriceBasis(e.target.value)}
@@ -2075,48 +2354,106 @@ export default function ProjectDetailPage() {
                 </div>
 
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-semibold text-neutral-500 mb-1">Price (₹ INR) *</label>
+                  <label className="block text-xs font-semibold text-neutral-500 mb-1">
+                    {editConfigPriceOnRequest ? 'Internal Reference Price (₹ INR, Preserved)' : 'Price (₹ INR)'}{' '}
+                    {!editConfigPriceOnRequest && <span className="text-rose-500">*</span>}
+                  </label>
                   <input
-                    type="number"
+                    type="text"
                     value={editConfigPrice}
                     onChange={(e) => setEditConfigPrice(e.target.value)}
-                    placeholder="e.g. 8500000"
-                    className="w-full text-sm bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 focus:outline-hidden"
-                    required
+                    placeholder={editConfigPriceOnRequest ? 'Optional internal reference price' : 'e.g. 85,00,000'}
+                    className={`w-full text-sm bg-neutral-50 border ${
+                      editFieldErrors.price ? 'border-rose-400' : 'border-neutral-200'
+                    } rounded-lg p-2.5 focus:outline-hidden font-mono`}
+                    required={!editConfigPriceOnRequest}
                   />
+                  {editFieldErrors.price && (
+                    <p className="text-[11px] text-rose-600 mt-1">{editFieldErrors.price}</p>
+                  )}
+                  <div className="mt-2.5 p-2.5 rounded-lg bg-neutral-50 border border-neutral-200/80">
+                    <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={editConfigPriceOnRequest}
+                        onChange={(e) => setEditConfigPriceOnRequest(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <div>
+                        <span className="text-xs font-bold text-neutral-800 font-display block">
+                          Mark Typology as Price on Request
+                        </span>
+                        <span className="text-[11px] text-neutral-500 font-sans block">
+                          Public visitors will see &ldquo;Price on Request&rdquo; while the internal reference price is preserved in the database.
+                        </span>
+                      </div>
+                    </label>
+                  </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-500 mb-1">Carpet Area (sq.ft.)</label>
+                  <label className="block text-xs font-semibold text-neutral-500 mb-1">
+                    Carpet Area (sq.ft.) <span className="text-rose-500">*</span>
+                  </label>
                   <input
                     type="number"
+                    step="any"
+                    min="0.01"
                     value={editConfigCarpet}
                     onChange={(e) => setEditConfigCarpet(e.target.value)}
                     placeholder="e.g. 1045"
-                    className="w-full text-sm bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 focus:outline-hidden"
+                    className={`w-full text-sm bg-neutral-50 border ${
+                      editFieldErrors.carpetArea ? 'border-rose-400' : 'border-neutral-200'
+                    } rounded-lg p-2.5 focus:outline-hidden`}
+                    required
                   />
+                  {editFieldErrors.carpetArea && (
+                    <p className="text-[11px] text-rose-600 mt-1">{editFieldErrors.carpetArea}</p>
+                  )}
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-500 mb-1">Built-up Area (sq.ft.)</label>
+                  <label className="block text-xs font-semibold text-neutral-500 mb-1">
+                    Built-up Area (sq.ft.){' '}
+                    {editConfigPriceBasis === 'BUILT_UP_AREA' && <span className="text-rose-500">*</span>}
+                  </label>
                   <input
                     type="number"
+                    step="any"
+                    min="0.01"
                     value={editConfigBuiltUp}
                     onChange={(e) => setEditConfigBuiltUp(e.target.value)}
                     placeholder="e.g. 1210"
-                    className="w-full text-sm bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 focus:outline-hidden"
+                    className={`w-full text-sm bg-neutral-50 border ${
+                      editFieldErrors.builtUpArea ? 'border-rose-400' : 'border-neutral-200'
+                    } rounded-lg p-2.5 focus:outline-hidden`}
+                    required={editConfigPriceBasis === 'BUILT_UP_AREA'}
                   />
+                  {editFieldErrors.builtUpArea && (
+                    <p className="text-[11px] text-rose-600 mt-1">{editFieldErrors.builtUpArea}</p>
+                  )}
                 </div>
 
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-semibold text-neutral-500 mb-1">Super Built-up Area (sq.ft.)</label>
+                  <label className="block text-xs font-semibold text-neutral-500 mb-1">
+                    Super Built-up Area (sq.ft.){' '}
+                    {editConfigPriceBasis === 'SUPER_BUILT_UP_AREA' && <span className="text-rose-500">*</span>}
+                  </label>
                   <input
                     type="number"
+                    step="any"
+                    min="0.01"
                     value={editConfigSuperBuiltUp}
                     onChange={(e) => setEditConfigSuperBuiltUp(e.target.value)}
                     placeholder="e.g. 1420"
-                    className="w-full text-sm bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 focus:outline-hidden"
+                    className={`w-full text-sm bg-neutral-50 border ${
+                      editFieldErrors.superBuiltUpArea ? 'border-rose-400' : 'border-neutral-200'
+                    } rounded-lg p-2.5 focus:outline-hidden`}
+                    required={editConfigPriceBasis === 'SUPER_BUILT_UP_AREA'}
                   />
+                  {editFieldErrors.superBuiltUpArea && (
+                    <p className="text-[11px] text-rose-600 mt-1">{editFieldErrors.superBuiltUpArea}</p>
+                  )}
                 </div>
               </div>
 

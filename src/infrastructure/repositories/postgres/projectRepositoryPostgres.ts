@@ -56,37 +56,100 @@ import {
 
 const isUuid = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 
+function isMissingPriceOnRequestColumnError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const msg = String((err as any).message || '');
+  const causeMsg = String((err as any).cause?.message || '');
+  const code = (err as any).code || (err as any).cause?.code;
+  return (
+    (code === '42703' || msg.includes('price_on_request') || causeMsg.includes('price_on_request')) &&
+    (msg.includes('price_on_request') || causeMsg.includes('price_on_request'))
+  );
+}
+
+const legacyProjectSelect = {
+  id: projects.id,
+  developerId: projects.developerId,
+  locationId: projects.locationId,
+  name: projects.name,
+  slug: projects.slug,
+  shortDescription: projects.shortDescription,
+  description: projects.description,
+  status: projects.status,
+  lifecycleStatus: projects.lifecycleStatus,
+  propertyType: projects.propertyType,
+  startingPrice: projects.startingPrice,
+  projectArea: projects.projectArea,
+  towerCount: projects.towerCount,
+  totalUnits: projects.totalUnits,
+  floors: projects.floors,
+  possession: projects.possession,
+  latitude: projects.latitude,
+  longitude: projects.longitude,
+  featured: projects.featured,
+  isPublished: projects.isPublished,
+  createdAt: projects.createdAt,
+  updatedAt: projects.updatedAt,
+};
+
+const legacyConfigurationSelect = {
+  id: projectConfigurations.id,
+  projectId: projectConfigurations.projectId,
+  name: projectConfigurations.name,
+  bedroomCount: projectConfigurations.bedroomCount,
+  carpetArea: projectConfigurations.carpetArea,
+  builtUpArea: projectConfigurations.builtUpArea,
+  superBuiltUpArea: projectConfigurations.superBuiltUpArea,
+  price: projectConfigurations.price,
+  priceBasis: projectConfigurations.priceBasis,
+  floorPlanMediaId: projectConfigurations.floorPlanMediaId,
+  createdAt: projectConfigurations.createdAt,
+  updatedAt: projectConfigurations.updatedAt,
+};
+
 export class ProjectRepositoryPostgres implements ProjectRepository {
   async create(data: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>): Promise<Project> {
     const db = getDb();
     if (!db) throw new Error('PostgreSQL database instance is unavailable.');
 
-    const [row] = await db
-      .insert(projects)
-      .values({
-        developerId: data.developerId,
-        locationId: data.locationId,
-        name: data.name,
-        slug: data.slug,
-        shortDescription: data.shortDescription,
-        description: data.description,
-        status: data.status as any,
-        lifecycleStatus: (data.lifecycleStatus as any) || 'PUBLISHED',
-        propertyType: data.propertyType as any,
-        startingPrice: data.startingPrice ? data.startingPrice.toString() : null,
-        projectArea: data.projectArea ?? null,
-        towerCount: data.towerCount ?? null,
-        totalUnits: data.totalUnits ?? null,
-        floors: data.floors ?? null,
-        possession: data.possession ?? null,
-        latitude: data.latitude !== undefined && data.latitude !== null ? data.latitude.toString() : null,
-        longitude: data.longitude !== undefined && data.longitude !== null ? data.longitude.toString() : null,
-        featured: data.featured ?? false,
-        isPublished: data.isPublished ?? true,
-      } as any)
-      .returning();
+    const baseValues: Record<string, any> = {
+      developerId: data.developerId,
+      locationId: data.locationId,
+      name: data.name,
+      slug: data.slug,
+      shortDescription: data.shortDescription,
+      description: data.description,
+      status: data.status as any,
+      lifecycleStatus: (data.lifecycleStatus as any) || 'PUBLISHED',
+      propertyType: data.propertyType as any,
+      startingPrice: data.startingPrice ? data.startingPrice.toString() : null,
+      priceOnRequest: Boolean(data.priceOnRequest),
+      projectArea: data.projectArea ?? null,
+      towerCount: data.towerCount ?? null,
+      totalUnits: data.totalUnits ?? null,
+      floors: data.floors ?? null,
+      possession: data.possession ?? null,
+      latitude: data.latitude !== undefined && data.latitude !== null ? data.latitude.toString() : null,
+      longitude: data.longitude !== undefined && data.longitude !== null ? data.longitude.toString() : null,
+      featured: data.featured ?? false,
+      isPublished: data.isPublished ?? true,
+    };
 
-    return this.mapRowToEntity(row);
+    try {
+      const [row] = await db
+        .insert(projects)
+        .values(baseValues as any)
+        .returning();
+      return this.mapRowToEntity(row);
+    } catch (err) {
+      if (!isMissingPriceOnRequestColumnError(err)) throw err;
+      delete baseValues.priceOnRequest;
+      const [row] = await db
+        .insert(projects)
+        .values(baseValues as any)
+        .returning(legacyProjectSelect);
+      return this.mapRowToEntity({ ...row, priceOnRequest: Boolean(data.priceOnRequest) });
+    }
   }
 
   async findById(id: string): Promise<Project | null> {
@@ -95,9 +158,16 @@ export class ProjectRepositoryPostgres implements ProjectRepository {
     const db = getDb();
     if (!db) return null;
 
-    const rows = await db.select().from(projects).where(eq(projects.id, id));
-    if (rows.length === 0) return null;
-    return this.mapRowToEntity(rows[0]);
+    try {
+      const rows = await db.select().from(projects).where(eq(projects.id, id));
+      if (rows.length === 0) return null;
+      return this.mapRowToEntity(rows[0]);
+    } catch (err) {
+      if (!isMissingPriceOnRequestColumnError(err)) throw err;
+      const rows = await db.select(legacyProjectSelect).from(projects).where(eq(projects.id, id));
+      if (rows.length === 0) return null;
+      return this.mapRowToEntity(rows[0]);
+    }
   }
 
   async findByIds(ids: string[]): Promise<Project[]> {
@@ -107,20 +177,36 @@ export class ProjectRepositoryPostgres implements ProjectRepository {
     const db = getDb();
     if (!db) return [];
 
-    const rows = await db.select().from(projects).where(inArray(projects.id, validIds));
-    return rows.map(r => this.mapRowToEntity(r));
+    try {
+      const rows = await db.select().from(projects).where(inArray(projects.id, validIds));
+      return rows.map(r => this.mapRowToEntity(r));
+    } catch (err) {
+      if (!isMissingPriceOnRequestColumnError(err)) throw err;
+      const rows = await db.select(legacyProjectSelect).from(projects).where(inArray(projects.id, validIds));
+      return rows.map(r => this.mapRowToEntity(r));
+    }
   }
 
   async findBySlug(slug: string): Promise<Project | null> {
     const db = getDb();
     if (!db) return null;
 
-    const rows = await db
-      .select()
-      .from(projects)
-      .where(sql`LOWER(${projects.slug}) = LOWER(${slug})`);
-    if (rows.length === 0) return null;
-    return this.mapRowToEntity(rows[0]);
+    try {
+      const rows = await db
+        .select()
+        .from(projects)
+        .where(sql`LOWER(${projects.slug}) = LOWER(${slug})`);
+      if (rows.length === 0) return null;
+      return this.mapRowToEntity(rows[0]);
+    } catch (err) {
+      if (!isMissingPriceOnRequestColumnError(err)) throw err;
+      const rows = await db
+        .select(legacyProjectSelect)
+        .from(projects)
+        .where(sql`LOWER(${projects.slug}) = LOWER(${slug})`);
+      if (rows.length === 0) return null;
+      return this.mapRowToEntity(rows[0]);
+    }
   }
 
   async findAll(): Promise<Project[]> {
@@ -156,11 +242,18 @@ export class ProjectRepositoryPostgres implements ProjectRepository {
       conditions.push(eq(projects.isPublished, filter.isPublished));
     }
 
-    const rows = conditions.length > 0
-      ? await db.select().from(projects).where(and(...conditions))
-      : await db.select().from(projects);
-
-    return rows.map(r => this.mapRowToEntity(r));
+    try {
+      const rows = conditions.length > 0
+        ? await db.select().from(projects).where(and(...conditions))
+        : await db.select().from(projects);
+      return rows.map(r => this.mapRowToEntity(r));
+    } catch (err) {
+      if (!isMissingPriceOnRequestColumnError(err)) throw err;
+      const rows = conditions.length > 0
+        ? await db.select(legacyProjectSelect).from(projects).where(and(...conditions))
+        : await db.select(legacyProjectSelect).from(projects);
+      return rows.map(r => this.mapRowToEntity(r));
+    }
   }
 
   async findByDeveloperId(developerId: string): Promise<Project[]> {
@@ -174,15 +267,29 @@ export class ProjectRepositoryPostgres implements ProjectRepository {
     const db = getDb();
     if (!db) return [];
 
-    const rows = await db
-      .select({
-        project: projects,
-        reraStatus: projectRera.status,
-        reraRegistrationNumber: projectRera.registrationNumber,
-      })
-      .from(projects)
-      .leftJoin(projectRera, eq(projectRera.projectId, projects.id))
-      .where(inArray(projects.developerId, validIds));
+    let rows: Array<{ project: any; reraStatus: any; reraRegistrationNumber: string | null }>;
+    try {
+      rows = await db
+        .select({
+          project: projects,
+          reraStatus: projectRera.status,
+          reraRegistrationNumber: projectRera.registrationNumber,
+        })
+        .from(projects)
+        .leftJoin(projectRera, eq(projectRera.projectId, projects.id))
+        .where(inArray(projects.developerId, validIds));
+    } catch (err) {
+      if (!isMissingPriceOnRequestColumnError(err)) throw err;
+      rows = await db
+        .select({
+          project: legacyProjectSelect,
+          reraStatus: projectRera.status,
+          reraRegistrationNumber: projectRera.registrationNumber,
+        })
+        .from(projects)
+        .leftJoin(projectRera, eq(projectRera.projectId, projects.id))
+        .where(inArray(projects.developerId, validIds));
+    }
 
     const byProjectId = new Map<string, Project>();
     for (const row of rows) {
@@ -222,6 +329,7 @@ export class ProjectRepositoryPostgres implements ProjectRepository {
     if (data.lifecycleStatus !== undefined) updatePayload.lifecycleStatus = data.lifecycleStatus;
     if (data.propertyType !== undefined) updatePayload.propertyType = data.propertyType;
     if (data.startingPrice !== undefined) updatePayload.startingPrice = data.startingPrice ? data.startingPrice.toString() : null;
+    if (data.priceOnRequest !== undefined) updatePayload.priceOnRequest = Boolean(data.priceOnRequest);
     if (data.projectArea !== undefined) updatePayload.projectArea = data.projectArea;
     if (data.towerCount !== undefined) updatePayload.towerCount = data.towerCount;
     if (data.totalUnits !== undefined) updatePayload.totalUnits = data.totalUnits;
@@ -232,21 +340,34 @@ export class ProjectRepositoryPostgres implements ProjectRepository {
     if (data.featured !== undefined) updatePayload.featured = data.featured;
     if (data.isPublished !== undefined) updatePayload.isPublished = data.isPublished;
 
-    const [row] = await db
-      .update(projects)
-      .set(updatePayload)
-      .where(eq(projects.id, id))
-      .returning();
+    try {
+      const [row] = await db
+        .update(projects)
+        .set(updatePayload)
+        .where(eq(projects.id, id))
+        .returning();
 
-    if (!row) return null;
-    return this.mapRowToEntity(row);
+      if (!row) return null;
+      return this.mapRowToEntity(row);
+    } catch (err) {
+      if (!isMissingPriceOnRequestColumnError(err)) throw err;
+      delete updatePayload.priceOnRequest;
+      const [row] = await db
+        .update(projects)
+        .set(updatePayload)
+        .where(eq(projects.id, id))
+        .returning(legacyProjectSelect);
+
+      if (!row) return null;
+      return this.mapRowToEntity({ ...row, priceOnRequest: Boolean(data.priceOnRequest) });
+    }
   }
 
   async delete(id: string): Promise<boolean> {
     const db = getDb();
     if (!db) return false;
 
-    const res = await db.delete(projects).where(eq(projects.id, id)).returning();
+    const res = await db.delete(projects).where(eq(projects.id, id)).returning({ id: projects.id });
     return res.length > 0;
   }
 
@@ -263,6 +384,7 @@ export class ProjectRepositoryPostgres implements ProjectRepository {
       lifecycleStatus: row.lifecycleStatus,
       propertyType: row.propertyType,
       startingPrice: row.startingPrice ? parseFloat(row.startingPrice) : undefined,
+      priceOnRequest: Boolean(row.priceOnRequest),
       projectArea: row.projectArea ?? null,
       towerCount: row.towerCount !== null && row.towerCount !== undefined ? Number(row.towerCount) : null,
       totalUnits: row.totalUnits !== null && row.totalUnits !== undefined ? Number(row.totalUnits) : null,
@@ -282,16 +404,31 @@ export class ProjectConfigurationRepositoryPostgres implements ProjectConfigurat
   async findAll(): Promise<ProjectConfiguration[]> {
     const db = getDb();
     if (!db) return [];
-    const rows = await db.select().from(projectConfigurations);
-    return rows.map(r => this.mapRowToEntity(r));
+    try {
+      const rows = await db.select().from(projectConfigurations);
+      return rows.map(r => this.mapRowToEntity(r));
+    } catch (err) {
+      if (!isMissingPriceOnRequestColumnError(err)) throw err;
+      const rows = await db.select(legacyConfigurationSelect).from(projectConfigurations);
+      return rows.map(r => this.mapRowToEntity(r));
+    }
   }
 
   async findByProjectId(projectId: string): Promise<ProjectConfiguration[]> {
     if (!isUuid(projectId)) return [];
     const db = getDb();
     if (!db) return [];
-    const rows = await db.select().from(projectConfigurations).where(eq(projectConfigurations.projectId, projectId));
-    return rows.map(r => this.mapRowToEntity(r));
+    try {
+      const rows = await db.select().from(projectConfigurations).where(eq(projectConfigurations.projectId, projectId));
+      return rows.map(r => this.mapRowToEntity(r));
+    } catch (err) {
+      if (!isMissingPriceOnRequestColumnError(err)) throw err;
+      const rows = await db
+        .select(legacyConfigurationSelect)
+        .from(projectConfigurations)
+        .where(eq(projectConfigurations.projectId, projectId));
+      return rows.map(r => this.mapRowToEntity(r));
+    }
   }
 
   async findByProjectIds(projectIds: string[]): Promise<ProjectConfiguration[]> {
@@ -299,41 +436,70 @@ export class ProjectConfigurationRepositoryPostgres implements ProjectConfigurat
     if (validIds.length === 0) return [];
     const db = getDb();
     if (!db) return [];
-    const rows = await db
-      .select()
-      .from(projectConfigurations)
-      .where(inArray(projectConfigurations.projectId, validIds));
-    return rows.map(r => this.mapRowToEntity(r));
+    try {
+      const rows = await db
+        .select()
+        .from(projectConfigurations)
+        .where(inArray(projectConfigurations.projectId, validIds));
+      return rows.map(r => this.mapRowToEntity(r));
+    } catch (err) {
+      if (!isMissingPriceOnRequestColumnError(err)) throw err;
+      const rows = await db
+        .select(legacyConfigurationSelect)
+        .from(projectConfigurations)
+        .where(inArray(projectConfigurations.projectId, validIds));
+      return rows.map(r => this.mapRowToEntity(r));
+    }
   }
 
   async findById(id: string): Promise<ProjectConfiguration | null> {
     const db = getDb();
     if (!db) return null;
-    const rows = await db.select().from(projectConfigurations).where(eq(projectConfigurations.id, id));
-    if (rows.length === 0) return null;
-    return this.mapRowToEntity(rows[0]);
+    try {
+      const rows = await db.select().from(projectConfigurations).where(eq(projectConfigurations.id, id));
+      if (rows.length === 0) return null;
+      return this.mapRowToEntity(rows[0]);
+    } catch (err) {
+      if (!isMissingPriceOnRequestColumnError(err)) throw err;
+      const rows = await db.select(legacyConfigurationSelect).from(projectConfigurations).where(eq(projectConfigurations.id, id));
+      if (rows.length === 0) return null;
+      return this.mapRowToEntity(rows[0]);
+    }
   }
 
   async create(data: Omit<ProjectConfiguration, 'id' | 'createdAt' | 'updatedAt'>): Promise<ProjectConfiguration> {
     const db = getDb();
     if (!db) throw new Error('PostgreSQL database instance is unavailable.');
 
-    const [row] = await db
-      .insert(projectConfigurations)
-      .values({
-        projectId: data.projectId,
-        name: data.name,
-        bedroomCount: data.bedroomCount,
-        carpetArea: data.carpetArea ? data.carpetArea.toString() : null,
-        builtUpArea: data.builtUpArea ? data.builtUpArea.toString() : null,
-        superBuiltUpArea: data.superBuiltUpArea ? data.superBuiltUpArea.toString() : null,
-        price: data.price ? data.price.toString() : '0',
-        priceBasis: data.priceBasis as any,
-        floorPlanMediaId: data.floorPlanMediaId ?? null,
-      } as any)
-      .returning();
+    const baseValues: Record<string, any> = {
+      projectId: data.projectId,
+      name: data.name,
+      bedroomCount: data.bedroomCount,
+      carpetArea: data.carpetArea ? data.carpetArea.toString() : null,
+      builtUpArea: data.builtUpArea ? data.builtUpArea.toString() : null,
+      superBuiltUpArea: data.superBuiltUpArea ? data.superBuiltUpArea.toString() : null,
+      price: data.price ? data.price.toString() : '0',
+      priceBasis: data.priceBasis as any,
+      priceOnRequest: Boolean(data.priceOnRequest),
+      floorPlanMediaId: data.floorPlanMediaId ?? null,
+    };
 
-    return this.mapRowToEntity(row);
+    try {
+      const [row] = await db
+        .insert(projectConfigurations)
+        .values(baseValues as any)
+        .returning();
+
+      return this.mapRowToEntity(row);
+    } catch (err) {
+      if (!isMissingPriceOnRequestColumnError(err)) throw err;
+      delete baseValues.priceOnRequest;
+      const [row] = await db
+        .insert(projectConfigurations)
+        .values(baseValues as any)
+        .returning(legacyConfigurationSelect);
+      return this.mapRowToEntity({ ...row, priceOnRequest: Boolean(data.priceOnRequest) });
+    }
   }
 
   async update(id: string, data: Partial<ProjectConfiguration>): Promise<ProjectConfiguration | null> {
@@ -348,23 +514,46 @@ export class ProjectConfigurationRepositoryPostgres implements ProjectConfigurat
     if (data.superBuiltUpArea !== undefined) updatePayload.superBuiltUpArea = data.superBuiltUpArea ? data.superBuiltUpArea.toString() : null;
     if (data.price !== undefined) updatePayload.price = data.price ? data.price.toString() : '0';
     if (data.priceBasis !== undefined) updatePayload.priceBasis = data.priceBasis;
+    if (data.priceOnRequest !== undefined) updatePayload.priceOnRequest = Boolean(data.priceOnRequest);
     if (data.floorPlanMediaId !== undefined) updatePayload.floorPlanMediaId = data.floorPlanMediaId;
 
-    const [row] = await db
-      .update(projectConfigurations)
-      .set(updatePayload)
-      .where(eq(projectConfigurations.id, id))
-      .returning();
+    try {
+      const [row] = await db
+        .update(projectConfigurations)
+        .set(updatePayload)
+        .where(eq(projectConfigurations.id, id))
+        .returning();
 
-    if (!row) return null;
-    return this.mapRowToEntity(row);
+      if (!row) return null;
+      return this.mapRowToEntity(row);
+    } catch (err) {
+      if (!isMissingPriceOnRequestColumnError(err)) throw err;
+      delete updatePayload.priceOnRequest;
+      const [row] = await db
+        .update(projectConfigurations)
+        .set(updatePayload)
+        .where(eq(projectConfigurations.id, id))
+        .returning(legacyConfigurationSelect);
+
+      if (!row) return null;
+      return this.mapRowToEntity({ ...row, priceOnRequest: Boolean(data.priceOnRequest) });
+    }
   }
 
   async delete(id: string): Promise<boolean> {
     const db = getDb();
     if (!db) return false;
-    const res = await db.delete(projectConfigurations).where(eq(projectConfigurations.id, id)).returning();
-    return res.length > 0;
+    return await db.transaction(async (tx) => {
+      await tx
+        .update(projectMedia)
+        .set({ configurationId: null, updatedAt: new Date() } as any)
+        .where(eq(projectMedia.configurationId, id));
+      const res = await tx
+        .delete(projectConfigurations)
+        .where(eq(projectConfigurations.id, id))
+        .returning({ id: projectConfigurations.id });
+      return res.length > 0;
+    });
   }
 
   async findDuplicates(projectId: string, name: string, excludeId?: string): Promise<ProjectConfiguration[]> {
@@ -386,6 +575,7 @@ export class ProjectConfigurationRepositoryPostgres implements ProjectConfigurat
       superBuiltUpArea: row.superBuiltUpArea ? parseFloat(row.superBuiltUpArea) : undefined,
       price: row.price ? parseFloat(row.price) : 0,
       priceBasis: row.priceBasis,
+      priceOnRequest: Boolean(row.priceOnRequest),
       floorPlanMediaId: row.floorPlanMediaId ?? null,
       createdAt: new Date(row.createdAt),
       updatedAt: new Date(row.updatedAt),

@@ -48,6 +48,7 @@ export interface PublicProjectDto {
   status: string;
   propertyType: string;
   startingPrice?: number;
+  priceOnRequest?: boolean;
   reraStatus?: 'NOT_PROVIDED' | 'PROVIDED' | 'VERIFIED';
   reraRegistrationNumber?: string;
   hasVerifiedReraBadge: boolean;
@@ -116,9 +117,17 @@ export function toPublicProjectDto(
   project: Project,
   developer: { id: string; name: string; slug: string },
   location?: Location,
-  coverImageUrl?: string | null
+  coverImageUrl?: string | null,
+  effectiveStartingPrice?: number | null,
+  isPriceOnRequest?: boolean
 ): PublicProjectDto {
   const isReraVerified = project.reraStatus === 'VERIFIED';
+  const por = Boolean(isPriceOnRequest ?? project.priceOnRequest);
+  const resolvedPrice = por
+    ? undefined
+    : effectiveStartingPrice !== undefined
+      ? (effectiveStartingPrice ?? undefined)
+      : (project.startingPrice && project.startingPrice > 0 ? project.startingPrice : undefined);
 
   return {
     id: project.id,
@@ -126,7 +135,8 @@ export function toPublicProjectDto(
     slug: project.slug,
     status: project.status,
     propertyType: project.propertyType,
-    startingPrice: project.startingPrice,
+    startingPrice: resolvedPrice,
+    priceOnRequest: por || !resolvedPrice,
     reraStatus: project.reraStatus ?? 'NOT_PROVIDED',
     reraRegistrationNumber: project.reraRegistrationNumber,
     hasVerifiedReraBadge: isReraVerified,

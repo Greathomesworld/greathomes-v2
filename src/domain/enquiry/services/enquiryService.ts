@@ -121,7 +121,7 @@ export class EnquiryService {
       projectName = project.name;
       locationName = project.location?.name ?? null;
       propertyType = propertyType || project.propertyType;
-      priceDisplay = project.pricing?.startingPrice ? formatIndianPrice(project.pricing.startingPrice) : null;
+      priceDisplay = project.pricing?.startingPrice ? formatIndianPrice(project.pricing.startingPrice) : 'Price on Request';
       canonicalTargetId = project.id;
 
       if (dto.configurationId) {
@@ -131,7 +131,9 @@ export class EnquiryService {
         }
         configurationId = conf.id;
         configuration = conf.name || (conf.bedroomCount ? `${conf.bedroomCount} BHK` : null);
-        if (conf.price) {
+        if (conf.priceOnRequest || project.priceOnRequest || !conf.price || conf.price <= 0) {
+          priceDisplay = 'Price on Request';
+        } else {
           priceDisplay = formatIndianPrice(conf.price);
         }
       }

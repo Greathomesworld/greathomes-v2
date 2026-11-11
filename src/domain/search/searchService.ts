@@ -11,6 +11,7 @@ import { resaleListingService, isKnownTestResaleListing } from '../projects/serv
 import { rentalListingService, isKnownTestRentalListing } from '../projects/services/rentalService';
 import { isKnownTestDeveloperSlug } from '../developers/services/developerService';
 import { normalizeMediaPublicUrl } from '@/src/lib/mediaUtils';
+import { deriveProjectPricingSummary } from '../projects/dto/projectDto';
 
 export interface UniversalSearchResultItem {
   id: string;
@@ -202,17 +203,16 @@ export class SearchService {
         }
       }
 
-      const validPrices = configs.map((c) => c.price).filter((pr): pr is number => typeof pr === 'number' && pr > 0);
-      const startingPrice =
-        validPrices.length > 0
-          ? Math.min(...validPrices)
-          : typeof p.startingPrice === 'number' && p.startingPrice > 0
-            ? p.startingPrice
-            : undefined;
+      const pricing = deriveProjectPricingSummary(p, configs);
+      const startingPrice = pricing.startingPrice ?? undefined;
 
-      if (intent.budgetMax && startingPrice) {
-        if (startingPrice <= intent.budgetMax) {
-          score += 30;
+      if (intent.budgetMax) {
+        if (startingPrice) {
+          if (startingPrice <= intent.budgetMax) {
+            score += 30;
+          } else {
+            score -= 40;
+          }
         } else {
           score -= 40;
         }
@@ -235,7 +235,7 @@ export class SearchService {
           url: `/projects/${p.slug}`,
           imageUrl: normalizeMediaPublicUrl(featuredImg?.url) || undefined,
           startingPrice,
-          priceDisplay: startingPrice ? formatIndianPriceCompact(startingPrice) : undefined,
+          priceDisplay: startingPrice ? formatIndianPriceCompact(startingPrice) : 'Price on Request',
           locationName: loc?.name,
           developerName: dev?.name,
           propertyType: p.propertyType,

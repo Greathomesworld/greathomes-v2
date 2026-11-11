@@ -11,6 +11,7 @@ import {
   toPublicProjectDto,
 } from "../dto/developerDto";
 import { normalizeMediaPublicUrl } from "@/src/lib/mediaUtils";
+import { deriveProjectPricingSummary } from "../../projects/dto/projectDto";
 
 export class ValidationError extends Error {
   constructor(message: string) {
@@ -640,19 +641,29 @@ export class DeveloperService {
     const devPublishedProjects = publishedProjectsByDevId.get(developer.id) || [];
     const devProjectIds = devPublishedProjects.map(p => p.id);
 
-    // Queries 6 & 7 (parallel): Scoped batch lookup of distinct locations and project media for this developer's projects
-    const [scopedLocations, devProjectsMedia] = await Promise.all([
+    // Queries 6 & 7 (parallel): Scoped batch lookup of distinct locations, project media, and configs for this developer's projects
+    const [scopedLocations, devProjectsMedia, devProjectsConfigs] = await Promise.all([
       neededLocationIds.size > 0
         ? this.locationRepository.findByIds(Array.from(neededLocationIds))
         : Promise.resolve([]),
       devProjectIds.length > 0
         ? projectMediaRepository.findByProjectIds(devProjectIds)
         : Promise.resolve([]),
+      devProjectIds.length > 0 && typeof projectConfigurationRepository.findByProjectIds === 'function'
+        ? projectConfigurationRepository.findByProjectIds(devProjectIds)
+        : Promise.resolve([]),
     ]);
 
     const locationsMap = new Map<string, Location>();
     for (const loc of scopedLocations) {
       locationsMap.set(loc.id, loc);
+    }
+
+    const configsByProjectId = new Map<string, typeof devProjectsConfigs>();
+    for (const c of devProjectsConfigs) {
+      const list = configsByProjectId.get(c.projectId) || [];
+      list.push(c);
+      configsByProjectId.set(c.projectId, list);
     }
 
     const logoByDevId = new Map<string, string>();
@@ -682,12 +693,16 @@ export class DeveloperService {
 
     const projectDtos: PublicProjectDto[] = devPublishedProjects.map(project => {
       const projMedia = mediaListByProjectId.get(project.id) || [];
+      const projConfigs = configsByProjectId.get(project.id) || [];
+      const pricing = deriveProjectPricingSummary(project, projConfigs);
       const coverUrl = this.resolveProjectCoverImageUrl(projMedia);
       return toPublicProjectDto(
         project,
         { id: developer.id, name: developer.name, slug: developer.slug },
         locationsMap.get(project.locationId),
-        coverUrl
+        coverUrl,
+        pricing.startingPrice,
+        pricing.priceOnRequest
       );
     });
 
@@ -882,9 +897,21 @@ export class DeveloperService {
 
     const { publishedProjects, locationsMap } = await this.getPublishedProjectsAndLocations(developer.id);
     const projectIds = publishedProjects.map(p => p.id);
-    const scopedMedia = projectIds.length > 0
-      ? await projectMediaRepository.findByProjectIds(projectIds)
-      : [];
+    const [scopedMedia, scopedConfigs] = await Promise.all([
+      projectIds.length > 0
+        ? projectMediaRepository.findByProjectIds(projectIds)
+        : Promise.resolve([]),
+      projectIds.length > 0 && typeof projectConfigurationRepository.findByProjectIds === 'function'
+        ? projectConfigurationRepository.findByProjectIds(projectIds)
+        : Promise.resolve([]),
+    ]);
+
+    const configsByProjectId = new Map<string, typeof scopedConfigs>();
+    for (const c of scopedConfigs) {
+      const list = configsByProjectId.get(c.projectId) || [];
+      list.push(c);
+      configsByProjectId.set(c.projectId, list);
+    }
 
     const mediaByProjectId = new Map<string, string>();
     const mediaListByProj = new Map<string, typeof scopedMedia>();
@@ -902,14 +929,18 @@ export class DeveloperService {
       }
     }
 
-    return publishedProjects.map(project =>
-      toPublicProjectDto(
+    return publishedProjects.map(project => {
+      const projConfigs = configsByProjectId.get(project.id) || [];
+      const pricing = deriveProjectPricingSummary(project, projConfigs);
+      return toPublicProjectDto(
         project,
         { id: developer.id, name: developer.name, slug: developer.slug },
         locationsMap.get(project.locationId),
-        mediaByProjectId.get(project.id) || null
-      )
-    );
+        mediaByProjectId.get(project.id) || null,
+        pricing.startingPrice,
+        pricing.priceOnRequest
+      );
+    });
   }
 
   /**
@@ -994,7 +1025,7 @@ import {
   developerMediaRepository,
   developerSeoRepository,
 } from "@/src/infrastructure/repositories/developerProvider";
-import { projectRepository, projectMediaRepository } from "@/src/infrastructure/repositories/projectProvider";
+import { projectRepository, projectMediaRepository, projectConfigurationRepository } from "@/src/infrastructure/repositories/projectProvider";
 import { locationRepository } from "@/src/infrastructure/repositories/locationProvider";
 
 export const developerService = new DeveloperService(

@@ -28,6 +28,7 @@ export interface PublicNewBookingConfigurationDto {
   superBuiltUpArea?: number | null;
   price: number;
   priceBasis: string;
+  priceOnRequest?: boolean;
   effectivePricePerSqft: number;
   availabilityStatus: ConfigurationAvailabilityStatus;
   lastVerifiedAt: string; // ISO string

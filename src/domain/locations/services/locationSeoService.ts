@@ -2,6 +2,7 @@ import { Metadata } from 'next';
 import { Location, LocationType } from '../entities';
 import { locationService, LOCATION_ALIASES } from './locationService';
 import { locationRepository } from '../../../infrastructure/repositories/locationProvider';
+import { projectRepository } from '../../../infrastructure/repositories/projectProvider';
 import { projectIntelligenceService } from '../../projects/services/projectIntelligenceService';
 import {
   isPublicCanonicalLocation,
@@ -36,7 +37,7 @@ export interface EvaluateLocationSeoParams {
   location: Location;
   path?: Location[];
   childLocations?: Location[];
-  projects?: Array<{ id: string; lifecycleStatus: string }>;
+  projects?: Array<{ id: string; lifecycleStatus?: string }>;
   isAlias?: boolean;
 }
 
@@ -201,7 +202,7 @@ export class LocationSeoService {
 
     // 7. Content signals
     const publishedProjectsCount = projects.filter(
-      p => p.lifecycleStatus === 'PUBLISHED'
+      p => (p.lifecycleStatus || 'PUBLISHED') === 'PUBLISHED'
     ).length;
     const publishedChildrenCount = childLocations.filter(
       c => isPublicCanonicalLocation(c)
@@ -396,20 +397,27 @@ export class LocationSeoService {
     const published = all.filter(l => isPublicCanonicalLocation(l));
     const allMap = new Map<string, Location>(all.map(l => [l.id, l]));
 
-    // Batch fetch all published projects across pages to map by locationId without 50-record cap
+    // Efficiently batch fetch all published projects directly via repository to prevent N+1 connection pool exhaustion
     let allPublishedProjects: Array<{
       id: string;
       locationId?: string | null;
       location?: { id: string } | null;
-      lifecycleStatus: string;
+      lifecycleStatus?: string;
     }> = [];
     try {
-      allPublishedProjects = await projectIntelligenceService.listAllProjects({}, false);
+      allPublishedProjects = await projectRepository.list({
+        lifecycleStatus: 'PUBLISHED',
+        isPublished: true,
+      });
     } catch (err) {
-      console.error('Error fetching projects for location SEO eligibility:', err);
+      try {
+        allPublishedProjects = await projectIntelligenceService.listAllProjects({}, false);
+      } catch (fallbackErr) {
+        console.error('Error fetching projects for location SEO eligibility:', err);
+      }
     }
 
-    const projectsByLocation = new Map<string, Array<{ id: string; lifecycleStatus: string }>>();
+    const projectsByLocation = new Map<string, Array<{ id: string; lifecycleStatus?: string }>>();
     for (const p of allPublishedProjects) {
       const locId = p.location?.id || p.locationId;
       if (locId) {
@@ -469,19 +477,27 @@ export class LocationSeoService {
     const all = await locationRepository.findAll();
     const allMap = new Map<string, Location>(all.map(l => [l.id, l]));
 
+    // Efficiently batch fetch all published projects directly via repository to prevent N+1 connection pool exhaustion
     let allPublishedProjects: Array<{
       id: string;
       locationId?: string | null;
       location?: { id: string } | null;
-      lifecycleStatus: string;
+      lifecycleStatus?: string;
     }> = [];
     try {
-      allPublishedProjects = await projectIntelligenceService.listAllProjects({}, false);
+      allPublishedProjects = await projectRepository.list({
+        lifecycleStatus: 'PUBLISHED',
+        isPublished: true,
+      });
     } catch (err) {
-      console.error('Error fetching projects for admin location SEO evaluation:', err);
+      try {
+        allPublishedProjects = await projectIntelligenceService.listAllProjects({}, false);
+      } catch (fallbackErr) {
+        console.error('Error fetching projects for admin location SEO evaluation:', err);
+      }
     }
 
-    const projectsByLocation = new Map<string, Array<{ id: string; lifecycleStatus: string }>>();
+    const projectsByLocation = new Map<string, Array<{ id: string; lifecycleStatus?: string }>>();
     for (const p of allPublishedProjects) {
       const locId = p.location?.id || p.locationId;
       if (locId) {

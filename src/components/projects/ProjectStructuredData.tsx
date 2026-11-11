@@ -5,6 +5,15 @@ interface ProjectStructuredDataProps {
 }
 
 export function ProjectStructuredData({ project }: ProjectStructuredDataProps) {
+  const hasPublicPrice = Boolean(
+    !project.pricing.priceOnRequest &&
+    project.pricing.startingPrice &&
+    project.pricing.startingPrice > 0
+  );
+  const pricedConfigCount = project.configurations.filter(
+    c => !c.priceOnRequest && typeof c.price === 'number' && c.price > 0
+  ).length;
+
   const projectSchema = {
     '@type': project.propertyType === 'VILLA' ? 'SingleFamilyResidence' : 'ApartmentComplex',
     name: project.name,
@@ -23,13 +32,17 @@ export function ProjectStructuredData({ project }: ProjectStructuredDataProps) {
         ? { url: `https://greathomes.co.in/developers/${project.developer.slug}` }
         : {}),
     },
-    offers: {
-      '@type': 'AggregateOffer',
-      priceCurrency: 'INR',
-      lowPrice: project.pricing.startingPrice || undefined,
-      highPrice: project.pricing.maximumPrice || undefined,
-      offerCount: project.configurations.length,
-    },
+    ...(hasPublicPrice
+      ? {
+          offers: {
+            '@type': 'AggregateOffer',
+            priceCurrency: 'INR',
+            lowPrice: project.pricing.startingPrice,
+            highPrice: project.pricing.maximumPrice || project.pricing.startingPrice,
+            offerCount: pricedConfigCount || project.configurations.length,
+          },
+        }
+      : {}),
     image: project.media.map(m => m.url),
   };
 

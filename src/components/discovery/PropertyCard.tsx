@@ -103,14 +103,18 @@ function NewBookingCard({ item, id }: { item: NewBookingDiscoveryCardDto; id?: s
           {/* Pricing & CTA */}
           <div className="pt-2 border-t border-[rgba(17,17,17,0.06)] flex items-end justify-between">
             <div>
-              <span className="text-[10px] uppercase tracking-wider text-neutral-500 block leading-none">Starting Price</span>
+              <span className="text-[10px] uppercase tracking-wider text-neutral-500 block leading-none">
+                {!item.priceOnRequest && item.price > 0 ? 'Starting Price' : 'Pricing'}
+              </span>
               <div className="flex items-baseline gap-1.5 mt-0.5">
                 <span className="font-display font-bold text-lg sm:text-xl text-[#111111] leading-tight">
-                  {formatIndianPrice(item.price)}
+                  {!item.priceOnRequest && item.price > 0 ? formatIndianPrice(item.price) : 'Price on Request'}
                 </span>
-                <span className="text-xs text-neutral-500">onwards</span>
+                {!item.priceOnRequest && item.price > 0 && (
+                  <span className="text-xs text-neutral-500">onwards</span>
+                )}
               </div>
-              {item.effectivePricePerSqft > 0 && (
+              {!item.priceOnRequest && item.price > 0 && item.effectivePricePerSqft > 0 && (
                 <span className="text-[10.5px] text-neutral-500 block leading-tight">
                   ₹{Math.round(item.effectivePricePerSqft).toLocaleString('en-IN')}/sq.ft.
                 </span>
@@ -333,7 +337,7 @@ function ProjectCard({ item, id }: { item: ProjectDiscoveryCardDto; id?: string 
   const locationLabel = formatProjectLocationShortLabel(item.location);
   const devName = item.developer?.name;
   const configText = item.bhkSummary?.length > 0 ? `${item.bhkSummary.join(', ')} BHK` : 'Configurations Available';
-  const hasStartingPrice = Boolean(item.startingPrice && item.startingPrice > 0);
+  const hasStartingPrice = Boolean(!item.priceOnRequest && item.startingPrice && item.startingPrice > 0);
 
   return (
     <Link

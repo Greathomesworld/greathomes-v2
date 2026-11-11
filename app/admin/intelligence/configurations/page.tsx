@@ -8,6 +8,7 @@ import { AdminErrorState } from '@/src/components/admin/AdminErrorState';
 import { AdminEmptyState } from '@/src/components/admin/AdminEmptyState';
 import { AdminBadge } from '@/src/components/admin/AdminBadge';
 import { getAdminHeaders } from '@/src/lib/adminAuth';
+import { compareEffectiveRates, comparePricesWithPorLast } from '@/src/lib/priceUtils';
 import {
   Plus,
   Search,
@@ -34,6 +35,7 @@ interface ProjectInfo {
   name: string;
   slug: string;
   status?: string;
+  priceOnRequest?: boolean;
 }
 
 interface ConfigurationItem {
@@ -49,6 +51,7 @@ interface ConfigurationItem {
   builtUpArea?: number | null;
   superBuiltUpArea?: number | null;
   price: number;
+  priceOnRequest?: boolean;
   priceBasis: 'CARPET_AREA' | 'BUILT_UP_AREA' | 'SUPER_BUILT_UP_AREA';
   effectivePricePerSqft: number;
   floorPlanMediaId?: string | null;
@@ -82,6 +85,7 @@ export default function AdminConfigurationsDirectoryPage() {
   const [createName, setCreateName] = useState('');
   const [createBhk, setCreateBhk] = useState('');
   const [createPrice, setCreatePrice] = useState('');
+  const [createPriceOnRequest, setCreatePriceOnRequest] = useState(false);
   const [createPriceBasis, setCreatePriceBasis] = useState<'CARPET_AREA' | 'BUILT_UP_AREA' | 'SUPER_BUILT_UP_AREA'>('CARPET_AREA');
   const [createCarpetArea, setCreateCarpetArea] = useState('');
   const [createBuiltUpArea, setCreateBuiltUpArea] = useState('');
@@ -156,13 +160,13 @@ export default function AdminConfigurationsDirectoryPage() {
         case 'name:asc':
           return a.name.localeCompare(b.name);
         case 'price:asc':
-          return a.price - b.price;
+          return comparePricesWithPorLast(a.priceOnRequest ? null : a.price, b.priceOnRequest ? null : b.price, 'asc');
         case 'price:desc':
-          return b.price - a.price;
+          return comparePricesWithPorLast(a.priceOnRequest ? null : a.price, b.priceOnRequest ? null : b.price, 'desc');
         case 'effectiveRate:asc':
-          return a.effectivePricePerSqft - b.effectivePricePerSqft;
+          return compareEffectiveRates(a.priceOnRequest ? null : a.effectivePricePerSqft, b.priceOnRequest ? null : b.effectivePricePerSqft, 'asc');
         case 'effectiveRate:desc':
-          return b.effectivePricePerSqft - a.effectivePricePerSqft;
+          return compareEffectiveRates(a.priceOnRequest ? null : a.effectivePricePerSqft, b.priceOnRequest ? null : b.effectivePricePerSqft, 'desc');
         case 'createdAt:asc':
           return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         case 'createdAt:desc':
@@ -250,9 +254,9 @@ export default function AdminConfigurationsDirectoryPage() {
       setCreateError('Configuration name is required');
       return;
     }
-    const parsedPrice = parseFloat(createPrice);
-    if (!parsedPrice || parsedPrice <= 0) {
-      setCreateError('Price must be a positive number');
+    const parsedPrice = createPrice.trim() !== '' ? parseFloat(createPrice) : (createPriceOnRequest ? 0 : NaN);
+    if (isNaN(parsedPrice) || (!createPriceOnRequest && parsedPrice <= 0) || parsedPrice < 0) {
+      setCreateError('Price must be a positive number unless Price on Request is enabled');
       return;
     }
 
@@ -275,6 +279,7 @@ export default function AdminConfigurationsDirectoryPage() {
         name: createName.trim(),
         bedroomCount: createBhk ? parseInt(createBhk, 10) : null,
         price: parsedPrice,
+        priceOnRequest: createPriceOnRequest,
         priceBasis: createPriceBasis,
         carpetArea: createCarpetArea ? parseFloat(createCarpetArea) : null,
         builtUpArea: createBuiltUpArea ? parseFloat(createBuiltUpArea) : null,
@@ -303,6 +308,7 @@ export default function AdminConfigurationsDirectoryPage() {
       setCreateName('');
       setCreateBhk('');
       setCreatePrice('');
+      setCreatePriceOnRequest(false);
       setCreateCarpetArea('');
       setCreateBuiltUpArea('');
       setCreateSuperBuiltUpArea('');
@@ -726,7 +732,14 @@ export default function AdminConfigurationsDirectoryPage() {
 
                           {/* Total Price Column */}
                           <td className="py-3.5 px-4 font-display font-semibold text-neutral-900">
-                            {formatPriceInr(item.price)}
+                            <div>
+                              {item.price && item.price > 0 ? formatPriceInr(item.price) : '—'}
+                            </div>
+                            {item.priceOnRequest && (
+                              <span className="inline-flex items-center mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 font-display">
+                                Price on Request
+                              </span>
+                            )}
                           </td>
 
                           {/* Effective Rate Column */}
@@ -860,18 +873,19 @@ export default function AdminConfigurationsDirectoryPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-display font-medium text-neutral-700 mb-1">
-                    Total Configuration Price (₹) <span className="text-red-500">*</span>
+                    {createPriceOnRequest ? 'Internal Price (₹, Optional)' : 'Total Configuration Price (₹)'}{' '}
+                    {!createPriceOnRequest && <span className="text-red-500">*</span>}
                   </label>
                   <input
                     type="number"
-                    placeholder="e.g. 4800000"
-                    min="1"
+                    placeholder={createPriceOnRequest ? 'Optional internal reference price' : 'e.g. 4800000'}
+                    min="0"
                     value={createPrice}
                     onChange={(e) => setCreatePrice(e.target.value)}
-                    required
+                    required={!createPriceOnRequest}
                     className="w-full px-3.5 py-2 rounded-xl border border-neutral-200 text-sm font-body text-neutral-900 placeholder:text-neutral-400 focus:outline-hidden focus:ring-2 focus:ring-neutral-900/10"
                   />
-                  {createPrice && !isNaN(parseFloat(createPrice)) && (
+                  {createPrice && !isNaN(parseFloat(createPrice)) && parseFloat(createPrice) > 0 && (
                     <span className="text-[11px] text-neutral-500 mt-0.5 block font-display">
                       Formatted: {formatPriceInr(parseFloat(createPrice))}
                     </span>
@@ -893,6 +907,25 @@ export default function AdminConfigurationsDirectoryPage() {
                     <option value="SUPER_BUILT_UP_AREA">Super Built-Up Area</option>
                   </select>
                 </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-neutral-50 border border-neutral-200">
+                <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={createPriceOnRequest}
+                    onChange={(e) => setCreatePriceOnRequest(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900"
+                  />
+                  <div>
+                    <span className="text-xs font-display font-bold text-neutral-900 block">
+                      Mark Configuration as Price on Request
+                    </span>
+                    <span className="text-[11px] font-body text-neutral-500 block">
+                      Hides the configuration price from public pages while keeping any internal price for staff.
+                    </span>
+                  </div>
+                </label>
               </div>
 
               {/* Area Metrics */}

@@ -14,6 +14,8 @@ import { rentalListingService } from '@/src/domain/projects/services/rentalServi
 import { editorialService } from '@/src/domain/editorial/services/editorialService';
 import { isKnownTestDeveloperSlug } from '@/src/domain/developers/services/developerService';
 import { normalizeMediaPublicUrl } from '@/src/lib/mediaUtils';
+import { deriveProjectPricingSummary } from '@/src/domain/projects/dto/projectDto';
+import { comparePricesWithPorLast } from '@/src/lib/priceUtils';
 
 import { HomeHero } from '@/src/components/home/HomeHero';
 import { HomeExplorePillars } from '@/src/components/home/HomeExplorePillars';
@@ -144,9 +146,10 @@ export default async function HomePage() {
   const sortByFeaturedThenPrice = (list: any[]) =>
     [...list].sort((a, b) => {
       if (Boolean(a.featured) !== Boolean(b.featured)) return a.featured ? -1 : 1;
-      const priceA = typeof a.startingPrice === 'number' && a.startingPrice > 0 ? a.startingPrice : Number.MAX_SAFE_INTEGER;
-      const priceB = typeof b.startingPrice === 'number' && b.startingPrice > 0 ? b.startingPrice : Number.MAX_SAFE_INTEGER;
-      if (priceA !== priceB) return priceA - priceB;
+      const priceA = !a.priceOnRequest && typeof a.startingPrice === 'number' && a.startingPrice > 0 ? a.startingPrice : null;
+      const priceB = !b.priceOnRequest && typeof b.startingPrice === 'number' && b.startingPrice > 0 ? b.startingPrice : null;
+      const cmp = comparePricesWithPorLast(priceA, priceB, 'asc');
+      if (cmp !== 0) return cmp;
       return a.name.localeCompare(b.name);
     });
 
@@ -290,15 +293,8 @@ export default async function HomePage() {
           : `${minArea.toLocaleString('en-IN')} – ${maxArea.toLocaleString('en-IN')} sq.ft`
         : undefined;
 
-    const validConfigPrices = configs
-      .map((c: any) => c.price)
-      .filter((pr: any): pr is number => typeof pr === 'number' && pr > 0);
-    const effectiveStartingPrice =
-      p.startingPrice && p.startingPrice > 0
-        ? p.startingPrice
-        : validConfigPrices.length > 0
-          ? Math.min(...validConfigPrices)
-          : undefined;
+    const pricing = deriveProjectPricingSummary(p, configs);
+    const effectiveStartingPrice = pricing.startingPrice ?? undefined;
 
     // Strict RERA verification semantics: Only VERIFIED if repository record status is strictly 'VERIFIED'
     const isReraVerified = rera?.status === 'VERIFIED';

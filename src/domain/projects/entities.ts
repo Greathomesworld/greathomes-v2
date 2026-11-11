@@ -28,6 +28,7 @@ export interface Project {
   lifecycleStatus?: ProjectLifecycleStatus;
   propertyType: PropertyType;
   startingPrice?: number;
+  priceOnRequest?: boolean;
   projectArea?: string | null;
   towerCount?: number | null;
   totalUnits?: number | null;
@@ -54,6 +55,7 @@ export interface ProjectConfiguration {
   superBuiltUpArea?: number | null;
   price: number;
   priceBasis: PriceBasis;
+  priceOnRequest?: boolean;
   floorPlanMediaId?: string | null;
   availability?: string; // 'AVAILABLE' | 'FEW_UNITS_LEFT' | 'SOLD_OUT'
   createdAt: Date;

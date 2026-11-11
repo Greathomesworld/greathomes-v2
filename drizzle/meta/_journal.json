@@ -36,6 +36,20 @@
       "when": 1793500000000,
       "tag": "0004_customer_email_optional",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794000000000,
+      "tag": "0005_project_media_config_fk_set_null",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794500000000,
+      "tag": "0006_price_on_request",
+      "breakpoints": true
     }
   ]
 }

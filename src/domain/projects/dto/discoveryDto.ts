@@ -22,6 +22,7 @@ export interface BoundedProject {
   developer: { id?: string; name: string; slug: string } | null;
   location: BoundedLocation | null;
   startingPrice?: number | null;
+  priceOnRequest?: boolean;
   propertyTypes: PropertyType[];
   bhkSummary: number[];
   reraVerified: boolean;
@@ -46,6 +47,7 @@ export interface ProjectDiscoveryCardDto extends BaseDiscoveryCard {
   propertyTypes: PropertyType[];
   bhkSummary: number[];
   startingPrice?: number | null;
+  priceOnRequest?: boolean;
   reraVerified: boolean;
   recommendationReason?: string;
   status?: ProjectStatus;
@@ -61,6 +63,7 @@ export interface NewBookingDiscoveryCardDto extends BaseDiscoveryCard {
   carpetArea?: number | null;
   price: number;
   priceBasis: string;
+  priceOnRequest?: boolean;
   effectivePricePerSqft: number;
   availabilityStatus: string;
   reraVerified: boolean;

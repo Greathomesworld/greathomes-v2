@@ -33,6 +33,7 @@ export default function CreateProjectPage() {
   const [propertyType, setPropertyType] = useState('APARTMENT');
   const [status, setStatus] = useState('UNDER_CONSTRUCTION');
   const [startingPrice, setStartingPrice] = useState('');
+  const [priceOnRequest, setPriceOnRequest] = useState(false);
   const [shortDescription, setShortDescription] = useState('');
   const [description, setDescription] = useState('');
   
@@ -134,6 +135,7 @@ export default function CreateProjectPage() {
         propertyType,
         status,
         startingPrice: startingPrice ? parseFloat(startingPrice) : undefined,
+        priceOnRequest,
         shortDescription: shortDescription || null,
         description: description || null,
         projectArea: projectArea.trim() || null,
@@ -349,7 +351,9 @@ export default function CreateProjectPage() {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-neutral-600 mb-1">Starting Price (₹ INR)</label>
+              <label className="block text-xs font-semibold text-neutral-600 mb-1">
+                {priceOnRequest ? 'Internal Reference Starting Price (₹ INR, Optional)' : 'Starting Price (₹ INR)'}
+              </label>
               <div className="relative">
                 <input
                   type="number"
@@ -361,6 +365,25 @@ export default function CreateProjectPage() {
                 <DollarSign className="absolute left-3 top-3 h-4 w-4 text-neutral-400" />
               </div>
             </div>
+          </div>
+
+          <div className="pt-3 border-t border-neutral-100">
+            <label className="flex items-start gap-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={priceOnRequest}
+                onChange={(e) => setPriceOnRequest(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              <div>
+                <span className="text-xs font-bold text-neutral-800 font-display block">
+                  Mark Entire Project as Price on Request
+                </span>
+                <span className="text-[11px] text-neutral-500 font-body block mt-0.5">
+                  When enabled, all public project surfaces and typologies display &ldquo;Price on Request&rdquo; while preserving internal reference prices for staff.
+                </span>
+              </div>
+            </label>
           </div>
         </div>
 

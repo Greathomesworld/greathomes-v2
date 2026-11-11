@@ -9,7 +9,8 @@ import {
   BoundedProject,
   SearchResultDto
 } from '../dto/discoveryDto';
-import { PublicProjectDto } from '../dto/projectDto';
+import { PublicProjectDto, calculateEffectivePricePerSqft, deriveProjectPricingSummary } from '../dto/projectDto';
+import { isConfigurationPriceOnRequest, comparePricesWithPorLast } from '@/src/lib/priceUtils';
 import { PropertyType } from '../entities';
 import { resaleListingService, isKnownTestResaleListing } from './resaleService';
 import { rentalListingService, isKnownTestRentalListing } from './rentalService';
@@ -263,8 +264,7 @@ export class PropertyDiscoveryService {
     }
     const bhks: number[] = Array.from(bhkSet).sort((a, b) => a - b);
     
-    const validPrices = configs.map(c => c.price).filter((p): p is number => typeof p === 'number' && p > 0);
-    const startingPrice = validPrices.length > 0 ? Math.min(...validPrices) : (proj.startingPrice && proj.startingPrice > 0 ? proj.startingPrice : null);
+    const pricing = deriveProjectPricingSummary(proj, configs);
 
     return {
       id: proj.id,
@@ -272,7 +272,8 @@ export class PropertyDiscoveryService {
       slug: proj.slug,
       developer: dev ? { id: dev.id, name: dev.name, slug: dev.slug } : null,
       location: boundedLoc,
-      startingPrice,
+      startingPrice: pricing.startingPrice,
+      priceOnRequest: Boolean(pricing.priceOnRequest),
       propertyTypes,
       bhkSummary: bhks,
       reraVerified: rera ? (rera.status === 'VERIFIED') : (proj.reraStatus === 'VERIFIED'),
@@ -334,8 +335,11 @@ export class PropertyDiscoveryService {
 
       if (filters.bedroomCount !== undefined && !bp.bhkSummary.includes(filters.bedroomCount)) continue;
       if (filters.propertyType && !bp.propertyTypes.includes(filters.propertyType as PropertyType)) continue;
-      if (filters.minPrice !== undefined && bp.startingPrice && bp.startingPrice < filters.minPrice) continue;
-      if (filters.maxPrice !== undefined && bp.startingPrice && bp.startingPrice > filters.maxPrice) continue;
+      if (filters.minPrice !== undefined || filters.maxPrice !== undefined) {
+        if (bp.priceOnRequest || !bp.startingPrice || bp.startingPrice <= 0) continue;
+        if (filters.minPrice !== undefined && bp.startingPrice < filters.minPrice) continue;
+        if (filters.maxPrice !== undefined && bp.startingPrice > filters.maxPrice) continue;
+      }
 
       results.push({
         id: proj.id,
@@ -347,6 +351,7 @@ export class PropertyDiscoveryService {
         propertyTypes: bp.propertyTypes,
         bhkSummary: bp.bhkSummary,
         startingPrice: bp.startingPrice,
+        priceOnRequest: bp.priceOnRequest,
         reraVerified: bp.reraVerified,
         featuredImageUrl: bp.featuredImageUrl,
         status: proj.status,
@@ -356,16 +361,16 @@ export class PropertyDiscoveryService {
     // Sort deterministically
     const sort = filters.sort?.toUpperCase() || 'RECOMMENDED';
     if (sort === 'PRICE_ASC') {
-      results.sort((a, b) => (a.startingPrice ?? Number.MAX_SAFE_INTEGER) - (b.startingPrice ?? Number.MAX_SAFE_INTEGER));
+      results.sort((a, b) => comparePricesWithPorLast(a.startingPrice, b.startingPrice, 'asc') || a.id.localeCompare(b.id));
     } else if (sort === 'PRICE_DESC') {
-      results.sort((a, b) => (b.startingPrice ?? -1) - (a.startingPrice ?? -1));
+      results.sort((a, b) => comparePricesWithPorLast(a.startingPrice, b.startingPrice, 'desc') || a.id.localeCompare(b.id));
     } else if (sort === 'NEWEST') {
       results.sort((a, b) => b.id.localeCompare(a.id));
     } else {
       // RECOMMENDED: RERA verified first, then has startingPrice, then id
       results.sort((a, b) => {
         if (a.reraVerified !== b.reraVerified) return a.reraVerified ? -1 : 1;
-        return (a.startingPrice ?? Number.MAX_SAFE_INTEGER) - (b.startingPrice ?? Number.MAX_SAFE_INTEGER);
+        return comparePricesWithPorLast(a.startingPrice, b.startingPrice, 'asc') || a.id.localeCompare(b.id);
       });
     }
 
@@ -398,11 +403,15 @@ export class PropertyDiscoveryService {
         const proj = maps.projectMap.get(config.projectId);
         if (!proj || !this.isProjectPublishedEligible(proj, maps.devMap)) continue;
 
+        const isPor = isConfigurationPriceOnRequest(config, proj);
         if (allowedLocationIds && (!proj.locationId || !allowedLocationIds.has(proj.locationId))) continue;
         if (filters.bedroomCount !== undefined && config.bedroomCount !== filters.bedroomCount) continue;
         if (filters.propertyType && proj.propertyType !== filters.propertyType) continue;
-        if (filters.minPrice !== undefined && config.price < filters.minPrice) continue;
-        if (filters.maxPrice !== undefined && config.price > filters.maxPrice) continue;
+        if (filters.minPrice !== undefined || filters.maxPrice !== undefined) {
+          if (isPor) continue;
+          if (filters.minPrice !== undefined && config.price < filters.minPrice) continue;
+          if (filters.maxPrice !== undefined && config.price > filters.maxPrice) continue;
+        }
 
         const bp = this.assembleBoundedProject(proj, maps);
         if (!bp) continue;
@@ -422,7 +431,18 @@ export class PropertyDiscoveryService {
           if (!matched) continue;
         }
 
-        const effPrice = (config.price && config.superBuiltUpArea) ? config.price / config.superBuiltUpArea : 0;
+        let effPrice = 0;
+        if (!isPor) {
+          try {
+            effPrice = calculateEffectivePricePerSqft(config.price, config.priceBasis, {
+              carpetArea: config.carpetArea,
+              builtUpArea: config.builtUpArea,
+              superBuiltUpArea: config.superBuiltUpArea,
+            });
+          } catch {
+            effPrice = 0;
+          }
+        }
 
         results.push({
           id: av.id,
@@ -431,9 +451,10 @@ export class PropertyDiscoveryService {
           configurationName: config.name,
           bedroomCount: config.bedroomCount,
           carpetArea: config.carpetArea,
-          price: config.price,
+          price: isPor ? 0 : config.price,
+          priceOnRequest: isPor,
           priceBasis: config.priceBasis,
-          effectivePricePerSqft: effPrice,
+          effectivePricePerSqft: isPor ? 0 : effPrice,
           availabilityStatus: av.availabilityStatus,
           reraVerified: bp.reraVerified,
           featuredImageUrl: bp.featuredImageUrl
@@ -526,16 +547,16 @@ export class PropertyDiscoveryService {
 
     // Sort deterministically
     const sort = filters.sort?.toUpperCase() || 'RECOMMENDED';
-    const getItemPrice = (item: PropertyDiscoveryCardDto): number => {
-      if (item.type === 'NEW_BOOKING') return item.price;
+    const getItemPrice = (item: PropertyDiscoveryCardDto): number | null => {
+      if (item.type === 'NEW_BOOKING') return item.priceOnRequest ? null : item.price;
       if (item.type === 'RESALE') return item.askingPrice;
-      return 0;
+      return null;
     };
 
     if (sort === 'PRICE_ASC') {
-      results.sort((a, b) => getItemPrice(a) - getItemPrice(b));
+      results.sort((a, b) => comparePricesWithPorLast(getItemPrice(a), getItemPrice(b), 'asc') || a.id.localeCompare(b.id));
     } else if (sort === 'PRICE_DESC') {
-      results.sort((a, b) => getItemPrice(b) - getItemPrice(a));
+      results.sort((a, b) => comparePricesWithPorLast(getItemPrice(a), getItemPrice(b), 'desc') || a.id.localeCompare(b.id));
     } else if (sort === 'NEWEST') {
       results.sort((a, b) => b.id.localeCompare(a.id));
     } else {
@@ -544,7 +565,7 @@ export class PropertyDiscoveryService {
         const aVerified = a.type === 'NEW_BOOKING' ? a.reraVerified : ('verificationStatus' in a ? (a as any).verificationStatus === 'VERIFIED' : false);
         const bVerified = b.type === 'NEW_BOOKING' ? b.reraVerified : ('verificationStatus' in b ? (b as any).verificationStatus === 'VERIFIED' : false);
         if (aVerified !== bVerified) return aVerified ? -1 : 1;
-        return getItemPrice(a) - getItemPrice(b);
+        return comparePricesWithPorLast(getItemPrice(a), getItemPrice(b), 'asc') || a.id.localeCompare(b.id);
       });
     }
 
@@ -841,6 +862,7 @@ export class PropertyDiscoveryService {
         propertyTypes: bp.propertyTypes,
         bhkSummary: bp.bhkSummary,
         startingPrice: bp.startingPrice,
+        priceOnRequest: bp.priceOnRequest,
         reraVerified: bp.reraVerified,
         featuredImageUrl: bp.featuredImageUrl,
         status: proj.status,
@@ -849,9 +871,8 @@ export class PropertyDiscoveryService {
 
     results.sort((a, b) => {
       if (a.reraVerified !== b.reraVerified) return a.reraVerified ? -1 : 1;
-      const priceA = a.startingPrice ?? Number.MAX_SAFE_INTEGER;
-      const priceB = b.startingPrice ?? Number.MAX_SAFE_INTEGER;
-      if (priceA !== priceB) return priceA - priceB;
+      const cmp = comparePricesWithPorLast(a.startingPrice, b.startingPrice, 'asc');
+      if (cmp !== 0) return cmp;
       return a.name.localeCompare(b.name);
     });
 
