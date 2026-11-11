@@ -24,6 +24,8 @@ export async function GET(request: NextRequest) {
     const developerIdParam = searchParams.get('developerId') || undefined;
     const locationIdParam = searchParams.get('locationId') || undefined;
     const propertyTypeParam = searchParams.get('propertyType') as any;
+    const rawSearch = searchParams.get('search') ?? searchParams.get('q');
+    const search = rawSearch && rawSearch.trim().length > 0 ? rawSearch.trim() : undefined;
 
     // Check if caller is authorized internal staff
     const auth = await verifyInternalStaff(request);
@@ -56,6 +58,7 @@ export async function GET(request: NextRequest) {
       {
         page: isNaN(page) ? 1 : page,
         limit: isNaN(limit) ? 10 : limit,
+        search,
         featured,
         sort: sortParam || undefined,
         status: statusParam || undefined,

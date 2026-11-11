@@ -15,6 +15,14 @@ export class ProjectConsiderationRepositoryMemory implements ProjectConsideratio
       .sort((a, b) => a.sortOrder - b.sortOrder);
   }
 
+  async findByProjectIds(projectIds: string[]): Promise<ProjectConsideration[]> {
+    if (projectIds.length === 0) return [];
+    const set = new Set(projectIds);
+    return this.considerations
+      .filter(c => set.has(c.projectId))
+      .sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+
   async findById(id: string): Promise<ProjectConsideration | null> {
     return this.considerations.find(c => c.id === id) || null;
   }

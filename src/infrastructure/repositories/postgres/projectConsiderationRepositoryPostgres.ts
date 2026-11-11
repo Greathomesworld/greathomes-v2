@@ -1,4 +1,4 @@
-import { eq, and, asc } from 'drizzle-orm';
+import { eq, and, asc, inArray } from 'drizzle-orm';
 import { getDb } from '@/src/db/client';
 import { projectConsiderations } from '@/src/db/schema';
 import {
@@ -7,6 +7,8 @@ import {
   ConsiderationSourceType,
 } from '@/src/domain/projects/entities';
 import { ProjectConsiderationRepository } from '@/src/domain/repositories/projectRepository';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export class ProjectConsiderationRepositoryPostgres implements ProjectConsiderationRepository {
   private mapRowToEntity(row: any): ProjectConsideration {
@@ -30,6 +32,19 @@ export class ProjectConsiderationRepositoryPostgres implements ProjectConsiderat
       .select()
       .from(projectConsiderations)
       .where(eq(projectConsiderations.projectId, projectId))
+      .orderBy(asc(projectConsiderations.sortOrder), asc(projectConsiderations.createdAt));
+
+    return rows.map(r => this.mapRowToEntity(r));
+  }
+
+  async findByProjectIds(projectIds: string[]): Promise<ProjectConsideration[]> {
+    const validIds = Array.from(new Set(projectIds.filter(id => UUID_REGEX.test(id))));
+    if (validIds.length === 0) return [];
+    const db = getDb();
+    const rows = await db
+      .select()
+      .from(projectConsiderations)
+      .where(inArray(projectConsiderations.projectId, validIds))
       .orderBy(asc(projectConsiderations.sortOrder), asc(projectConsiderations.createdAt));
 
     return rows.map(r => this.mapRowToEntity(r));

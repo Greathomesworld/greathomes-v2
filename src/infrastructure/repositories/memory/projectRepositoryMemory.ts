@@ -405,6 +405,33 @@ export class AmenityRepositoryMemory implements AmenityRepository {
     return result.sort((a, b) => a.sortOrder - b.sortOrder);
   }
 
+  async findByProjectIds(projectIds: string[]): Promise<Map<string, { amenity: Amenity; isFeatured: boolean; sortOrder: number }[]>> {
+    const result = new Map<string, { amenity: Amenity; isFeatured: boolean; sortOrder: number }[]>();
+    if (projectIds.length === 0) return result;
+    const set = new Set(projectIds);
+    const amenityMap = new Map(this.amenities.map(a => [a.id, a]));
+
+    for (const link of this.projectAmenities) {
+      if (!set.has(link.projectId)) continue;
+      const amenity = amenityMap.get(link.amenityId);
+      if (!amenity) continue;
+      const list = result.get(link.projectId) || [];
+      list.push({
+        amenity,
+        isFeatured: link.isFeatured,
+        sortOrder: link.sortOrder,
+      });
+      result.set(link.projectId, list);
+    }
+
+    for (const [projId, list] of result.entries()) {
+      list.sort((a, b) => a.sortOrder - b.sortOrder);
+      result.set(projId, list);
+    }
+
+    return result;
+  }
+
   async create(data: Omit<Amenity, 'id' | 'createdAt' | 'updatedAt'>): Promise<Amenity> {
     const amenity: Amenity = {
       ...data,
@@ -481,6 +508,14 @@ export class ProjectFaqRepositoryMemory implements ProjectFaqRepository {
   async findByProjectId(projectId: string): Promise<ProjectFaq[]> {
     return this.faqs
       .filter(f => f.projectId === projectId)
+      .sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+
+  async findByProjectIds(projectIds: string[]): Promise<ProjectFaq[]> {
+    if (projectIds.length === 0) return [];
+    const set = new Set(projectIds);
+    return this.faqs
+      .filter(f => set.has(f.projectId))
       .sort((a, b) => a.sortOrder - b.sortOrder);
   }
 

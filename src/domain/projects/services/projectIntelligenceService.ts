@@ -31,7 +31,9 @@ import { Location } from "../../locations/entities";
 import {
   PublicProjectDto,
   PublicProjectConfigurationDto,
+  PublicProjectPricingSummary,
   toPublicProjectDto,
+  deriveProjectPricingSummary,
   calculateEffectivePricePerSqft,
   ValidationError,
 } from "../dto/projectDto";
@@ -160,6 +162,7 @@ export interface ProjectFaqWithProject {
 export interface ProjectListOptions {
   page?: number;
   limit?: number;
+  search?: string;
   status?: ProjectStatus;
   lifecycleStatus?: ProjectLifecycleStatus;
   developerId?: string;
@@ -223,6 +226,7 @@ export class ProjectIntelligenceService {
     };
     this.considerationRepository = considerationRepository || {
       findByProjectId: async () => [],
+      findByProjectIds: async () => [],
       findById: async () => null,
       create: async (data: any) => ({ ...data, id: 'mock-id', createdAt: new Date(), updatedAt: new Date() }),
       update: async () => null,
@@ -459,9 +463,40 @@ export class ProjectIntelligenceService {
   > {
     const path: { id: string; name: string; slug: string; type: string; latitude?: number | null; longitude?: number | null }[] = [];
     let currentId: string | null = locationId;
+    const visited = new Set<string>();
 
-    while (currentId) {
+    while (currentId && !visited.has(currentId)) {
+      visited.add(currentId);
       const loc: Location | null = await this.locationRepository.findById(currentId);
+      if (!loc) break;
+      path.unshift({
+        id: loc.id,
+        name: loc.name,
+        slug: loc.slug,
+        type: loc.type,
+        latitude: loc.latitude ?? null,
+        longitude: loc.longitude ?? null,
+      });
+      currentId = loc.parentId ?? null;
+    }
+
+    return path;
+  }
+
+  /**
+   * Resolves canonical location path ancestry (root -> leaf) in memory from a preloaded Map.
+   */
+  private resolveLocationPathFromMap(
+    locationId: string,
+    locationMap: Map<string, Location>
+  ): { id: string; name: string; slug: string; type: string; latitude?: number | null; longitude?: number | null }[] {
+    const path: { id: string; name: string; slug: string; type: string; latitude?: number | null; longitude?: number | null }[] = [];
+    let currentId: string | null = locationId;
+    const visited = new Set<string>();
+
+    while (currentId && !visited.has(currentId)) {
+      visited.add(currentId);
+      const loc = locationMap.get(currentId);
       if (!loc) break;
       path.unshift({
         id: loc.id,
@@ -574,7 +609,7 @@ export class ProjectIntelligenceService {
   }
 
   /**
-   * Lists projects with pagination, controlled sorting, and public filtering.
+   * Lists projects with server-side search, batch data loading, controlled sorting, and paginate-first hydration.
    */
   async listProjects(
     options: ProjectListOptions = {},
@@ -590,6 +625,8 @@ export class ProjectIntelligenceService {
   }> {
     const page = Math.max(1, options.page || 1);
     const limit = Math.min(50, Math.max(1, options.limit || 10));
+    const searchQuery = options.search ? options.search.trim().toLowerCase() : '';
+    const sort = options.sort || 'createdAt:desc';
 
     const filter: ProjectFilterOptions = {
       status: options.status,
@@ -607,66 +644,273 @@ export class ProjectIntelligenceService {
       filter.lifecycleStatus = options.lifecycleStatus;
     }
 
-    const all = await this.projectRepository.list(filter);
+    // Batch A: Load candidate projects, developers, and locations in a single parallel round-trip
+    const [allProjects, allDevelopers, allLocations] = await Promise.all([
+      this.projectRepository.list(filter),
+      this.developerRepository.list(),
+      this.locationRepository.findAll(),
+    ]);
 
-    const validDtos: PublicProjectDto[] = [];
-    for (const project of all) {
-      const dto = await this.buildPublicProjectDto(project, isInternalStaff);
-      if (dto) {
+    const developerMap = new Map(allDevelopers.map(d => [d.id, d]));
+    const locationMap = new Map(allLocations.map(l => [l.id, l]));
+
+    type CandidateEntry = {
+      project: Project;
+      developer: NonNullable<ReturnType<typeof developerMap.get>>;
+      location: Location;
+      pricing?: PublicProjectPricingSummary;
+    };
+
+    let matchedEntries: CandidateEntry[] = [];
+
+    for (const project of allProjects) {
+      const developer = developerMap.get(project.developerId);
+      if (!developer) {
+        console.warn(
+          `[ProjectIntelligence] Data Inconsistency: Developer '${project.developerId}' not found for project '${project.id}' (${project.name}). Excluding from payload.`
+        );
+        continue;
+      }
+
+      const location = locationMap.get(project.locationId);
+      if (!location) {
+        console.warn(
+          `[ProjectIntelligence] Data Inconsistency: Location '${project.locationId}' not found for project '${project.id}' (${project.name}). Excluding from payload.`
+        );
+        continue;
+      }
+
+      if (searchQuery.length > 0) {
+        const matchesSearch =
+          (project.name || '').toLowerCase().includes(searchQuery) ||
+          (project.slug || '').toLowerCase().includes(searchQuery) ||
+          (developer.name || '').toLowerCase().includes(searchQuery) ||
+          (developer.slug || '').toLowerCase().includes(searchQuery) ||
+          (location.name || '').toLowerCase().includes(searchQuery) ||
+          (location.slug || '').toLowerCase().includes(searchQuery);
+
+        if (!matchesSearch) {
+          continue;
+        }
+      }
+
+      matchedEntries.push({ project, developer, location });
+    }
+
+    if (matchedEntries.length === 0) {
+      return {
+        data: [],
+        pagination: {
+          total: 0,
+          page,
+          limit,
+          totalPages: 1,
+        },
+      };
+    }
+
+    const needsConfigsBeforePagination =
+      options.minPrice !== undefined ||
+      options.maxPrice !== undefined ||
+      sort === 'price:asc' ||
+      sort === 'price:desc';
+
+    let preloadedConfigsByProjectId: Map<string, ProjectConfiguration[]> | null = null;
+
+    if (needsConfigsBeforePagination) {
+      const candidateProjectIds = matchedEntries.map(e => e.project.id);
+      const allCandidateConfigs = await this.configurationRepository.findByProjectIds(candidateProjectIds);
+      preloadedConfigsByProjectId = new Map<string, ProjectConfiguration[]>();
+      for (const cfg of allCandidateConfigs) {
+        const list = preloadedConfigsByProjectId.get(cfg.projectId) || [];
+        list.push(cfg);
+        preloadedConfigsByProjectId.set(cfg.projectId, list);
+      }
+
+      const priceFiltered: CandidateEntry[] = [];
+      for (const entry of matchedEntries) {
+        const configs = preloadedConfigsByProjectId.get(entry.project.id) || [];
+        const pricing = deriveProjectPricingSummary(entry.project, configs);
+        entry.pricing = pricing;
+
         if (options.minPrice !== undefined || options.maxPrice !== undefined) {
-          if (dto.pricing.priceOnRequest || dto.pricing.startingPrice === null || dto.pricing.startingPrice <= 0) {
+          if (pricing.priceOnRequest || pricing.startingPrice === null || pricing.startingPrice <= 0) {
             continue;
           }
-          if (options.minPrice !== undefined && dto.pricing.startingPrice < options.minPrice) {
+          if (options.minPrice !== undefined && pricing.startingPrice < options.minPrice) {
             continue;
           }
-          if (options.maxPrice !== undefined && dto.pricing.startingPrice > options.maxPrice) {
+          if (options.maxPrice !== undefined && pricing.startingPrice > options.maxPrice) {
             continue;
           }
         }
-        validDtos.push(dto);
+        priceFiltered.push(entry);
       }
+      matchedEntries = priceFiltered;
     }
 
     // Controlled sorting whitelist using resolved public pricing so PoR projects ALWAYS sort last
     // and never leak internal starting prices via sort order.
-    const sort = options.sort || 'createdAt:desc';
-    validDtos.sort((a, b) => {
+    matchedEntries.sort((a, b) => {
       switch (sort) {
         case 'name:asc':
-          return a.name.localeCompare(b.name);
+          return a.project.name.localeCompare(b.project.name);
         case 'name:desc':
-          return b.name.localeCompare(a.name);
+          return b.project.name.localeCompare(a.project.name);
         case 'price:asc':
           return comparePricesWithPorLast(
-            a.pricing.startingPrice,
-            b.pricing.startingPrice,
+            a.pricing?.startingPrice ?? null,
+            b.pricing?.startingPrice ?? null,
             'asc',
-            Boolean(a.pricing.priceOnRequest),
-            Boolean(b.pricing.priceOnRequest)
+            Boolean(a.pricing?.priceOnRequest),
+            Boolean(b.pricing?.priceOnRequest)
           );
         case 'price:desc':
           return comparePricesWithPorLast(
-            a.pricing.startingPrice,
-            b.pricing.startingPrice,
+            a.pricing?.startingPrice ?? null,
+            b.pricing?.startingPrice ?? null,
             'desc',
-            Boolean(a.pricing.priceOnRequest),
-            Boolean(b.pricing.priceOnRequest)
+            Boolean(a.pricing?.priceOnRequest),
+            Boolean(b.pricing?.priceOnRequest)
           );
         case 'createdAt:asc':
-          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          return new Date(a.project.createdAt).getTime() - new Date(b.project.createdAt).getTime();
         case 'createdAt:desc':
         default:
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          return new Date(b.project.createdAt).getTime() - new Date(a.project.createdAt).getTime();
       }
     });
 
-    const total = validDtos.length;
+    const total = matchedEntries.length;
     const totalPages = Math.ceil(total / limit) || 1;
-    const paginated = validDtos.slice((page - 1) * limit, page * limit);
+    const pageEntries = matchedEntries.slice((page - 1) * limit, page * limit);
+
+    if (pageEntries.length === 0) {
+      return {
+        data: [],
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages,
+        },
+      };
+    }
+
+    // Batch B: Hydrate sub-entities ONLY for the current page's projects in a single parallel round-trip
+    const pageProjectIds = pageEntries.map(e => e.project.id);
+    const pageDeveloperIds = Array.from(new Set(pageEntries.map(e => e.developer.id)));
+
+    const [
+      fetchedPageConfigs,
+      pageMedia,
+      pageRera,
+      pageAmenitiesMap,
+      pageFaqs,
+      pageConsiderations,
+      pageDevMedia,
+    ] = await Promise.all([
+      preloadedConfigsByProjectId
+        ? Promise.resolve<ProjectConfiguration[] | null>(null)
+        : this.configurationRepository.findByProjectIds(pageProjectIds),
+      this.mediaRepository.findByProjectIds(pageProjectIds),
+      this.reraRepository.findByProjectIds(pageProjectIds),
+      this.amenityRepository.findByProjectIds
+        ? this.amenityRepository.findByProjectIds(pageProjectIds)
+        : Promise.all(
+            pageProjectIds.map(async id => [id, await this.amenityRepository.findByProjectId(id)] as const)
+          ).then(pairs => new Map(pairs)),
+      this.faqRepository.findByProjectIds
+        ? this.faqRepository.findByProjectIds(pageProjectIds)
+        : Promise.all(pageProjectIds.map(id => this.faqRepository.findByProjectId(id))).then(lists => lists.flat()),
+      this.considerationRepository.findByProjectIds
+        ? this.considerationRepository.findByProjectIds(pageProjectIds)
+        : Promise.all(pageProjectIds.map(id => this.considerationRepository.findByProjectId(id))).then(lists =>
+            lists.flat()
+          ),
+      typeof developerMediaRepository?.findByDeveloperIds === 'function'
+        ? developerMediaRepository.findByDeveloperIds(pageDeveloperIds).catch(() => [])
+        : Promise.resolve([]),
+    ]);
+
+    const configsByProjectId = preloadedConfigsByProjectId || new Map<string, ProjectConfiguration[]>();
+    if (!preloadedConfigsByProjectId && fetchedPageConfigs) {
+      for (const cfg of fetchedPageConfigs) {
+        const list = configsByProjectId.get(cfg.projectId) || [];
+        list.push(cfg);
+        configsByProjectId.set(cfg.projectId, list);
+      }
+    }
+
+    const mediaByProjectId = new Map<string, ProjectMedia[]>();
+    for (const m of pageMedia) {
+      const list = mediaByProjectId.get(m.projectId) || [];
+      list.push(m);
+      mediaByProjectId.set(m.projectId, list);
+    }
+
+    const reraByProjectId = new Map<string, ProjectRera>();
+    for (const r of pageRera) {
+      if (!reraByProjectId.has(r.projectId)) {
+        reraByProjectId.set(r.projectId, r);
+      }
+    }
+
+    const faqsByProjectId = new Map<string, ProjectFaq[]>();
+    for (const f of pageFaqs) {
+      const list = faqsByProjectId.get(f.projectId) || [];
+      list.push(f);
+      faqsByProjectId.set(f.projectId, list);
+    }
+
+    const considerationsByProjectId = new Map<string, ProjectConsideration[]>();
+    for (const c of pageConsiderations) {
+      const list = considerationsByProjectId.get(c.projectId) || [];
+      list.push(c);
+      considerationsByProjectId.set(c.projectId, list);
+    }
+
+    const devLogoUrlByDeveloperId = new Map<string, string | null>();
+    for (const dm of pageDevMedia) {
+      if (
+        !devLogoUrlByDeveloperId.has(dm.developerId) &&
+        (dm.category || '').toUpperCase() === 'LOGO' &&
+        dm.url &&
+        dm.url.trim().length > 0
+      ) {
+        devLogoUrlByDeveloperId.set(dm.developerId, normalizeMediaPublicUrl(dm.url.trim()));
+      }
+    }
+
+    const paginatedDtos: PublicProjectDto[] = pageEntries.map(entry => {
+      const { project, developer, location } = entry;
+      const locationPath = this.resolveLocationPathFromMap(location.id, locationMap);
+      const logoUrl = devLogoUrlByDeveloperId.get(developer.id) ?? null;
+
+      return toPublicProjectDto(
+        project,
+        {
+          id: developer.id,
+          name: developer.name,
+          slug: developer.slug,
+          logoUrl,
+          shortDescription: developer.shortDescription ?? null,
+          description: developer.description ?? null,
+        },
+        location,
+        locationPath,
+        configsByProjectId.get(project.id) || [],
+        mediaByProjectId.get(project.id) || [],
+        pageAmenitiesMap.get(project.id) || [],
+        faqsByProjectId.get(project.id) || [],
+        reraByProjectId.get(project.id) || null,
+        considerationsByProjectId.get(project.id) || [],
+        { includeInternalPricing: isInternalStaff }
+      );
+    });
 
     return {
-      data: paginated,
+      data: paginatedDtos,
       pagination: {
         total,
         page,

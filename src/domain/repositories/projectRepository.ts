@@ -68,6 +68,7 @@ export interface AmenityRepository {
   findBySlug(slug: string): Promise<Amenity | null>;
   findByIds(ids: string[]): Promise<Amenity[]>;
   findByProjectId(projectId: string): Promise<{ amenity: Amenity; isFeatured: boolean; sortOrder: number }[]>;
+  findByProjectIds(projectIds: string[]): Promise<Map<string, { amenity: Amenity; isFeatured: boolean; sortOrder: number }[]>>;
   create(amenity: Omit<Amenity, 'id' | 'createdAt' | 'updatedAt'>): Promise<Amenity>;
   update(id: string, amenity: Partial<Amenity>): Promise<Amenity | null>;
   delete(id: string): Promise<boolean>;
@@ -78,6 +79,7 @@ export interface AmenityRepository {
 
 export interface ProjectFaqRepository {
   findByProjectId(projectId: string): Promise<ProjectFaq[]>;
+  findByProjectIds(projectIds: string[]): Promise<ProjectFaq[]>;
   findById(id: string): Promise<ProjectFaq | null>;
   findAll(): Promise<ProjectFaq[]>;
   create(faq: Omit<ProjectFaq, 'id' | 'createdAt' | 'updatedAt'>): Promise<ProjectFaq>;
@@ -92,6 +94,7 @@ export interface ProjectSeoRepository {
 
 export interface ProjectConsiderationRepository {
   findByProjectId(projectId: string): Promise<ProjectConsideration[]>;
+  findByProjectIds?(projectIds: string[]): Promise<ProjectConsideration[]>;
   findById(id: string): Promise<ProjectConsideration | null>;
   create(consideration: Omit<ProjectConsideration, 'id' | 'createdAt' | 'updatedAt'>): Promise<ProjectConsideration>;
   update(id: string, data: Partial<ProjectConsideration>): Promise<ProjectConsideration | null>;

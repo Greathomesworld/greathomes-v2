@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AdminPageHeader } from '@/src/components/admin/AdminPageHeader';
@@ -13,7 +13,7 @@ import { AdminLoadingState } from '@/src/components/admin/AdminLoadingState';
 import { AdminErrorState } from '@/src/components/admin/AdminErrorState';
 import { AdminConfirmDialog } from '@/src/components/admin/AdminConfirmDialog';
 import { getAdminHeaders } from '@/src/lib/adminAuth';
-import { Building2, Plus, RefreshCw, MapPin, Building, Eye, Edit3, Trash2, CheckCircle, Archive } from 'lucide-react';
+import { Plus, RefreshCw, MapPin, Building, Eye, Edit3, CheckCircle, Archive } from 'lucide-react';
 
 export default function AdminProjectsPage() {
   const router = useRouter();
@@ -24,6 +24,7 @@ export default function AdminProjectsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   
   const [statusFilter, setStatusFilter] = useState('ALL'); // lifecycleStatus filter
   const [stageFilter, setStageFilter] = useState('ALL'); // status (stage) filter
@@ -39,40 +40,74 @@ export default function AdminProjectsPage() {
   const [dialogAction, setDialogAction] = useState<'publish' | 'archive' | null>(null);
   const [dialogLoading, setDialogLoading] = useState(false);
 
-  const fetchData = async () => {
+  // Request cancellation and sequence guards
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const requestSeqRef = useRef(0);
+
+  // Debounce search input (~250ms) and reset pagination to page 1 when search changes
+  useEffect(() => {
+    const trimmed = search.trim();
+    if (trimmed === debouncedSearch) return;
+
+    if (trimmed === '') {
+      setDebouncedSearch('');
+      setPage(1);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setDebouncedSearch(trimmed);
+      setPage(1);
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [search, debouncedSearch]);
+
+  // Load filter metadata (developers & locations) once on mount
+  useEffect(() => {
+    let active = true;
+    const fetchFilterMetadata = async () => {
+      try {
+        const [devsRes, locsRes] = await Promise.all([
+          fetch('/api/admin/developers', { headers: getAdminHeaders() }),
+          fetch('/api/admin/locations', { headers: getAdminHeaders() }),
+        ]);
+        if (!active) return;
+        if (devsRes.ok) {
+          const json = await devsRes.json();
+          setDevelopers(json.items || []);
+        }
+        if (locsRes.ok) {
+          const json = await locsRes.json();
+          setLocations(json.items || []);
+        }
+      } catch {
+        // Non-blocking filter metadata load failure
+      }
+    };
+
+    fetchFilterMetadata();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const fetchProjects = useCallback(async () => {
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    const reqId = ++requestSeqRef.current;
+
     try {
       setLoading(true);
-      setError(null);
-
-      // Fetch developers & locations for filters
-      const [devsRes, locsRes] = await Promise.all([
-        fetch('/api/admin/developers', { headers: getAdminHeaders() }),
-        fetch('/api/admin/locations', { headers: getAdminHeaders() })
-      ]);
-      if (devsRes.ok) {
-        const json = await devsRes.json();
-        setDevelopers(json.items || []);
-      }
-      if (locsRes.ok) {
-        const json = await locsRes.json();
-        setLocations(json.items || []);
-      }
-
-      // Fetch projects
-      await fetchProjects();
-    } catch (err: any) {
-      setError(err.message || 'Error fetching data');
-      setLoading(false);
-    }
-  };
-
-  const fetchProjects = async () => {
-    try {
       setError(null);
       const params = new URLSearchParams({
         page: String(page),
         limit: '10',
       });
+      if (debouncedSearch) {
+        params.append('search', debouncedSearch);
+      }
       if (statusFilter !== 'ALL') {
         params.append('lifecycleStatus', statusFilter);
       }
@@ -88,6 +123,7 @@ export default function AdminProjectsPage() {
 
       const res = await fetch(`/api/projects?${params.toString()}`, {
         headers: getAdminHeaders(),
+        signal: controller.signal,
       });
 
       if (!res.ok) {
@@ -95,24 +131,32 @@ export default function AdminProjectsPage() {
       }
 
       const json = await res.json();
+      if (reqId !== requestSeqRef.current || controller.signal.aborted) {
+        return;
+      }
+
       setProjects(json.data || []);
       if (json.pagination) {
         setPagination(json.pagination);
       }
     } catch (err: any) {
+      if (err?.name === 'AbortError' || controller.signal.aborted || reqId !== requestSeqRef.current) {
+        return;
+      }
       setError(err.message || 'Error fetching projects');
     } finally {
-      setLoading(false);
+      if (reqId === requestSeqRef.current && !controller.signal.aborted) {
+        setLoading(false);
+      }
     }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
+  }, [page, debouncedSearch, statusFilter, stageFilter, developerFilter, locationFilter]);
 
   useEffect(() => {
     fetchProjects();
-  }, [page, statusFilter, stageFilter, developerFilter, locationFilter]);
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, [fetchProjects]);
 
   const handleAction = async () => {
     if (!selectedProjectId || !dialogAction) return;
@@ -144,22 +188,23 @@ export default function AdminProjectsPage() {
       setDialogOpen(false);
       fetchProjects();
     } catch (err: any) {
-      alert(err.message || 'Operation failed');
+      setError(err.message || 'Operation failed');
     } finally {
       setDialogLoading(false);
     }
   };
 
-  const filteredProjects = projects.filter(p => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return (
-      p.name?.toLowerCase().includes(q) ||
-      p.slug?.toLowerCase().includes(q) ||
-      p.developer?.name?.toLowerCase().includes(q) ||
-      p.location?.name?.toLowerCase().includes(q)
-    );
-  });
+  const hasActiveFilters =
+    statusFilter !== 'ALL' ||
+    stageFilter !== 'ALL' ||
+    developerFilter !== 'ALL' ||
+    locationFilter !== 'ALL';
+
+  const emptyMessage = debouncedSearch
+    ? `No projects found matching "${debouncedSearch}".`
+    : hasActiveFilters
+      ? 'No projects found matching the selected filters.'
+      : 'No residential projects exist in the directory yet.';
 
   const columns: ColumnDef<any>[] = [
     {
@@ -305,7 +350,7 @@ export default function AdminProjectsPage() {
         <div className="flex flex-col gap-4 bg-white p-4 border border-neutral-200/80 rounded-xl shadow-2xs">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <AdminSearch
-              placeholder="Search projects by name, slug, developer..."
+              placeholder="Search projects by name, slug, developer, location..."
               value={search}
               onChange={setSearch}
             />
@@ -321,7 +366,10 @@ export default function AdminProjectsPage() {
                     { label: 'Archived', value: 'ARCHIVED' },
                   ],
                   value: statusFilter,
-                  onChange: setStatusFilter,
+                  onChange: (val) => {
+                    setStatusFilter(val);
+                    setPage(1);
+                  },
                 },
                 {
                   key: 'stage',
@@ -336,14 +384,20 @@ export default function AdminProjectsPage() {
                     { label: 'Sold Out', value: 'SOLD_OUT' },
                   ],
                   value: stageFilter,
-                  onChange: setStageFilter,
+                  onChange: (val) => {
+                    setStageFilter(val);
+                    setPage(1);
+                  },
                 },
               ]}
               onReset={() => {
+                setSearch('');
+                setDebouncedSearch('');
                 setStatusFilter('ALL');
                 setStageFilter('ALL');
                 setDeveloperFilter('ALL');
                 setLocationFilter('ALL');
+                setPage(1);
               }}
             />
           </div>
@@ -353,7 +407,10 @@ export default function AdminProjectsPage() {
               <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-1">Developer Filter</label>
               <select
                 value={developerFilter}
-                onChange={(e) => setDeveloperFilter(e.target.value)}
+                onChange={(e) => {
+                  setDeveloperFilter(e.target.value);
+                  setPage(1);
+                }}
                 className="w-full text-sm bg-neutral-50 border border-neutral-200 rounded-lg p-2 focus:outline-hidden focus:ring-1 focus:ring-indigo-500"
               >
                 <option value="ALL">All Developers</option>
@@ -366,7 +423,10 @@ export default function AdminProjectsPage() {
               <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-1">Location Filter</label>
               <select
                 value={locationFilter}
-                onChange={(e) => setLocationFilter(e.target.value)}
+                onChange={(e) => {
+                  setLocationFilter(e.target.value);
+                  setPage(1);
+                }}
                 className="w-full text-sm bg-neutral-50 border border-neutral-200 rounded-lg p-2 focus:outline-hidden focus:ring-1 focus:ring-indigo-500"
               >
                 <option value="ALL">All Locations</option>
@@ -386,9 +446,9 @@ export default function AdminProjectsPage() {
           <>
             <AdminTable
               columns={columns}
-              data={filteredProjects}
+              data={projects}
               keyExtractor={(item) => item.id}
-              emptyMessage="No projects found matching the criteria."
+              emptyMessage={emptyMessage}
             />
             <AdminPagination
               currentPage={page}

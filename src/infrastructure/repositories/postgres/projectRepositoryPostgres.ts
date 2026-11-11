@@ -1012,6 +1012,44 @@ export class AmenityRepositoryPostgres implements AmenityRepository {
     return result.sort((a, b) => a.sortOrder - b.sortOrder);
   }
 
+  async findByProjectIds(projectIds: string[]): Promise<Map<string, { amenity: Amenity; isFeatured: boolean; sortOrder: number }[]>> {
+    const result = new Map<string, { amenity: Amenity; isFeatured: boolean; sortOrder: number }[]>();
+    const validIds = Array.from(new Set(projectIds.filter(isUuid)));
+    if (validIds.length === 0) return result;
+
+    const db = getDb();
+    if (!db) return result;
+
+    const paRows = await db
+      .select()
+      .from(projectAmenities)
+      .where(inArray(projectAmenities.projectId, validIds));
+    if (paRows.length === 0) return result;
+
+    const amenityIds = Array.from(new Set(paRows.map(p => p.amenityId)));
+    const amRows = await this.findByIds(amenityIds);
+    const amenityMap = new Map(amRows.map(a => [a.id, a]));
+
+    for (const pa of paRows) {
+      const am = amenityMap.get(pa.amenityId);
+      if (!am) continue;
+      const list = result.get(pa.projectId) || [];
+      list.push({
+        amenity: am,
+        isFeatured: pa.isFeatured,
+        sortOrder: pa.sortOrder,
+      });
+      result.set(pa.projectId, list);
+    }
+
+    for (const [projId, list] of result.entries()) {
+      list.sort((a, b) => a.sortOrder - b.sortOrder);
+      result.set(projId, list);
+    }
+
+    return result;
+  }
+
   async create(data: Omit<Amenity, 'id' | 'createdAt' | 'updatedAt'>): Promise<Amenity> {
     const db = getDb();
     if (!db) throw new Error('PostgreSQL database instance is unavailable.');
@@ -1127,6 +1165,30 @@ export class ProjectFaqRepositoryPostgres implements ProjectFaqRepository {
     if (!db) return [];
 
     const rows = await db.select().from(projectFaqs).where(eq(projectFaqs.projectId, projectId));
+    return rows
+      .map(r => ({
+        id: r.id,
+        projectId: r.projectId,
+        question: r.question,
+        answer: r.answer,
+        sortOrder: r.sortOrder,
+        isPublished: r.isPublished,
+        createdAt: new Date(r.createdAt),
+        updatedAt: new Date(r.updatedAt),
+      }))
+      .sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+
+  async findByProjectIds(projectIds: string[]): Promise<ProjectFaq[]> {
+    const validIds = Array.from(new Set(projectIds.filter(isUuid)));
+    if (validIds.length === 0) return [];
+    const db = getDb();
+    if (!db) return [];
+
+    const rows = await db
+      .select()
+      .from(projectFaqs)
+      .where(inArray(projectFaqs.projectId, validIds));
     return rows
       .map(r => ({
         id: r.id,
