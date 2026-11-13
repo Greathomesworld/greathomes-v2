@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
     const bhkFilter = searchParams.get('bhk');
     const priceBasisFilter = searchParams.get('priceBasis');
     const hasFloorPlanFilter = searchParams.get('hasFloorPlan');
+    const availabilityFilter = searchParams.get('availabilityStatus') || searchParams.get('availability');
     const searchQuery = searchParams.get('query') || searchParams.get('search') || '';
     const sort = searchParams.get('sort') || 'createdAt:desc';
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
@@ -68,6 +69,9 @@ export async function GET(request: NextRequest) {
         if (c.hasFloorPlan !== wantFP) {
           return false;
         }
+      }
+      if (availabilityFilter && availabilityFilter !== 'ALL' && c.availability !== availabilityFilter) {
+        return false;
       }
       if (searchQuery.trim()) {
         const q = searchQuery.trim().toLowerCase();

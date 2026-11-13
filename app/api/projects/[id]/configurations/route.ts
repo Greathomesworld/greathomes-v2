@@ -8,6 +8,8 @@ import {
 } from '@/src/domain/projects/services/projectIntelligenceService';
 import { verifyStaffCapability } from '@/src/domain/auth/capabilities';
 import { ensureSeedData } from '@/src/infrastructure/seed';
+import { auditService } from '@/src/domain/audit/auditService';
+import { revalidateProjectLifecyclePaths } from '@/src/lib/revalidateListingPaths';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -51,6 +53,29 @@ export async function POST(
     const body = await request.json();
 
     const configuration = await projectIntelligenceService.createConfiguration(id, body, true);
+
+    await auditService.record(
+      request,
+      auth.staff ? { id: auth.staff.id, role: auth.role || auth.staff.role } : { role: auth.role || 'ADMIN' },
+      {
+        action: 'CREATE',
+        resourceType: 'PROJECT_CONFIGURATION',
+        resourceId: configuration.id,
+        resourceLabel: configuration.name,
+        after: {
+          name: configuration.name,
+          availability: configuration.availability,
+          priceOnRequest: configuration.priceOnRequest,
+        },
+        metadata: { projectId: id },
+      }
+    );
+
+    await revalidateProjectLifecyclePaths({
+      projectId: id,
+      bedroomCounts: configuration.bedroomCount != null ? [configuration.bedroomCount] : undefined,
+    });
+
     return NextResponse.json(configuration, { status: 201 });
   } catch (error: any) {
     if (error instanceof UnauthorizedError || error?.name === 'UnauthorizedError') {

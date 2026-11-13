@@ -44,6 +44,12 @@ import {
   isConfigurationPriceOnRequest,
   comparePricesWithPorLast,
 } from "@/src/lib/priceUtils";
+import type { NewBookingAvailabilityRepository } from "../repositories/newBookingRepository";
+import {
+  isValidConfigurationAvailabilityStatus,
+  type ConfigurationAvailabilityStatus,
+  type ProjectConfigurationAvailability,
+} from "../dto/newBookingDto";
 
 export { ValidationError };
 
@@ -202,6 +208,7 @@ const VALID_PRICE_BASES: PriceBasis[] = [
 export class ProjectIntelligenceService {
   private seoRepository: ProjectSeoRepository;
   private considerationRepository: ProjectConsiderationRepository;
+  private availabilityRepository?: NewBookingAvailabilityRepository;
 
   constructor(
     private projectRepository: ProjectRepository,
@@ -213,8 +220,10 @@ export class ProjectIntelligenceService {
     private developerRepository: DeveloperRepository,
     private locationRepository: LocationRepository,
     seoRepository?: ProjectSeoRepository,
-    considerationRepository?: ProjectConsiderationRepository
+    considerationRepository?: ProjectConsiderationRepository,
+    availabilityRepository?: NewBookingAvailabilityRepository
   ) {
+    this.availabilityRepository = availabilityRepository;
     this.seoRepository = seoRepository || {
       findByProjectId: async () => null,
       upsert: async (seo: any) => ({
@@ -519,7 +528,7 @@ export class ProjectIntelligenceService {
     project: Project,
     isInternalStaff = false
   ): Promise<PublicProjectDto | null> {
-    const [developer, location, configurations, media, amenities, faqs, rera, considerations, devMedia] = await Promise.all([
+    const [developer, location, configurations, media, amenities, faqs, rera, considerations, devMedia, availabilities] = await Promise.all([
       this.developerRepository.findById(project.developerId),
       this.locationRepository.findById(project.locationId),
       this.configurationRepository.findByProjectId(project.id),
@@ -529,6 +538,7 @@ export class ProjectIntelligenceService {
       this.reraRepository.findByProjectId(project.id),
       this.considerationRepository.findByProjectId(project.id),
       developerMediaRepository.findByDeveloperId(project.developerId).catch(() => []),
+      this.availabilityRepository ? this.availabilityRepository.findByProjectId(project.id) : Promise.resolve([]),
     ]);
 
     if (!developer) {
@@ -539,6 +549,11 @@ export class ProjectIntelligenceService {
     if (!location) {
       console.warn(`[ProjectIntelligence] Data Inconsistency: Location '${project.locationId}' not found for project '${project.id}' (${project.name}). Excluding from payload.`);
       return null;
+    }
+
+    const availabilityByConfigId = new Map<string, ProjectConfigurationAvailability>();
+    for (const av of availabilities) {
+      availabilityByConfigId.set(av.configurationId, av);
     }
 
     const locationPath = await this.resolveLocationPath(location.id);
@@ -562,7 +577,7 @@ export class ProjectIntelligenceService {
       faqs,
       rera,
       considerations,
-      { includeInternalPricing: isInternalStaff }
+      { includeInternalPricing: isInternalStaff, availabilityByConfigId }
     );
   }
 
@@ -809,6 +824,7 @@ export class ProjectIntelligenceService {
       pageFaqs,
       pageConsiderations,
       pageDevMedia,
+      pageAvailabilities,
     ] = await Promise.all([
       preloadedConfigsByProjectId
         ? Promise.resolve<ProjectConfiguration[] | null>(null)
@@ -830,6 +846,9 @@ export class ProjectIntelligenceService {
           ),
       typeof developerMediaRepository?.findByDeveloperIds === 'function'
         ? developerMediaRepository.findByDeveloperIds(pageDeveloperIds).catch(() => [])
+        : Promise.resolve([]),
+      this.availabilityRepository
+        ? this.availabilityRepository.findByProjectIds(pageProjectIds)
         : Promise.resolve([]),
     ]);
 
@@ -870,6 +889,11 @@ export class ProjectIntelligenceService {
       considerationsByProjectId.set(c.projectId, list);
     }
 
+    const availabilityByConfigId = new Map<string, ProjectConfigurationAvailability>();
+    for (const av of pageAvailabilities) {
+      availabilityByConfigId.set(av.configurationId, av);
+    }
+
     const devLogoUrlByDeveloperId = new Map<string, string | null>();
     for (const dm of pageDevMedia) {
       if (
@@ -905,7 +929,7 @@ export class ProjectIntelligenceService {
         faqsByProjectId.get(project.id) || [],
         reraByProjectId.get(project.id) || null,
         considerationsByProjectId.get(project.id) || [],
-        { includeInternalPricing: isInternalStaff }
+        { includeInternalPricing: isInternalStaff, availabilityByConfigId }
       );
     });
 
@@ -1061,6 +1085,17 @@ export class ProjectIntelligenceService {
       );
     }
 
+    let resolvedAvailability: ConfigurationAvailabilityStatus = 'NOT_AVAILABLE';
+    if (data.availability !== undefined && data.availability !== null && String(data.availability).trim() !== '') {
+      const candidateStatus = String(data.availability).trim();
+      if (!isValidConfigurationAvailabilityStatus(candidateStatus)) {
+        throw new ValidationError(
+          `Invalid availability status '${candidateStatus}'. Allowed values: AVAILABLE, LIMITED, ON_REQUEST, SOLD_OUT, NOT_AVAILABLE.`
+        );
+      }
+      resolvedAvailability = candidateStatus;
+    }
+
     const configuration = await this.configurationRepository.create({
       projectId,
       name: data.name.trim(),
@@ -1072,8 +1107,20 @@ export class ProjectIntelligenceService {
       priceBasis: data.priceBasis,
       priceOnRequest: isPor,
       floorPlanMediaId: data.floorPlanMediaId,
-      availability: data.availability ?? 'AVAILABLE',
+      availability: resolvedAvailability,
     });
+
+    let avRecord: ProjectConfigurationAvailability | null = null;
+    if (this.availabilityRepository) {
+      avRecord = await this.availabilityRepository.upsert({
+        projectId,
+        configurationId: configuration.id,
+        availabilityStatus: resolvedAvailability,
+        lastVerifiedAt: new Date(),
+        source: 'CONFIGURATION_CREATE',
+        internalNotes: null,
+      });
+    }
 
     return {
       id: configuration.id,
@@ -1087,7 +1134,13 @@ export class ProjectIntelligenceService {
       priceOnRequest: Boolean(configuration.priceOnRequest),
       effectivePricePerSqft: effectiveRate,
       floorPlanMediaId: configuration.floorPlanMediaId,
-      availability: configuration.availability ?? 'AVAILABLE',
+      availability: avRecord?.availabilityStatus ?? configuration.availability ?? 'NOT_AVAILABLE',
+      ...(avRecord
+        ? {
+            availabilityRecordId: avRecord.id,
+            availabilityLastVerifiedAt: new Date(avRecord.lastVerifiedAt).toISOString(),
+          }
+        : {}),
     };
   }
 
@@ -1104,7 +1157,12 @@ export class ProjectIntelligenceService {
       throw new NotFoundError(`Project with id '${projectId}' not found`);
     }
 
-    const configs = await this.configurationRepository.findByProjectId(projectId);
+    const [configs, availabilities] = await Promise.all([
+      this.configurationRepository.findByProjectId(projectId),
+      this.availabilityRepository ? this.availabilityRepository.findByProjectId(projectId) : Promise.resolve([]),
+    ]);
+    const availabilityMap = new Map(availabilities.map(a => [a.configurationId, a]));
+
     return configs.map(c => {
       const isPorForPublic = isConfigurationPriceOnRequest(c, project);
       let effectiveRate = 0;
@@ -1126,8 +1184,9 @@ export class ProjectIntelligenceService {
       const exposedPrice = isInternalStaff ? c.price : isPorForPublic ? 0 : c.price;
       const exposedRate = isInternalStaff ? effectiveRate : isPorForPublic ? 0 : effectiveRate;
       const exposedPor = isInternalStaff ? Boolean(c.priceOnRequest) : isPorForPublic;
+      const av = availabilityMap.get(c.id);
 
-      return {
+      const dto: PublicProjectConfigurationDto = {
         id: c.id,
         name: c.name,
         bedroomCount: c.bedroomCount,
@@ -1139,8 +1198,18 @@ export class ProjectIntelligenceService {
         priceOnRequest: exposedPor,
         effectivePricePerSqft: exposedRate,
         floorPlanMediaId: c.floorPlanMediaId,
-        availability: c.availability ?? 'AVAILABLE',
+        availability: av?.availabilityStatus ?? c.availability ?? 'NOT_AVAILABLE',
       };
+
+      if (isInternalStaff && av) {
+        dto.availabilityRecordId = av.id;
+        dto.availabilityLastVerifiedAt = new Date(av.lastVerifiedAt).toISOString();
+        dto.availabilityUpdatedByStaffId = av.updatedByStaffId ?? null;
+        dto.availabilityUpdatedByStaffName = av.updatedByStaffName ?? null;
+        dto.availabilityInternalNotes = av.internalNotes ?? null;
+      }
+
+      return dto;
     });
   }
 
@@ -1152,6 +1221,8 @@ export class ProjectIntelligenceService {
     projectId: string;
     projectName: string;
     projectSlug: string;
+    projectStatus?: ProjectStatus;
+    projectLifecycleStatus?: ProjectLifecycleStatus;
     projectPriceOnRequest?: boolean;
     developerName?: string | null;
     locationName?: string | null;
@@ -1168,16 +1239,24 @@ export class ProjectIntelligenceService {
     floorPlanCount: number;
     hasFloorPlan: boolean;
     availability: string;
+    availabilityRecordId?: string | null;
+    availabilityLastVerifiedAt?: string | null;
+    availabilityUpdatedByStaffId?: string | null;
+    availabilityUpdatedByStaffName?: string | null;
+    availabilityInternalNotes?: string | null;
     createdAt: Date;
     updatedAt: Date;
   }>> {
-    const [allConfigs, allProjects, allMedia, allDevs, allLocs] = await Promise.all([
+    const [allConfigs, allProjects, allMedia, allDevs, allLocs, allAvailabilities] = await Promise.all([
       this.configurationRepository.findAll(),
       this.projectRepository.findAll(),
       this.mediaRepository.findAll({ category: 'FLOOR_PLANS' }).catch(() => []),
       this.developerRepository.list().catch(() => []),
       this.locationRepository.findAll().catch(() => []),
+      this.availabilityRepository ? this.availabilityRepository.findAll() : Promise.resolve([]),
     ]);
+
+    const avByConfigId = new Map(allAvailabilities.map(a => [a.configurationId, a]));
 
     const projectMap = new Map<string, Project>();
     for (const p of allProjects) {
@@ -1204,6 +1283,7 @@ export class ProjectIntelligenceService {
 
     return allConfigs.map(c => {
       const project = projectMap.get(c.projectId);
+      const av = avByConfigId.get(c.id);
       let effectiveRate = 0;
       if (typeof c.price === 'number' && Number.isFinite(c.price) && c.price > 0) {
         try {
@@ -1224,6 +1304,8 @@ export class ProjectIntelligenceService {
         projectId: c.projectId,
         projectName: project?.name || 'Unknown Project',
         projectSlug: project?.slug || '',
+        projectStatus: project?.status,
+        projectLifecycleStatus: project?.lifecycleStatus,
         projectPriceOnRequest: Boolean(project?.priceOnRequest),
         developerName: project?.developerId ? devMap.get(project.developerId) || null : null,
         locationName: project?.locationId ? locMap.get(project.locationId) || null : null,
@@ -1239,7 +1321,12 @@ export class ProjectIntelligenceService {
         floorPlanMediaId: c.floorPlanMediaId ?? null,
         floorPlanCount: fpCount,
         hasFloorPlan: fpCount > 0,
-        availability: c.availability ?? 'AVAILABLE',
+        availability: av?.availabilityStatus ?? c.availability ?? 'NOT_AVAILABLE',
+        availabilityRecordId: av?.id ?? null,
+        availabilityLastVerifiedAt: av?.lastVerifiedAt ? new Date(av.lastVerifiedAt).toISOString() : null,
+        availabilityUpdatedByStaffId: av?.updatedByStaffId ?? null,
+        availabilityUpdatedByStaffName: av?.updatedByStaffName ?? null,
+        availabilityInternalNotes: av?.internalNotes ?? null,
         createdAt: c.createdAt,
         updatedAt: c.updatedAt,
       };
@@ -1486,6 +1573,8 @@ export class ProjectIntelligenceService {
     const updated = await this.configurationRepository.update(id, updatePayload);
     if (!updated) throw new NotFoundError(`Configuration with id '${id}' not found`);
 
+    const av = this.availabilityRepository ? await this.availabilityRepository.findByConfigurationId(id) : null;
+
     return {
       id: updated.id,
       name: updated.name,
@@ -1498,7 +1587,7 @@ export class ProjectIntelligenceService {
       priceOnRequest: Boolean(updated.priceOnRequest),
       effectivePricePerSqft: effectiveRate,
       floorPlanMediaId: updated.floorPlanMediaId,
-      availability: updated.availability ?? 'AVAILABLE',
+      availability: av?.availabilityStatus ?? updated.availability ?? 'NOT_AVAILABLE',
     };
   }
 
@@ -2021,6 +2110,7 @@ import {
   projectFaqRepository,
   projectSeoRepository,
   projectConsiderationRepository,
+  newBookingAvailabilityRepository,
 } from "../../../infrastructure/repositories/projectProvider";
 import { developerRepository, developerMediaRepository } from "../../../infrastructure/repositories/developerProvider";
 import { locationRepository } from "../../../infrastructure/repositories/locationProvider";
@@ -2035,5 +2125,6 @@ export const projectIntelligenceService = new ProjectIntelligenceService(
   developerRepository,
   locationRepository,
   projectSeoRepository,
-  projectConsiderationRepository
+  projectConsiderationRepository,
+  newBookingAvailabilityRepository
 );

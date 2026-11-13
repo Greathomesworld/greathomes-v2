@@ -38,14 +38,16 @@ function NewBookingCard({ item, id }: { item: NewBookingDiscoveryCardDto; id?: s
   const targetUrl = `/projects/${projectSlug}`;
   const locationLabel = formatProjectLocationShortLabel(item.project?.location);
   const devName = item.project?.developer?.name;
-  const configSummary = `${item.bedroomCount} BHK`;
+  const bhkLabel = typeof item.bedroomCount === 'number' && item.bedroomCount > 0 ? `${item.bedroomCount} BHK` : null;
+  const configSummary = [bhkLabel, item.configurationName].filter(Boolean).join(' · ');
   const areaSummary = formatArea(item.carpetArea);
+  const isPor = Boolean(item.priceOnRequest) || !(item.price > 0);
 
   return (
     <Link
       href={targetUrl}
       id={id || `card-nb-${item.id}`}
-      aria-label={`${item.bedroomCount} BHK New Booking at ${item.project?.name || item.configurationName}`}
+      aria-label={`${bhkLabel ? `${bhkLabel} ` : ''}New Booking at ${item.project?.name || item.configurationName}`}
       className="group flex flex-col h-full bg-white border border-[rgba(17,17,17,0.08)] rounded-xl overflow-hidden hover:border-[rgba(17,17,17,0.2)] hover:shadow-md transition-all duration-200 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2"
     >
       <article className="flex flex-col flex-grow">
@@ -71,9 +73,14 @@ function NewBookingCard({ item, id }: { item: NewBookingDiscoveryCardDto; id?: s
                 RERA Verified
               </span>
             )}
-            {item.availabilityStatus === 'FEW_UNITS_LEFT' && (
+            {(item.availabilityStatus === 'LIMITED' || item.availabilityStatus === 'FEW_UNITS_LEFT') && (
               <span className="bg-[#E85D3F] text-white text-[11px] font-medium px-2 py-1 rounded-md shadow-xs">
-                Few Units Left
+                Limited Availability
+              </span>
+            )}
+            {item.availabilityStatus === 'ON_REQUEST' && (
+              <span className="bg-amber-600 text-white text-[11px] font-medium px-2 py-1 rounded-md shadow-xs">
+                On Request
               </span>
             )}
           </div>
@@ -94,35 +101,35 @@ function NewBookingCard({ item, id }: { item: NewBookingDiscoveryCardDto; id?: s
             </div>
 
             {/* Configuration & Area */}
-            <div className="py-2 px-2.5 bg-[#FAFAF8] rounded-lg border border-[rgba(17,17,17,0.06)] text-xs text-neutral-700 flex items-center justify-between">
-              <span className="font-medium text-neutral-900">{configSummary} · {item.configurationName}</span>
-              {areaSummary && <span className="text-neutral-500">{areaSummary}</span>}
+            <div className="py-2 px-2.5 bg-[#FAFAF8] rounded-lg border border-[rgba(17,17,17,0.06)] text-xs text-neutral-700 flex items-center justify-between gap-2">
+              <span className="font-medium text-neutral-900 truncate">{configSummary}</span>
+              {areaSummary && <span className="text-neutral-500 shrink-0">{areaSummary}</span>}
             </div>
           </div>
 
           {/* Pricing & CTA */}
-          <div className="pt-2 border-t border-[rgba(17,17,17,0.06)] flex items-end justify-between">
+          <div className="pt-2 border-t border-[rgba(17,17,17,0.06)] flex items-end justify-between gap-2">
             <div>
               <span className="text-[10px] uppercase tracking-wider text-neutral-500 block leading-none">
-                {!item.priceOnRequest && item.price > 0 ? 'Starting Price' : 'Pricing'}
+                {!isPor ? 'Starting Price' : 'Pricing'}
               </span>
               <div className="flex items-baseline gap-1.5 mt-0.5">
                 <span className="font-display font-bold text-lg sm:text-xl text-[#111111] leading-tight">
-                  {!item.priceOnRequest && item.price > 0 ? formatIndianPrice(item.price) : 'Price on Request'}
+                  {!isPor ? formatIndianPrice(item.price) : 'Price on Request'}
                 </span>
-                {!item.priceOnRequest && item.price > 0 && (
+                {!isPor && (
                   <span className="text-xs text-neutral-500">onwards</span>
                 )}
               </div>
-              {!item.priceOnRequest && item.price > 0 && item.effectivePricePerSqft > 0 && (
+              {!isPor && item.effectivePricePerSqft > 0 && (
                 <span className="text-[10.5px] text-neutral-500 block leading-tight">
                   ₹{Math.round(item.effectivePricePerSqft).toLocaleString('en-IN')}/sq.ft.
                 </span>
               )}
             </div>
 
-            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#111111] group-hover:text-[#E85D3F] transition-colors h-9 px-3 rounded-lg border border-[rgba(17,17,17,0.12)] group-hover:border-[#E85D3F]">
-              <span>View Project</span>
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#111111] group-hover:text-[#E85D3F] transition-colors h-9 px-3 rounded-lg border border-[rgba(17,17,17,0.12)] group-hover:border-[#E85D3F] shrink-0">
+              <span>{item.availabilityStatus === 'ON_REQUEST' ? 'Contact for Details' : 'View Project'}</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </span>
           </div>

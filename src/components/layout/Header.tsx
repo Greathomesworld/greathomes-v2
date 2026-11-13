@@ -90,14 +90,14 @@ function HeaderContent() {
     pathname?.startsWith('/locations') ||
     pathname?.startsWith('/developers') ||
     pathname?.startsWith('/guides') ||
-    (pathname === '/buy' && searchParams?.get('inventoryType') === 'NEW_BOOKING');
+    (pathname === '/projects' && searchParams?.get('stage') === 'NEW_LAUNCH');
 
 
   const exploreItems = [
     {
       title: 'New Launches',
       description: 'Newly launched master-planned residential projects',
-      href: '/buy?inventoryType=NEW_BOOKING',
+      href: '/projects?stage=NEW_LAUNCH',
       icon: Sparkles,
       badge: 'Fresh',
     },
@@ -366,7 +366,7 @@ function HeaderContent() {
               </Link>
 
               <Link
-                href="/buy?inventoryType=NEW_BOOKING"
+                href="/projects?stage=NEW_LAUNCH"
                 onClick={() => setMobileMenuOpen(false)}
                 className="flex items-center justify-between py-2.5 px-3 rounded-lg text-sm font-semibold text-slate-800 hover:bg-slate-50 hover:text-[#E85D3F]"
               >

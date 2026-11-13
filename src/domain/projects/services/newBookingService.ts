@@ -1,14 +1,34 @@
-import { projectIntelligenceService } from '../services/projectIntelligenceService';
-import { newBookingAvailabilityRepository, NewBookingAvailabilityRepository } from '../repositories/newBookingRepository';
+import {
+  projectIntelligenceService,
+  ValidationError,
+  NotFoundError,
+} from '../services/projectIntelligenceService';
+import { newBookingAvailabilityRepository } from '../../../infrastructure/repositories/projectProvider';
+import { NewBookingAvailabilityRepository } from '../repositories/newBookingRepository';
 import {
   ConfigurationAvailabilityStatus,
   ProjectConfigurationAvailability,
   PublicNewBookingConfigurationDto,
+  isValidConfigurationAvailabilityStatus,
+  isPubliclyBookableAvailabilityStatus,
 } from '../dto/newBookingDto';
 import { calculateEffectivePricePerSqft } from '../dto/projectDto';
+import { auditService } from '../../audit/auditService';
+import type { RequestLike } from '../../audit/auditRequestContext';
+import { revalidateProjectLifecyclePaths } from '@/src/lib/revalidateListingPaths';
+import { isConfigurationPriceOnRequest } from '@/src/lib/priceUtils';
+
+export interface SetAvailabilityContext {
+  req?: RequestLike | null;
+  staff?: { id?: string | null; role?: string | null } | null;
+  availableFrom?: Date | null;
+}
 
 export class NewBookingService {
-  constructor(private availabilityRepo: NewBookingAvailabilityRepository = newBookingAvailabilityRepository) {}
+  constructor(
+    private availabilityRepo: NewBookingAvailabilityRepository = newBookingAvailabilityRepository,
+    private projectService = projectIntelligenceService
+  ) {}
 
   /**
    * Retrieves only explicit, verified configuration availability override records for a project
@@ -22,36 +42,40 @@ export class NewBookingService {
   }
 
   async getPublicNewBookingConfigurations(projectId: string): Promise<PublicNewBookingConfigurationDto[]> {
-    // 1. Verify project exists and is PUBLISHED
-    const project = await projectIntelligenceService.getProjectById(projectId);
+    // 1. Verify project exists and is PUBLISHED and not SOLD_OUT
+    const project = await this.projectService.getProjectById(projectId);
     if (!project) {
-      throw new Error('Project not found');
+      throw new NotFoundError('Project not found');
     }
-    if (project.lifecycleStatus !== 'PUBLISHED') {
-      return []; // Non-published projects do not expose public new booking inventory
+    if (project.lifecycleStatus !== 'PUBLISHED' || project.status === 'SOLD_OUT') {
+      return []; // Non-published or sold-out projects do not expose public new booking inventory
     }
 
-    // 2. Get project configurations from project intelligence service
-    const configurations = await projectIntelligenceService.getConfigurationsByProjectId(projectId);
+    // 2. Get project configurations from project intelligence service (with PoR masking)
+    const configurations = await this.projectService.getConfigurationsByProjectId(projectId, false);
     const availabilities = await this.availabilityRepo.findByProjectId(projectId);
     const availabilityMap = new Map<string, ProjectConfigurationAvailability>();
     for (const av of availabilities) {
       availabilityMap.set(av.configurationId, av);
     }
 
-    const mediaList = await projectIntelligenceService.getMediaByProjectId(projectId);
+    const mediaList = await this.projectService.getMediaByProjectId(projectId);
     const mediaMap = new Map<string, string>();
     for (const m of mediaList) {
       mediaMap.set(m.id, m.url);
     }
 
-    // 3. Compose public DTOs (configurations from getConfigurationsByProjectId(projectId, false) already mask PoR prices)
+    // 3. Compose public DTOs, failing closed to NOT_AVAILABLE and exposing only AVAILABLE | LIMITED | ON_REQUEST
     const result: PublicNewBookingConfigurationDto[] = [];
     for (const config of configurations) {
       const av = availabilityMap.get(config.id);
-      const status: ConfigurationAvailabilityStatus = av ? av.availabilityStatus : 'AVAILABLE'; // Default to AVAILABLE if unset
-      const lastVerified = av ? av.lastVerifiedAt.toISOString() : new Date().toISOString();
-      const isPor = Boolean(config.priceOnRequest) || Boolean(project.priceOnRequest) || !(config.price && config.price > 0);
+      const status: ConfigurationAvailabilityStatus = av ? av.availabilityStatus : 'NOT_AVAILABLE';
+      if (!isPubliclyBookableAvailabilityStatus(status)) {
+        continue;
+      }
+
+      const lastVerified = av ? new Date(av.lastVerifiedAt).toISOString() : new Date().toISOString();
+      const isPor = isConfigurationPriceOnRequest(config, project);
 
       let effectiveRate = 0;
       if (!isPor) {
@@ -69,7 +93,7 @@ export class NewBookingService {
       const floorPlanUrl = config.floorPlanMediaId ? mediaMap.get(config.floorPlanMediaId) || null : null;
 
       result.push({
-        id: av ? av.id : `fallback_${config.id}`,
+        id: av!.id,
         configurationId: config.id,
         name: config.name,
         bedroomCount: config.bedroomCount,
@@ -95,41 +119,148 @@ export class NewBookingService {
     configurationId: string,
     status: ConfigurationAvailabilityStatus,
     source?: string,
-    internalNotes?: string
+    internalNotes?: string | null,
+    context?: SetAvailabilityContext
   ): Promise<ProjectConfigurationAvailability> {
+    if (!isValidConfigurationAvailabilityStatus(status)) {
+      throw new ValidationError(
+        `Invalid availability status '${String(status)}'. Allowed values: AVAILABLE, LIMITED, ON_REQUEST, SOLD_OUT, NOT_AVAILABLE.`
+      );
+    }
+
+    const project = await this.projectService.getProjectById(projectId, true);
+    if (!project) {
+      throw new NotFoundError(`Project with id '${projectId}' not found.`);
+    }
+
+    if (isPubliclyBookableAvailabilityStatus(status)) {
+      if (project.lifecycleStatus === 'ARCHIVED') {
+        throw new ValidationError('Cannot mark a configuration as bookable on an ARCHIVED project.');
+      }
+      if (project.status === 'SOLD_OUT') {
+        throw new ValidationError('Cannot mark a configuration as bookable on a SOLD_OUT project.');
+      }
+    }
+
     // Validate configuration belongs to project
-    const configurations = await projectIntelligenceService.getConfigurationsByProjectId(projectId);
-    const configExists = configurations.some(c => c.id === configurationId);
-    if (!configExists) {
-      throw new Error('Configuration does not belong to the specified project.');
+    const configurations = await this.projectService.getConfigurationsByProjectId(projectId, true);
+    const targetConfig = configurations.find(c => c.id === configurationId);
+    if (!targetConfig) {
+      throw new NotFoundError('Configuration does not belong to the specified project.');
     }
 
     const existing = await this.availabilityRepo.findByConfigurationId(configurationId);
-    if (existing) {
-      return await this.availabilityRepo.update(existing.id, {
-        availabilityStatus: status,
-        lastVerifiedAt: new Date(),
-        source: source || existing.source,
-        internalNotes: internalNotes !== undefined ? internalNotes : existing.internalNotes,
-      });
-    } else {
-      return await this.availabilityRepo.create({
-        projectId,
-        configurationId,
-        availabilityStatus: status,
-        lastVerifiedAt: new Date(),
-        source: source || 'MANUAL_STAFF_VERIFICATION',
-        internalNotes: internalNotes || null,
-      });
+    if (existing && existing.projectId !== projectId) {
+      throw new ValidationError(
+        `Configuration '${configurationId}' belongs to project '${existing.projectId}' and cannot be updated under project '${projectId}'.`
+      );
     }
+    const now = new Date();
+    const resolvedSource = source?.trim() || existing?.source || 'MANUAL_STAFF_VERIFICATION';
+    const resolvedNotes = internalNotes !== undefined ? internalNotes : existing?.internalNotes ?? null;
+    const resolvedAvailableFrom =
+      context?.availableFrom !== undefined ? context.availableFrom : existing?.availableFrom ?? null;
+
+    const saved = await this.availabilityRepo.upsert({
+      projectId,
+      configurationId,
+      availabilityStatus: status,
+      availableFrom: resolvedAvailableFrom,
+      lastVerifiedAt: now,
+      updatedByStaffId: context?.staff?.id ?? existing?.updatedByStaffId ?? null,
+      updatedByStaffName: existing?.updatedByStaffName ?? null,
+      source: resolvedSource,
+      internalNotes: resolvedNotes,
+    });
+
+    await auditService.record(
+      context?.req ?? null,
+      context?.staff
+        ? { id: context.staff.id ?? null, role: context.staff.role ?? 'STAFF' }
+        : { role: 'SYSTEM' },
+      {
+        action: 'STATUS_CHANGED',
+        resourceType: 'PROJECT_CONFIGURATION',
+        resourceId: configurationId,
+        resourceLabel: `${project.name} · ${targetConfig.name}`,
+        before: {
+          availabilityStatus: existing?.availabilityStatus ?? 'NOT_AVAILABLE',
+          internalNotes: existing?.internalNotes ?? null,
+        },
+        after: {
+          availabilityStatus: saved.availabilityStatus,
+          internalNotes: saved.internalNotes ?? null,
+        },
+        metadata: {
+          subtype: 'NEW_BOOKING_AVAILABILITY',
+          projectId,
+          projectSlug: project.slug,
+          availabilityRecordId: saved.id,
+          source: resolvedSource,
+        },
+      }
+    );
+
+    await revalidateProjectLifecyclePaths({
+      projectId,
+      projectSlug: project.slug,
+      bedroomCounts: targetConfig.bedroomCount != null ? [targetConfig.bedroomCount] : undefined,
+    });
+
+    return saved;
   }
 
   async getAvailabilityRecordById(id: string): Promise<ProjectConfigurationAvailability | null> {
     return await this.availabilityRepo.findById(id);
   }
 
-  async deleteAvailabilityRecord(id: string): Promise<boolean> {
-    return await this.availabilityRepo.delete(id);
+  async deleteAvailabilityRecord(
+    id: string,
+    context?: SetAvailabilityContext & { expectedProjectId?: string }
+  ): Promise<boolean> {
+    const existing = await this.availabilityRepo.findById(id);
+    if (!existing) return false;
+    if (context?.expectedProjectId && existing.projectId !== context.expectedProjectId) {
+      throw new NotFoundError('Availability record does not belong to the specified project.');
+    }
+
+    const deleted = await this.availabilityRepo.delete(id);
+    if (!deleted) return false;
+
+    const project = await this.projectService.getProjectById(existing.projectId, true).catch(() => null);
+
+    await auditService.record(
+      context?.req ?? null,
+      context?.staff
+        ? { id: context.staff.id ?? null, role: context.staff.role ?? 'STAFF' }
+        : { role: 'SYSTEM' },
+      {
+        action: 'DELETE',
+        resourceType: 'PROJECT_CONFIGURATION',
+        resourceId: existing.configurationId,
+        resourceLabel: project ? `${project.name} · Availability Override` : existing.configurationId,
+        before: {
+          availabilityStatus: existing.availabilityStatus,
+          internalNotes: existing.internalNotes ?? null,
+        },
+        after: {
+          availabilityStatus: 'NOT_AVAILABLE',
+        },
+        metadata: {
+          subtype: 'NEW_BOOKING_AVAILABILITY_RESET',
+          projectId: existing.projectId,
+          projectSlug: project?.slug ?? null,
+          availabilityRecordId: existing.id,
+        },
+      }
+    );
+
+    await revalidateProjectLifecyclePaths({
+      projectId: existing.projectId,
+      projectSlug: project?.slug ?? undefined,
+    });
+
+    return true;
   }
 }
 

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { SearchX, RotateCcw, Building2, MessageSquare, MapPin } from 'lucide-react';
 import { useEnquiry } from '@/src/components/enquiry/EnquiryContext';
 
@@ -25,11 +25,13 @@ export function DiscoveryEmptyState({
 }: DiscoveryEmptyStateProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { openEnquiry } = useEnquiry();
+  const activeInventoryType = searchParams?.get('inventoryType')?.toUpperCase();
 
   const handleReset = () => {
     if (pathname.includes('/buy')) {
-      router.push('/buy?inventoryType=RESALE');
+      router.push('/buy');
     } else if (pathname.includes('/rent')) {
       router.push('/rent');
     } else if (pathname.includes('/projects')) {
@@ -102,7 +104,9 @@ export function DiscoveryEmptyState({
             const targetUrl =
               mode === 'rent' || pathname.includes('/rent')
                 ? `/rent?location=${loc.slug}`
-                : `/buy?inventoryType=RESALE&location=${loc.slug}`;
+                : activeInventoryType === 'NEW_BOOKING' || activeInventoryType === 'RESALE'
+                  ? `/buy?inventoryType=${activeInventoryType}&location=${loc.slug}`
+                  : `/buy?location=${loc.slug}`;
 
             return (
               <Link

@@ -33,7 +33,7 @@ export function HomeExplorePillars() {
       id: 'NEW_LAUNCH',
       title: 'New Launches',
       description: 'Explore the latest projects',
-      href: '/buy?inventoryType=NEW_BOOKING',
+      href: '/projects?stage=NEW_LAUNCH',
       isFeatured: true, // Prominent terracotta card as shown in reference board
       icon: <Sparkles className="w-6 h-6 text-white" />,
     },

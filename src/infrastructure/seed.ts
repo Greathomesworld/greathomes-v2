@@ -6,9 +6,9 @@ import {
   projectReraRepository,
   amenityRepository,
   projectFaqRepository,
+  newBookingAvailabilityRepository,
 } from './repositories/projectProvider';
 import { locationRepository } from './repositories/locationProvider';
-import { newBookingAvailabilityRepository } from '../domain/projects/repositories/newBookingRepository';
 import { resaleListingRepository } from '../domain/projects/repositories/resaleRepository';
 import { rentalListingRepository } from '../domain/projects/repositories/rentalRepository';
 import { enquiryRepository } from '../domain/enquiry/repositories/enquiryRepository';
@@ -94,18 +94,20 @@ export async function ensureSeedData(): Promise<void> {
     const existingLocation = await locationRepository.findBySlug('rajarhat');
 
     if (existingProject) {
-      const existingAvails = await newBookingAvailabilityRepository.findAll();
-      if (existingAvails.length === 0) {
-        const allProjects = await projectRepository.list({ isPublished: true });
-        for (const proj of allProjects) {
-          const configs = await projectConfigurationRepository.findByProjectId(proj.id);
-          for (const cfg of configs) {
-            await newBookingAvailabilityRepository.create({
-              projectId: proj.id,
-              configurationId: cfg.id,
-              availabilityStatus: cfg.availability === 'FEW_UNITS_LEFT' ? 'LIMITED' : 'AVAILABLE',
-              lastVerifiedAt: new Date(),
-            });
+      if (isMemoryMode) {
+        const existingAvails = await newBookingAvailabilityRepository.findAll();
+        if (existingAvails.length === 0) {
+          const allProjects = await projectRepository.list({ isPublished: true });
+          for (const proj of allProjects) {
+            const configs = await projectConfigurationRepository.findByProjectId(proj.id);
+            for (const cfg of configs) {
+              await newBookingAvailabilityRepository.create({
+                projectId: proj.id,
+                configurationId: cfg.id,
+                availabilityStatus: cfg.availability === 'FEW_UNITS_LEFT' ? 'LIMITED' : 'AVAILABLE',
+                lastVerifiedAt: new Date(),
+              });
+            }
           }
         }
       }

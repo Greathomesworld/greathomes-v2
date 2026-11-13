@@ -54,13 +54,17 @@ export default async function BuyPage({
   const qParam = typeof params.q === 'string' ? params.q : typeof params.query === 'string' ? params.query : undefined;
   const location = typeof params.location === 'string' ? params.location : undefined;
   const bhkParam = typeof params.bedroomCount === 'string' ? params.bedroomCount : typeof params.bhk === 'string' ? params.bhk : undefined;
-  const bedroomCount = bhkParam ? parseInt(bhkParam, 10) : undefined;
+  const bhkParsed = bhkParam ? parseInt(bhkParam, 10) : NaN;
+  const bedroomCount = Number.isFinite(bhkParsed) ? bhkParsed : undefined;
   const propertyType = typeof params.propertyType === 'string' ? params.propertyType : undefined;
-  const minPrice = typeof params.minPrice === 'string' ? parseInt(params.minPrice, 10) : undefined;
-  const maxPrice = typeof params.maxPrice === 'string' ? parseInt(params.maxPrice, 10) : undefined;
+  const minPriceParsed = typeof params.minPrice === 'string' ? parseInt(params.minPrice, 10) : NaN;
+  const maxPriceParsed = typeof params.maxPrice === 'string' ? parseInt(params.maxPrice, 10) : NaN;
+  const minPrice = Number.isFinite(minPriceParsed) ? minPriceParsed : undefined;
+  const maxPrice = Number.isFinite(maxPriceParsed) ? maxPriceParsed : undefined;
   const inventoryType = typeof params.inventoryType === 'string' ? params.inventoryType : undefined;
   const sort = typeof params.sort === 'string' ? params.sort : undefined;
-  const page = typeof params.page === 'string' ? parseInt(params.page, 10) : 1;
+  const pageParsed = typeof params.page === 'string' ? parseInt(params.page, 10) : 1;
+  const page = Number.isFinite(pageParsed) && pageParsed > 0 ? pageParsed : 1;
   const pageSize = 12;
 
   const filters = {
@@ -79,14 +83,14 @@ export default async function BuyPage({
     propertyDiscoveryService.discoverBuy(filters, page, pageSize),
   ]);
 
-  const { data: properties, pagination } = discoveryResult;
+  const { data: properties, pagination, countsByType } = discoveryResult;
 
-  // Compute breakdown if viewing all inventory
+  // Compute full unpaginated breakdown when viewing all inventory
   const breakdown =
     !inventoryType || inventoryType === 'ALL'
       ? {
-          newBookingCount: properties.filter((p) => p.type === 'NEW_BOOKING').length,
-          resaleCount: properties.filter((p) => p.type === 'RESALE').length,
+          newBookingCount: countsByType?.newBooking ?? properties.filter((p) => p.type === 'NEW_BOOKING').length,
+          resaleCount: countsByType?.resale ?? properties.filter((p) => p.type === 'RESALE').length,
         }
       : undefined;
 

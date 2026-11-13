@@ -228,7 +228,7 @@ export function mapDtoToConfigurationViewModel(
     floorPlans: configFloorPlans,
     floorPlanCount: configFloorPlans.length,
     hasFloorPlans: configFloorPlans.length > 0,
-    availability: dto.availability || 'AVAILABLE',
+    availability: dto.availability || 'NOT_AVAILABLE',
   };
 }
 

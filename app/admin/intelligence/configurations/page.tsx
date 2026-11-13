@@ -10,6 +10,11 @@ import { AdminBadge } from '@/src/components/admin/AdminBadge';
 import { getAdminHeaders } from '@/src/lib/adminAuth';
 import { compareEffectiveRates, comparePricesWithPorLast } from '@/src/lib/priceUtils';
 import {
+  AvailabilityControlModal,
+  AvailabilityStatusBadge,
+  normalizeAvailabilityStatus,
+} from '@/src/components/admin/typologies/AvailabilityControlModal';
+import {
   Plus,
   Search,
   Filter,
@@ -43,6 +48,8 @@ interface ConfigurationItem {
   projectId: string;
   projectName: string;
   projectSlug: string;
+  projectStatus?: string;
+  projectLifecycleStatus?: string;
   developerName?: string | null;
   locationName?: string | null;
   name: string;
@@ -58,6 +65,11 @@ interface ConfigurationItem {
   floorPlanCount: number;
   hasFloorPlan: boolean;
   availability: string;
+  availabilityRecordId?: string | null;
+  availabilityLastVerifiedAt?: string | null;
+  availabilityUpdatedByStaffId?: string | null;
+  availabilityUpdatedByStaffName?: string | null;
+  availabilityInternalNotes?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -74,10 +86,12 @@ export default function AdminConfigurationsDirectoryPage() {
   const [selectedBhk, setSelectedBhk] = useState<string>('ALL');
   const [selectedPriceBasis, setSelectedPriceBasis] = useState<string>('ALL');
   const [selectedFloorPlanFilter, setSelectedFloorPlanFilter] = useState<string>('ALL');
+  const [selectedAvailabilityFilter, setSelectedAvailabilityFilter] = useState<string>('ALL');
   const [sortBy, setSortBy] = useState<string>('createdAt:desc');
 
   // Success Notification Banner
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [availabilityTargetItem, setAvailabilityTargetItem] = useState<ConfigurationItem | null>(null);
 
   // Create Configuration Modal
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -90,7 +104,7 @@ export default function AdminConfigurationsDirectoryPage() {
   const [createCarpetArea, setCreateCarpetArea] = useState('');
   const [createBuiltUpArea, setCreateBuiltUpArea] = useState('');
   const [createSuperBuiltUpArea, setCreateSuperBuiltUpArea] = useState('');
-  const [createAvailability, setCreateAvailability] = useState('AVAILABLE');
+  const [createAvailability, setCreateAvailability] = useState('NOT_AVAILABLE');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -155,6 +169,12 @@ export default function AdminConfigurationsDirectoryPage() {
       result = result.filter((c) => c.hasFloorPlan === wantFP);
     }
 
+    if (selectedAvailabilityFilter !== 'ALL') {
+      result = result.filter(
+        (c) => normalizeAvailabilityStatus(c.availability) === selectedAvailabilityFilter
+      );
+    }
+
     result.sort((a, b) => {
       switch (sortBy) {
         case 'name:asc':
@@ -183,6 +203,7 @@ export default function AdminConfigurationsDirectoryPage() {
     selectedBhk,
     selectedPriceBasis,
     selectedFloorPlanFilter,
+    selectedAvailabilityFilter,
     sortBy,
   ]);
 
@@ -213,7 +234,8 @@ export default function AdminConfigurationsDirectoryPage() {
     selectedProjectId !== 'ALL' ||
     selectedBhk !== 'ALL' ||
     selectedPriceBasis !== 'ALL' ||
-    selectedFloorPlanFilter !== 'ALL';
+    selectedFloorPlanFilter !== 'ALL' ||
+    selectedAvailabilityFilter !== 'ALL';
 
   const clearFilters = () => {
     setSearchQuery('');
@@ -221,6 +243,7 @@ export default function AdminConfigurationsDirectoryPage() {
     setSelectedBhk('ALL');
     setSelectedPriceBasis('ALL');
     setSelectedFloorPlanFilter('ALL');
+    setSelectedAvailabilityFilter('ALL');
     setSortBy('createdAt:desc');
   };
 
@@ -312,6 +335,7 @@ export default function AdminConfigurationsDirectoryPage() {
       setCreateCarpetArea('');
       setCreateBuiltUpArea('');
       setCreateSuperBuiltUpArea('');
+      setCreateAvailability('NOT_AVAILABLE');
 
       setToastMessage(`Configuration '${created.name || createName}' created successfully.`);
       setTimeout(() => setToastMessage(null), 5000);
@@ -490,7 +514,7 @@ export default function AdminConfigurationsDirectoryPage() {
               </div>
 
               {/* Filter Controls Row */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 pt-2 border-t border-neutral-100">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 pt-2 border-t border-neutral-100">
                 {/* Project Filter */}
                 <div>
                   <label className="block text-xs font-display font-medium text-neutral-500 mb-1">
@@ -559,6 +583,25 @@ export default function AdminConfigurationsDirectoryPage() {
                     <option value="ALL">All Floor Plan Status</option>
                     <option value="WITH_FP">Attached Floor Plan</option>
                     <option value="NO_FP">Missing Floor Plan</option>
+                  </select>
+                </div>
+
+                {/* Availability Filter */}
+                <div>
+                  <label className="block text-xs font-display font-medium text-neutral-500 mb-1">
+                    Availability
+                  </label>
+                  <select
+                    value={selectedAvailabilityFilter}
+                    onChange={(e) => setSelectedAvailabilityFilter(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-neutral-200 text-xs font-body text-neutral-800 bg-neutral-50 focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-neutral-400"
+                  >
+                    <option value="ALL">All Availability</option>
+                    <option value="AVAILABLE">Available</option>
+                    <option value="LIMITED">Limited Availability</option>
+                    <option value="ON_REQUEST">On Request</option>
+                    <option value="SOLD_OUT">Sold Out</option>
+                    <option value="NOT_AVAILABLE">Not Available</option>
                   </select>
                 </div>
 
@@ -631,6 +674,7 @@ export default function AdminConfigurationsDirectoryPage() {
                         <th className="py-3.5 px-4 font-medium">Total Price</th>
                         <th className="py-3.5 px-4 font-medium">Effective Rate</th>
                         <th className="py-3.5 px-4 font-medium">Floor Plan</th>
+                        <th className="py-3.5 px-4 font-medium">Availability</th>
                         <th className="py-3.5 px-4 font-medium text-right">Actions</th>
                       </tr>
                     </thead>
@@ -767,15 +811,37 @@ export default function AdminConfigurationsDirectoryPage() {
                             )}
                           </td>
 
+                          {/* Availability Status Column */}
+                          <td className="py-3.5 px-4">
+                            <div className="space-y-1">
+                              <AvailabilityStatusBadge status={item.availability} />
+                              {item.availabilityLastVerifiedAt && (
+                                <div className="text-[10px] text-neutral-400 font-mono leading-tight">
+                                  {new Date(item.availabilityLastVerifiedAt).toLocaleDateString('en-IN')}
+                                  {item.availabilityUpdatedByStaffName ? ` · ${item.availabilityUpdatedByStaffName}` : ''}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+
                           {/* Actions Column */}
-                          <td className="py-3.5 px-4 text-right space-x-2 shrink-0">
-                            <Link
-                              href={`/admin/projects/${item.projectId}?tab=configs`}
-                              className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-lg border border-neutral-200 text-neutral-700 hover:bg-neutral-100 text-xs font-display font-medium transition-all"
-                            >
-                              <Edit3 className="h-3.5 w-3.5 text-neutral-500" />
-                              <span>Manage / Floor Plans</span>
-                            </Link>
+                          <td className="py-3.5 px-4 text-right shrink-0">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setAvailabilityTargetItem(item)}
+                                className="inline-flex items-center px-2.5 py-1.5 rounded-lg border border-neutral-200 bg-neutral-50 hover:bg-neutral-100 text-neutral-800 text-xs font-display font-semibold transition-all"
+                              >
+                                Update Availability
+                              </button>
+                              <Link
+                                href={`/admin/projects/${item.projectId}?tab=configs`}
+                                className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-lg border border-neutral-200 text-neutral-700 hover:bg-neutral-100 text-xs font-display font-medium transition-all"
+                              >
+                                <Edit3 className="h-3.5 w-3.5 text-neutral-500" />
+                                <span>Manage</span>
+                              </Link>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -991,17 +1057,22 @@ export default function AdminConfigurationsDirectoryPage() {
               {/* Availability */}
               <div>
                 <label className="block text-xs font-display font-medium text-neutral-700 mb-1">
-                  Availability
+                  Initial Availability Status
                 </label>
                 <select
                   value={createAvailability}
                   onChange={(e) => setCreateAvailability(e.target.value)}
                   className="w-full px-3.5 py-2 rounded-xl border border-neutral-200 text-sm font-body text-neutral-900 bg-white focus:outline-hidden focus:ring-2 focus:ring-neutral-900/10"
                 >
+                  <option value="NOT_AVAILABLE">Not Available (Fail-closed default)</option>
                   <option value="AVAILABLE">Available</option>
-                  <option value="FEW_UNITS_LEFT">Few Units Left</option>
+                  <option value="LIMITED">Limited Availability</option>
+                  <option value="ON_REQUEST">On Request</option>
                   <option value="SOLD_OUT">Sold Out</option>
                 </select>
+                <p className="text-[11px] text-neutral-500 mt-1 font-sans">
+                  New configurations default to Not Available until explicitly reviewed for New Booking discovery.
+                </p>
               </div>
 
               {/* Actions */}
@@ -1034,6 +1105,25 @@ export default function AdminConfigurationsDirectoryPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* New Booking Availability Control Modal */}
+      {availabilityTargetItem && (
+        <AvailabilityControlModal
+          isOpen={Boolean(availabilityTargetItem)}
+          onClose={() => setAvailabilityTargetItem(null)}
+          projectId={availabilityTargetItem.projectId}
+          projectName={availabilityTargetItem.projectName}
+          projectLifecycleStatus={availabilityTargetItem.projectLifecycleStatus}
+          projectStatus={availabilityTargetItem.projectStatus}
+          configuration={availabilityTargetItem}
+          source="ADMIN_CONFIG_DIRECTORY_UI"
+          onSaved={async (_updatedStatus, message) => {
+            setToastMessage(message);
+            setTimeout(() => setToastMessage(null), 5000);
+            await fetchConfigurations();
+          }}
+        />
       )}
     </div>
   );

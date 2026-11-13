@@ -24,6 +24,11 @@ import { ProjectLocationMap } from '@/src/components/projects/ProjectLocationMap
 import { isValidCoordinate, resolveProjectCoordinates } from '@/src/domain/projects/viewModels/projectLocationViewModel';
 import { ProjectIntelligenceControl } from '@/src/components/admin/intelligence/ProjectIntelligenceControl';
 import { parseIndianCurrencyPrice, parsePositiveAreaSqft } from '@/src/lib/priceUtils';
+import {
+  AvailabilityControlModal,
+  AvailabilityStatusBadge,
+  normalizeAvailabilityStatus,
+} from '@/src/components/admin/typologies/AvailabilityControlModal';
 
 function formatCoordinates(lat: number, lng: number): string {
   const latDir = lat >= 0 ? 'N' : 'S';
@@ -47,7 +52,9 @@ export default function ProjectDetailPage() {
   // Sub-items forms
   const [savingSub, setSavingSub] = useState(false);
   const [subError, setSubError] = useState<string | null>(null);
+  const [subSuccess, setSubSuccess] = useState<string | null>(null);
   const [deletingConfigId, setDeletingConfigId] = useState<string | null>(null);
+  const [availabilityTargetConfig, setAvailabilityTargetConfig] = useState<any | null>(null);
 
   // Floor Plan viewer modal states
   const [isFloorPlanViewerOpen, setIsFloorPlanViewerOpen] = useState(false);
@@ -76,6 +83,7 @@ export default function ProjectDetailPage() {
   const [newConfigCarpet, setNewConfigCarpet] = useState('');
   const [newConfigBuiltUp, setNewConfigBuiltUp] = useState('');
   const [newConfigSuperBuiltUp, setNewConfigSuperBuiltUp] = useState('');
+  const [newConfigAvailability, setNewConfigAvailability] = useState('NOT_AVAILABLE');
   const [addFieldErrors, setAddFieldErrors] = useState<Record<string, string>>({});
 
   // New FAQ states
@@ -316,6 +324,7 @@ export default function ProjectDetailPage() {
         carpetArea: carpetVal,
         builtUpArea: builtUpVal,
         superBuiltUpArea: superBuiltUpVal,
+        availability: newConfigAvailability,
       };
 
       const res = await fetch(`/api/projects/${id}/configurations`, {
@@ -340,6 +349,7 @@ export default function ProjectDetailPage() {
       setNewConfigCarpet('');
       setNewConfigBuiltUp('');
       setNewConfigSuperBuiltUp('');
+      setNewConfigAvailability('NOT_AVAILABLE');
       setAddFieldErrors({});
       await fetchProjectData(true);
     } catch (err: any) {
@@ -1166,6 +1176,23 @@ export default function ProjectDetailPage() {
             </div>
           )}
 
+          {subSuccess && (
+            <div className="flex items-center justify-between gap-2 p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-medium rounded-lg">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0" />
+                <span>{subSuccess}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSubSuccess(null)}
+                className="text-emerald-600 hover:text-emerald-800 p-1"
+                aria-label="Dismiss message"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+
           {/* TAB 1: Overview */}
           {activeTab === 'overview' && (
             <div className="bg-white border border-neutral-200/80 rounded-xl p-6 space-y-6 shadow-2xs">
@@ -1346,14 +1373,73 @@ export default function ProjectDetailPage() {
           )}
 
           {/* TAB 2: Configurations / Typologies */}
-          {activeTab === 'configs' && (
+          {activeTab === 'configs' && (() => {
+            const configs = project.configurations || [];
+            const availCounts = configs.reduce(
+              (acc: Record<string, number>, c: any) => {
+                const st = normalizeAvailabilityStatus(c.availability);
+                acc[st] = (acc[st] || 0) + 1;
+                return acc;
+              },
+              { AVAILABLE: 0, LIMITED: 0, ON_REQUEST: 0, SOLD_OUT: 0, NOT_AVAILABLE: 0 }
+            );
+            const activeDiscoveryCount = availCounts.AVAILABLE + availCounts.LIMITED + availCounts.ON_REQUEST;
+
+            return (
             <div className="space-y-8">
+              {/* Project New Booking Availability Summary Strip */}
+              <div className="bg-white border border-neutral-200/80 rounded-xl p-5 space-y-4 shadow-2xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-xs font-bold text-neutral-500 uppercase tracking-wider font-display">
+                      New Booking Availability Summary
+                    </h4>
+                    <p className="text-xs text-neutral-500 font-sans mt-0.5">
+                      Typologies default to Not Available until explicitly reviewed and activated for public discovery.
+                    </p>
+                  </div>
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold font-display bg-neutral-100 text-neutral-800 border border-neutral-200 tabular-nums self-start">
+                    {activeDiscoveryCount} Active in New Booking
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                  {[
+                    { key: 'AVAILABLE', label: 'Available', style: 'bg-emerald-50/70 border-emerald-200 text-emerald-800' },
+                    { key: 'LIMITED', label: 'Limited', style: 'bg-amber-50/70 border-amber-200 text-amber-800' },
+                    { key: 'ON_REQUEST', label: 'On Request', style: 'bg-sky-50/70 border-sky-200 text-sky-800' },
+                    { key: 'SOLD_OUT', label: 'Sold Out', style: 'bg-rose-50/70 border-rose-200 text-rose-700' },
+                    { key: 'NOT_AVAILABLE', label: 'Not Available', style: 'bg-neutral-50 border-neutral-200 text-neutral-700' },
+                  ].map((item) => (
+                    <div key={item.key} className={`rounded-lg border px-3 py-2 ${item.style}`}>
+                      <span className="text-[10px] font-bold uppercase tracking-wider font-display block opacity-80">
+                        {item.label}
+                      </span>
+                      <span className="text-lg font-bold font-display tabular-nums">
+                        {availCounts[item.key] || 0}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {(project.lifecycleStatus !== 'PUBLISHED' || project.status === 'SOLD_OUT') && (
+                  <div className="flex items-start gap-2.5 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900">
+                    <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                    <span>
+                      {project.lifecycleStatus === 'ARCHIVED' || project.status === 'SOLD_OUT'
+                        ? `This project is ${project.lifecycleStatus === 'ARCHIVED' ? 'Archived' : 'Sold Out'}. Publicly bookable availability statuses cannot be activated.`
+                        : `This project is currently ${project.lifecycleStatus}. Typologies will only appear in public New Booking discovery once the project is Published.`}
+                    </span>
+                  </div>
+                )}
+              </div>
+
               {/* Attached Typologies Card */}
               <div className="bg-white border border-neutral-200/80 rounded-xl p-6 space-y-5 shadow-2xs">
                 <div className="flex items-center justify-between pb-3 border-b border-neutral-100">
                   <div>
                     <h4 className="text-sm font-bold text-neutral-800 uppercase tracking-wider font-display">Attached Typologies & Configurations</h4>
-                    <p className="text-xs text-neutral-500 mt-0.5 font-sans">Manage floor plan layouts, area specifications, and pricing basis for this project.</p>
+                    <p className="text-xs text-neutral-500 mt-0.5 font-sans">Manage floor plan layouts, area specifications, pricing basis, and New Booking availability.</p>
                   </div>
                   <span className="text-xs font-bold px-2.5 py-1 bg-neutral-100 text-neutral-700 rounded-full font-mono border border-neutral-200">
                     {project.configurations?.length || 0} Total
@@ -1368,23 +1454,24 @@ export default function ProjectDetailPage() {
                   <>
                     {/* Desktop Table View */}
                     <div className="hidden md:block overflow-x-auto">
-                      <table className="w-full text-left text-sm border-collapse table-fixed">
+                      <table className="w-full text-left text-sm border-collapse table-fixed min-w-[920px]">
                         <thead>
                           <tr className="border-b border-neutral-200/80 text-[11px] font-bold text-neutral-400 uppercase tracking-wider font-display bg-neutral-50/60">
-                            <th className="py-3.5 px-3 w-[16%] font-bold text-neutral-500 tracking-wider">Name</th>
+                            <th className="py-3.5 px-3 w-[15%] font-bold text-neutral-500 tracking-wider">Name</th>
                             <th className="py-3.5 px-2 w-[7%] text-center font-bold text-neutral-500 tracking-wider">BHK</th>
-                            <th className="py-3.5 px-3 w-[18%] font-bold text-neutral-500 tracking-wider">Areas</th>
-                            <th className="py-3.5 px-3 w-[11%] font-bold text-neutral-500 tracking-wider">Price Basis</th>
-                            <th className="py-3.5 px-3 w-[12%] font-bold text-neutral-500 tracking-wider">Price</th>
-                            <th className="py-3.5 px-3 w-[11%] font-bold text-neutral-500 tracking-wider">Effective Rate</th>
-                            <th className="py-3.5 px-3 w-[16%] font-bold text-neutral-500 tracking-wider">Floor Plans</th>
-                            <th className="py-3.5 px-2 w-[9%] text-right font-bold text-neutral-500 tracking-wider">Actions</th>
+                            <th className="py-3.5 px-3 w-[16%] font-bold text-neutral-500 tracking-wider">Areas</th>
+                            <th className="py-3.5 px-2 w-[10%] font-bold text-neutral-500 tracking-wider">Basis</th>
+                            <th className="py-3.5 px-2 w-[10%] font-bold text-neutral-500 tracking-wider">Price</th>
+                            <th className="py-3.5 px-2 w-[10%] font-bold text-neutral-500 tracking-wider">Eff. Rate</th>
+                            <th className="py-3.5 px-2 w-[13%] font-bold text-neutral-500 tracking-wider">Floor Plans</th>
+                            <th className="py-3.5 px-2 w-[12%] font-bold text-neutral-500 tracking-wider">Availability</th>
+                            <th className="py-3.5 px-2 w-[7%] text-right font-bold text-neutral-500 tracking-wider">Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-neutral-100">
                           {project.configurations.map((config: any) => (
                             <tr key={config.id} className="hover:bg-neutral-50/40 transition-colors align-top border-b border-neutral-100/50">
-                              <td className="py-4 px-3 w-[16%] min-w-0">
+                              <td className="py-4 px-3 w-[15%] min-w-0">
                                 <span className="font-bold text-neutral-900 font-display text-sm block leading-snug break-words">{config.name}</span>
                               </td>
                               <td className="py-4 px-2 w-[7%] text-center">
@@ -1392,7 +1479,7 @@ export default function ProjectDetailPage() {
                                   {config.bedroomCount ? `${config.bedroomCount} BHK` : '—'}
                                 </span>
                               </td>
-                              <td className="py-4 px-3 w-[18%] min-w-0">
+                              <td className="py-4 px-3 w-[16%] min-w-0">
                                 <div className="space-y-1 text-xs font-sans">
                                   {config.carpetArea ? (
                                     <div className="flex items-center gap-2">
@@ -1417,12 +1504,12 @@ export default function ProjectDetailPage() {
                                   )}
                                 </div>
                               </td>
-                              <td className="py-4 px-3 w-[11%]">
+                              <td className="py-4 px-2 w-[10%]">
                                 <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-neutral-100 text-neutral-600 border border-neutral-200/80 font-mono whitespace-nowrap">
-                                  {config.priceBasis === 'CARPET_AREA' ? 'Carpet Area' : config.priceBasis === 'BUILT_UP_AREA' ? 'Built-Up Area' : config.priceBasis === 'SUPER_BUILT_UP_AREA' ? 'Super Built' : config.priceBasis || '—'}
+                                  {config.priceBasis === 'CARPET_AREA' ? 'Carpet' : config.priceBasis === 'BUILT_UP_AREA' ? 'Built-Up' : config.priceBasis === 'SUPER_BUILT_UP_AREA' ? 'Super' : config.priceBasis || '—'}
                                 </span>
                               </td>
-                              <td className="py-4 px-3 w-[12%] whitespace-nowrap">
+                              <td className="py-4 px-2 w-[10%] whitespace-nowrap">
                                 <div className="space-y-1">
                                   <span className="font-bold text-sm text-neutral-900 font-display block">
                                     {config.price && config.price > 0 ? `₹${config.price.toLocaleString('en-IN')}` : '—'}
@@ -1434,12 +1521,12 @@ export default function ProjectDetailPage() {
                                   )}
                                 </div>
                               </td>
-                              <td className="py-4 px-3 w-[11%] whitespace-nowrap">
+                              <td className="py-4 px-2 w-[10%] whitespace-nowrap">
                                 <span className="text-xs font-medium text-neutral-500 font-mono">
-                                  {config.effectivePricePerSqft && config.effectivePricePerSqft > 0 ? `₹${config.effectivePricePerSqft.toLocaleString('en-IN')}/sq.ft.` : '—'}
+                                  {config.effectivePricePerSqft && config.effectivePricePerSqft > 0 ? `₹${config.effectivePricePerSqft.toLocaleString('en-IN')}` : '—'}
                                 </span>
                               </td>
-                              <td className="py-4 px-3 w-[16%] min-w-0">
+                              <td className="py-4 px-2 w-[13%] min-w-0">
                                 <TypologyFloorPlanControl
                                   projectId={project.id}
                                   projectName={project.name}
@@ -1452,7 +1539,25 @@ export default function ProjectDetailPage() {
                                   }}
                                 />
                               </td>
-                              <td className="py-4 px-2 w-[9%] text-right">
+                              <td className="py-4 px-2 w-[12%] min-w-0">
+                                <div className="space-y-1.5">
+                                  <AvailabilityStatusBadge status={config.availability} />
+                                  {config.availabilityLastVerifiedAt && (
+                                    <span className="block text-[10px] text-neutral-400 font-mono leading-tight">
+                                      {new Date(config.availabilityLastVerifiedAt).toLocaleDateString('en-IN')}
+                                      {config.availabilityUpdatedByStaffName ? ` · ${config.availabilityUpdatedByStaffName}` : ''}
+                                    </span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => setAvailabilityTargetConfig(config)}
+                                    className="inline-flex items-center px-2 py-1 text-[11px] font-semibold font-display text-neutral-700 hover:text-neutral-950 bg-neutral-50 hover:bg-neutral-100 border border-neutral-200 rounded-md transition"
+                                  >
+                                    Update
+                                  </button>
+                                </div>
+                              </td>
+                              <td className="py-4 px-2 w-[7%] text-right">
                                 <div className="flex items-center justify-end gap-1">
                                   <button
                                     type="button"
@@ -1490,11 +1595,20 @@ export default function ProjectDetailPage() {
                       {project.configurations.map((config: any) => (
                         <div key={config.id} className="p-4 space-y-3 bg-white">
                           <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-neutral-100 text-neutral-700 font-display mb-1">
-                                {config.bedroomCount ? `${config.bedroomCount} BHK` : 'Typology'}
-                              </span>
+                            <div className="space-y-1">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-neutral-100 text-neutral-700 font-display">
+                                  {config.bedroomCount ? `${config.bedroomCount} BHK` : 'Typology'}
+                                </span>
+                                <AvailabilityStatusBadge status={config.availability} />
+                              </div>
                               <h5 className="text-base font-bold text-neutral-900 font-display">{config.name}</h5>
+                              {config.availabilityLastVerifiedAt && (
+                                <p className="text-[11px] text-neutral-500 font-mono">
+                                  Verified {new Date(config.availabilityLastVerifiedAt).toLocaleDateString('en-IN')}
+                                  {config.availabilityUpdatedByStaffName ? ` by ${config.availabilityUpdatedByStaffName}` : ''}
+                                </p>
+                              )}
                             </div>
                             <div className="flex items-center gap-1">
                               <button
@@ -1547,7 +1661,7 @@ export default function ProjectDetailPage() {
                             {config.superBuiltUpArea && <span>Super: <strong>{config.superBuiltUpArea} sq.ft.</strong></span>}
                           </div>
 
-                          <div className="pt-1">
+                          <div className="pt-1 flex flex-wrap items-center justify-between gap-2">
                             <TypologyFloorPlanControl
                               projectId={project.id}
                               projectName={project.name}
@@ -1559,6 +1673,13 @@ export default function ProjectDetailPage() {
                                 setIsFloorPlanViewerOpen(true);
                               }}
                             />
+                            <button
+                              type="button"
+                              onClick={() => setAvailabilityTargetConfig(config)}
+                              className="px-3 py-2 text-xs font-semibold font-display text-neutral-800 bg-neutral-100 hover:bg-neutral-200 rounded-lg border border-neutral-200 transition"
+                            >
+                              Update Availability
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -1655,6 +1776,22 @@ export default function ProjectDetailPage() {
                     />
                     {addFieldErrors.superBuiltUpArea && <p className="text-[11px] text-rose-600 mt-1">{addFieldErrors.superBuiltUpArea}</p>}
                   </div>
+                  <div className="sm:col-span-2 lg:col-span-2">
+                    <label className="block text-xs font-semibold text-neutral-600 mb-1 font-display">
+                      Initial Availability Status
+                    </label>
+                    <select
+                      value={newConfigAvailability}
+                      onChange={(e) => setNewConfigAvailability(e.target.value)}
+                      className="w-full text-sm bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 focus:bg-white focus:border-indigo-500 focus:outline-hidden transition"
+                    >
+                      <option value="NOT_AVAILABLE">Not Available (Fail-closed default)</option>
+                      <option value="AVAILABLE">Available</option>
+                      <option value="LIMITED">Limited Availability</option>
+                      <option value="ON_REQUEST">On Request</option>
+                      <option value="SOLD_OUT">Sold Out</option>
+                    </select>
+                  </div>
                   <div className="sm:col-span-2 lg:col-span-4 pt-1">
                     <label className="flex items-start gap-2.5 cursor-pointer select-none">
                       <input
@@ -1683,7 +1820,8 @@ export default function ProjectDetailPage() {
                 </div>
               </form>
             </div>
-          )}
+            );
+          })()}
 
           {/* TAB 3: RERA Registry */}
           {activeTab === 'rera' && (
@@ -2742,6 +2880,23 @@ export default function ProjectDetailPage() {
           </div>
         </div>
       )}
+
+      {/* New Booking Availability Control Modal */}
+      <AvailabilityControlModal
+        isOpen={Boolean(availabilityTargetConfig)}
+        onClose={() => setAvailabilityTargetConfig(null)}
+        projectId={project.id}
+        projectName={project.name}
+        projectLifecycleStatus={project.lifecycleStatus}
+        projectStatus={project.status}
+        configuration={availabilityTargetConfig}
+        source="ADMIN_PROJECT_TYPOLOGY_UI"
+        onSaved={async (_updatedStatus, message) => {
+          setSubSuccess(message);
+          setTimeout(() => setSubSuccess(null), 6000);
+          await fetchProjectData(true);
+        }}
+      />
 
       {/* Delete Walkthrough Video Confirmation Dialog */}
       <AdminConfirmDialog

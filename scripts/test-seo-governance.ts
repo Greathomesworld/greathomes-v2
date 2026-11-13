@@ -29,7 +29,16 @@ import { locationSeoService, TIER_2_CURATED_SLUGS } from '../src/domain/location
 import { isPublicCanonicalLocation } from '../src/domain/locations/locationRegionMapper';
 import { bhkLandingService } from '../src/domain/projects/services/bhkLandingService';
 import { revalidateProjectLifecyclePaths } from '../src/lib/revalidateListingPaths';
-import { ensureSeedData } from '../src/infrastructure/seed';
+import { ensureSeedData, importLocationMasterData } from '../src/infrastructure/seed';
+import { getDb } from '../src/db/client';
+import { developerRepository } from '../src/infrastructure/repositories/developerProvider';
+import { locationRepository } from '../src/infrastructure/repositories/locationProvider';
+import {
+  projectRepository,
+  projectConfigurationRepository,
+  projectMediaRepository,
+  newBookingAvailabilityRepository,
+} from '../src/infrastructure/repositories/projectProvider';
 import sitemap from '../app/sitemap';
 import robots from '../app/robots';
 import { GET as getAdminLocations } from '../app/api/admin/locations/route';
@@ -37,6 +46,198 @@ import { GET as getAdminDevelopers } from '../app/api/admin/developers/route';
 import { POST as postSearchConsoleInspect } from '../app/api/admin/google/search-console/inspect/route';
 
 const BASE_URL = 'https://www.greathomes.co.in';
+
+/**
+ * Hard guardrail: test-only SEO fixtures may NEVER run against PostgreSQL or in production.
+ */
+function assertMemoryOnlyTestEnvironment(): void {
+  if (process.env.PERSISTENCE_PROVIDER === 'postgres') {
+    throw new Error('FATAL: SEO governance memory fixtures cannot execute when PERSISTENCE_PROVIDER=postgres.');
+  }
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('FATAL: SEO governance memory fixtures cannot execute when NODE_ENV=production.');
+  }
+  if (process.env.DATABASE_URL && process.env.PERSISTENCE_PROVIDER !== 'memory') {
+    throw new Error(
+      'FATAL: DATABASE_URL is configured without PERSISTENCE_PROVIDER=memory; refusing to seed SEO test fixtures.'
+    );
+  }
+  if (getDb() !== null) {
+    throw new Error('FATAL: Active PostgreSQL handle detected; refusing to seed SEO test fixtures.');
+  }
+}
+
+/**
+ * Deterministic, test-only memory fixture helper.
+ * Loads canonical LOCATION_MASTER_RECORDS (163 locations) alongside minimal deterministic
+ * project/configuration fixtures so all 12 BHK landing routes and 3-tier location rollup
+ * assertions execute against real domain services without polluting src/infrastructure/seed.ts.
+ */
+async function ensureSeoMemoryFixtures(): Promise<void> {
+  assertMemoryOnlyTestEnvironment();
+
+  const previousPersistenceProvider = process.env.PERSISTENCE_PROVIDER;
+  const previousEnableSeeding = process.env.ENABLE_SEEDING;
+
+  try {
+    process.env.PERSISTENCE_PROVIDER = 'memory';
+    process.env.ENABLE_SEEDING = 'true';
+
+    assertMemoryOnlyTestEnvironment();
+
+    if (!(await projectRepository.findBySlug('merlin-rise'))) {
+      await ensureSeedData();
+    }
+
+    const masterImport = await importLocationMasterData({
+      dryRun: false,
+      protectCuratedFields: true,
+    });
+    assert.strictEqual(masterImport.hierarchyValid, true, `Location master hierarchy invalid: ${masterImport.errors.join('; ')}`);
+    assert.strictEqual(masterImport.errors.length, 0, 'Location master import produced errors');
+
+  const merlin = await developerRepository.findBySlug('merlin-group');
+  assert.ok(merlin, 'Expected seeded developer merlin-group for SEO fixtures');
+
+  const fixtureProjects: Array<{
+    slug: string;
+    name: string;
+    locationSlug: string;
+    bedrooms: number[];
+    featured?: boolean;
+  }> = [
+    // EM Bypass Tier-1 direct & 3/4 BHK landing pages (also 1st 5 BHK for Kolkata)
+    { slug: 'seo-fixture-em-bypass-1', name: 'SEO Fixture EM Bypass One', locationSlug: 'em-bypass', bedrooms: [3, 4], featured: true },
+    { slug: 'seo-fixture-em-bypass-2', name: 'SEO Fixture EM Bypass Two', locationSlug: 'em-bypass', bedrooms: [3, 4] },
+    { slug: 'seo-fixture-em-bypass-3', name: 'SEO Fixture EM Bypass Three', locationSlug: 'em-bypass', bedrooms: [3, 4, 5] },
+    // Rajarhat 2/3/4 BHK landing pages (merlin-rise already provides 2 & 3 BHK; also 2nd 5 BHK for Kolkata)
+    { slug: 'seo-fixture-rajarhat-1', name: 'SEO Fixture Rajarhat One', locationSlug: 'rajarhat', bedrooms: [2, 3, 4] },
+    { slug: 'seo-fixture-rajarhat-2', name: 'SEO Fixture Rajarhat Two', locationSlug: 'rajarhat', bedrooms: [2, 3, 4] },
+    { slug: 'seo-fixture-rajarhat-3', name: 'SEO Fixture Rajarhat Three', locationSlug: 'rajarhat', bedrooms: [4, 5] },
+    // New Town child neighbourhoods (Action Area 1 & 2 Tier-1 direct + New Town 2/3/4 BHK + 3rd 5 BHK for Kolkata)
+    { slug: 'seo-fixture-aa1-1', name: 'SEO Fixture Action Area One', locationSlug: 'action-area-1', bedrooms: [2, 3, 4, 5] },
+    { slug: 'seo-fixture-aa2-1', name: 'SEO Fixture Action Area Two', locationSlug: 'action-area-2', bedrooms: [2, 4] },
+    // Tier-1 rollup parent corridors via verified child neighbourhoods (keeps Tier-2 slugs strictly 0-inventory)
+    { slug: 'seo-fixture-salt-lake-sector-v', name: 'SEO Fixture Sector V Enclave', locationSlug: 'sector-v', bedrooms: [3] },
+    { slug: 'seo-fixture-north-kolkata-shyambazar', name: 'SEO Fixture Shyambazar Enclave', locationSlug: 'shyambazar', bedrooms: [3] },
+    { slug: 'seo-fixture-new-alipore-block-a', name: 'SEO Fixture New Alipore Block A', locationSlug: 'new-alipore-block-a', bedrooms: [3] },
+    { slug: 'seo-fixture-bhowanipore-sarat-bose', name: 'SEO Fixture Sarat Bose Enclave', locationSlug: 'sarat-bose-road', bedrooms: [3] },
+    { slug: 'seo-fixture-garia-station', name: 'SEO Fixture Garia Station Enclave', locationSlug: 'garia-station', bedrooms: [3] },
+    { slug: 'seo-fixture-tollygunge-metro', name: 'SEO Fixture Tollygunge Metro Enclave', locationSlug: 'tollygunge-metro', bedrooms: [3] },
+  ];
+
+  for (const spec of fixtureProjects) {
+    const existingProj = await projectRepository.findBySlug(spec.slug);
+    if (existingProj) continue;
+
+    const loc = await locationRepository.findBySlug(spec.locationSlug);
+    assert.ok(loc, `Expected canonical location '${spec.locationSlug}' for SEO fixture`);
+
+    const startingPrice = 5500000;
+    const project = await projectRepository.create({
+      developerId: merlin.id,
+      locationId: loc.id,
+      name: spec.name,
+      slug: spec.slug,
+      shortDescription: `${spec.name} in ${loc.name}, Kolkata with verified residential configurations and RERA documentation.`,
+      description: `${spec.name} offers verified residential flats in ${loc.name}, Kolkata with modern amenities and connectivity.`,
+      status: 'UNDER_CONSTRUCTION',
+      lifecycleStatus: 'PUBLISHED',
+      propertyType: 'APARTMENT',
+      startingPrice,
+      priceOnRequest: false,
+      isPublished: true,
+      featured: Boolean(spec.featured),
+    });
+
+    await projectMediaRepository.create({
+      projectId: project.id,
+      mediaType: 'IMAGE',
+      category: 'EXTERIOR',
+      url: 'https://www.greathomes.co.in/images/project-placeholder.jpg',
+      altText: `${spec.name} Exterior`,
+      sortOrder: 0,
+      isFeatured: true,
+    });
+
+    for (const bhk of spec.bedrooms) {
+      const cfg = await projectConfigurationRepository.create({
+        projectId: project.id,
+        name: `${bhk} BHK Fixture Unit`,
+        bedroomCount: bhk,
+        carpetArea: 600 + bhk * 250,
+        price: 4500000 + bhk * 2500000,
+        priceBasis: 'CARPET_AREA',
+        priceOnRequest: false,
+        availability: 'AVAILABLE',
+      });
+      await newBookingAvailabilityRepository.create({
+        projectId: project.id,
+        configurationId: cfg.id,
+        availabilityStatus: 'AVAILABLE',
+        lastVerifiedAt: new Date(),
+      });
+    }
+  }
+
+  // Add canonical metropolitan Tier-2 locations (Howrah & Hooghly) absent from LOCATION_MASTER_RECORDS
+  const westBengal = await locationRepository.findBySlug('west-bengal');
+  assert.ok(westBengal, 'Expected west-bengal root location for metropolitan fixtures');
+  const metropolitanTier2Fixtures: Array<{
+    name: string;
+    slug: string;
+    type: 'CITY' | 'DISTRICT';
+    latitude: number;
+    longitude: number;
+  }> = [
+    { name: 'Howrah', slug: 'howrah', type: 'CITY', latitude: 22.5958, longitude: 88.2636 },
+    { name: 'Hooghly', slug: 'hooghly', type: 'DISTRICT', latitude: 22.9012, longitude: 88.3899 },
+  ];
+  for (const metro of metropolitanTier2Fixtures) {
+    const existingMetro = await locationRepository.findBySlug(metro.slug);
+    if (!existingMetro) {
+      await locationRepository.create({
+        name: metro.name,
+        slug: metro.slug,
+        type: metro.type,
+        parentId: westBengal.id,
+        latitude: metro.latitude,
+        longitude: metro.longitude,
+        status: 'PUBLISHED',
+        featured: true,
+      });
+    }
+  }
+
+    // Add 4 archived non-public fixture locations so evaluateAllLocationsForAdmin() matches 142 non-indexable total
+    // (163 master + 2 metropolitan Tier-2 = 165 public: 27 indexable + 138 Tier-3 noindex; + 4 archived = 142 non-indexable)
+    for (let i = 1; i <= 4; i++) {
+      const archivedSlug = `seo-fixture-archived-${i}`;
+      const existingLoc = await locationRepository.findBySlug(archivedSlug);
+      if (!existingLoc) {
+        await locationRepository.create({
+          name: `SEO Fixture Archived ${i}`,
+          slug: archivedSlug,
+          type: 'NEIGHBOURHOOD',
+          parentId: null,
+          status: 'ARCHIVED',
+          featured: false,
+        });
+      }
+    }
+  } finally {
+    if (previousPersistenceProvider === undefined) {
+      delete process.env.PERSISTENCE_PROVIDER;
+    } else {
+      process.env.PERSISTENCE_PROVIDER = previousPersistenceProvider;
+    }
+    if (previousEnableSeeding === undefined) {
+      delete process.env.ENABLE_SEEDING;
+    } else {
+      process.env.ENABLE_SEEDING = previousEnableSeeding;
+    }
+  }
+}
 
 function extractRobotsDirectives(
   robotsMeta: Metadata['robots']
@@ -75,7 +276,7 @@ async function runTests() {
     console.log(` [PASS] ${name}`);
   }
 
-  await ensureSeedData();
+  await ensureSeoMemoryFixtures();
 
   // ---------------------------------------------------------------------------
   // 1. Canonical Domain & Shared SEO Audit Engine

@@ -116,6 +116,10 @@ export type PropertyDiscoveryCardDto =
 export interface DiscoveryResponse<T> {
   data: T[];
   pagination: DiscoveryPagination;
+  countsByType?: {
+    newBooking: number;
+    resale: number;
+  };
 }
 
 export type SearchResultType = 'PROJECT' | 'DEVELOPER' | 'LOCATION';

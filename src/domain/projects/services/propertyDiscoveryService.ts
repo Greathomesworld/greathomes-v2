@@ -14,10 +14,10 @@ import { isConfigurationPriceOnRequest, comparePricesWithPorLast } from '@/src/l
 import { PropertyType } from '../entities';
 import { resaleListingService, isKnownTestResaleListing } from './resaleService';
 import { rentalListingService, isKnownTestRentalListing } from './rentalService';
-import { projectRepository, projectConfigurationRepository, projectMediaRepository, projectReraRepository } from '../../../infrastructure/repositories/projectProvider';
+import { projectRepository, projectConfigurationRepository, projectMediaRepository, projectReraRepository, newBookingAvailabilityRepository } from '../../../infrastructure/repositories/projectProvider';
 import { locationRepository } from '../../../infrastructure/repositories/locationProvider';
 import { developerRepository } from '../../../infrastructure/repositories/developerProvider';
-import { newBookingAvailabilityRepository } from '../repositories/newBookingRepository';
+import { isPubliclyBookableAvailabilityStatus } from '../dto/newBookingDto';
 import { isValidCoordinate, resolveProjectCoordinates } from '../viewModels/projectLocationViewModel';
 import { calculateGeodesicDistanceKm, formatDistanceKm } from '../../places/spatial/distance';
 import { normalizeMediaPublicUrl } from '@/src/lib/mediaUtils';
@@ -393,22 +393,28 @@ export class PropertyDiscoveryService {
     const q = filters.query ? filters.query.toLowerCase().trim() : '';
     const matchedLocIds = q ? await this.getLocationScopeIds(q, 'DESCENDANT', maps.locs) : new Set<string>();
 
-    if (!filters.inventoryType || filters.inventoryType === 'NEW_BOOKING') {
+    const includeNewBooking =
+      !filters.inventoryType || filters.inventoryType === 'ALL' || filters.inventoryType === 'NEW_BOOKING';
+    const includeResale =
+      !filters.inventoryType || filters.inventoryType === 'ALL' || filters.inventoryType === 'RESALE';
+
+    if (includeNewBooking) {
       const allAvail = await newBookingAvailabilityRepository.findAll();
       for (const av of allAvail) {
-        if (av.availabilityStatus === 'NOT_AVAILABLE') continue;
+        if (!isPubliclyBookableAvailabilityStatus(av.availabilityStatus)) continue;
         const config = maps.configMap.get(av.configurationId);
-        if (!config || config.price === null) continue;
-        
+        if (!config) continue;
+
         const proj = maps.projectMap.get(config.projectId);
         if (!proj || !this.isProjectPublishedEligible(proj, maps.devMap)) continue;
+        if (proj.status === 'SOLD_OUT') continue;
 
         const isPor = isConfigurationPriceOnRequest(config, proj);
         if (allowedLocationIds && (!proj.locationId || !allowedLocationIds.has(proj.locationId))) continue;
         if (filters.bedroomCount !== undefined && config.bedroomCount !== filters.bedroomCount) continue;
         if (filters.propertyType && proj.propertyType !== filters.propertyType) continue;
         if (filters.minPrice !== undefined || filters.maxPrice !== undefined) {
-          if (isPor) continue;
+          if (isPor || typeof config.price !== 'number' || config.price <= 0) continue;
           if (filters.minPrice !== undefined && config.price < filters.minPrice) continue;
           if (filters.maxPrice !== undefined && config.price > filters.maxPrice) continue;
         }
@@ -432,7 +438,7 @@ export class PropertyDiscoveryService {
         }
 
         let effPrice = 0;
-        if (!isPor) {
+        if (!isPor && typeof config.price === 'number' && config.price > 0) {
           try {
             effPrice = calculateEffectivePricePerSqft(config.price, config.priceBasis, {
               carpetArea: config.carpetArea,
@@ -451,7 +457,7 @@ export class PropertyDiscoveryService {
           configurationName: config.name,
           bedroomCount: config.bedroomCount,
           carpetArea: config.carpetArea,
-          price: isPor ? 0 : config.price,
+          price: isPor ? 0 : (config.price ?? 0),
           priceOnRequest: isPor,
           priceBasis: config.priceBasis,
           effectivePricePerSqft: isPor ? 0 : effPrice,
@@ -462,7 +468,7 @@ export class PropertyDiscoveryService {
       }
     }
 
-    if (!filters.inventoryType || filters.inventoryType === 'RESALE') {
+    if (includeResale) {
       const resale = await resaleListingService.listPublicListings({
         skipAmenities: true,
         preloadedContext: { ...maps, allowedLocationIds: allowedLocationIds || undefined },
@@ -569,7 +575,15 @@ export class PropertyDiscoveryService {
       });
     }
 
-    return this.paginate(results, page, pageSize);
+    const countsByType = {
+      newBooking: results.filter((r) => r.type === 'NEW_BOOKING').length,
+      resale: results.filter((r) => r.type === 'RESALE').length,
+    };
+
+    return {
+      ...this.paginate(results, page, pageSize),
+      countsByType,
+    };
   }
 
   async discoverRent(filters: DiscoveryFilters, page: number = 1, pageSize: number = 20): Promise<DiscoveryResponse<RentDiscoveryCardDto>> {

@@ -88,7 +88,7 @@ export async function runLocationProfileOptimizationTests() {
   const jsonLd = locationSeoService.buildJsonLd({
     location: northKolkataLoc,
     path: [kolkataCity, northKolkataLoc],
-    canonicalUrl: 'https://greathomes.co.in/locations/north-kolkata',
+    canonicalUrl: 'https://www.greathomes.co.in/locations/north-kolkata',
     description: nkEligibility.description,
   });
   const breadcrumbGraph = (jsonLd['@graph'] as any[]).find(g => g['@type'] === 'BreadcrumbList');
@@ -96,7 +96,7 @@ export async function runLocationProfileOptimizationTests() {
   assert(
     breadcrumbGraph.itemListElement[0].name === 'Home' &&
       breadcrumbGraph.itemListElement[1].name === 'Locations' &&
-      breadcrumbGraph.itemListElement[1].item === 'https://greathomes.co.in/locations',
+      breadcrumbGraph.itemListElement[1].item === 'https://www.greathomes.co.in/locations',
     'Expected JSON-LD BreadcrumbList position 2 to be Locations (/locations)'
   );
   console.log('✔ 1. Location SEO & JSON-LD tests passed');

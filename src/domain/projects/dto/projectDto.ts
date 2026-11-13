@@ -67,6 +67,11 @@ export interface PublicProjectConfigurationDto {
   floorPlanMediaId?: string | null;
   floorPlans?: PublicProjectMediaDto[];
   availability: string;
+  availabilityRecordId?: string | null;
+  availabilityLastVerifiedAt?: string | null;
+  availabilityUpdatedByStaffId?: string | null;
+  availabilityUpdatedByStaffName?: string | null;
+  availabilityInternalNotes?: string | null;
 }
 
 export interface PublicProjectMediaDto {
@@ -501,7 +506,20 @@ export function toPublicProjectDto(
   faqs: ProjectFaq[] = [],
   reraRecord?: ProjectRera | null,
   considerations: ProjectConsideration[] = [],
-  options?: { includeInternalPricing?: boolean }
+  options?: {
+    includeInternalPricing?: boolean;
+    availabilityByConfigId?: Map<
+      string,
+      {
+        id?: string;
+        availabilityStatus?: string;
+        lastVerifiedAt?: Date | string | null;
+        updatedByStaffId?: string | null;
+        updatedByStaffName?: string | null;
+        internalNotes?: string | null;
+      }
+    >;
+  }
 ): PublicProjectDto {
   const includeInternalPricing = Boolean(options?.includeInternalPricing);
   const reraStatus: ReraStatus = reraRecord?.status ?? project.reraStatus ?? 'NOT_PROVIDED';
@@ -561,7 +579,10 @@ export function toPublicProjectDto(
         : internalEffectiveRate;
     const exposedPorFlag = includeInternalPricing ? Boolean(c.priceOnRequest) : isPorForPublic;
 
-    return {
+    const avRecord = options?.availabilityByConfigId?.get(c.id);
+    const resolvedAvailability = avRecord?.availabilityStatus ?? c.availability ?? 'NOT_AVAILABLE';
+
+    const dto: PublicProjectConfigurationDto = {
       id: c.id,
       name: c.name,
       bedroomCount: c.bedroomCount,
@@ -574,8 +595,23 @@ export function toPublicProjectDto(
       effectivePricePerSqft: exposedEffectiveRate,
       floorPlanMediaId: c.floorPlanMediaId,
       floorPlans: configFloorPlans,
-      availability: c.availability ?? 'AVAILABLE',
+      availability: resolvedAvailability,
     };
+
+    if (includeInternalPricing && avRecord) {
+      dto.availabilityRecordId = avRecord.id ?? null;
+      dto.availabilityLastVerifiedAt =
+        avRecord.lastVerifiedAt instanceof Date
+          ? avRecord.lastVerifiedAt.toISOString()
+          : avRecord.lastVerifiedAt
+            ? String(avRecord.lastVerifiedAt)
+            : null;
+      dto.availabilityUpdatedByStaffId = avRecord.updatedByStaffId ?? null;
+      dto.availabilityUpdatedByStaffName = avRecord.updatedByStaffName ?? null;
+      dto.availabilityInternalNotes = avRecord.internalNotes ?? null;
+    }
+
+    return dto;
   });
 
   const pricing = deriveProjectPricingSummary(project, configurations);

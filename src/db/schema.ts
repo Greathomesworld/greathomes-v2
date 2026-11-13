@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, uuid, pgEnum, decimal, boolean, integer, index, uniqueIndex, jsonb } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, timestamp, uuid, pgEnum, decimal, boolean, integer, index, uniqueIndex, unique, foreignKey, jsonb } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 // Enums
@@ -10,6 +10,13 @@ export const reraStatusEnum = pgEnum('rera_status', ['NOT_PROVIDED', 'PROVIDED',
 export const locationTypeEnum = pgEnum('location_type', ['STATE', 'DISTRICT', 'CITY', 'DISCOVERY_REGION', 'AREA', 'NEIGHBOURHOOD']);
 export const locationStatusEnum = pgEnum('location_status', ['DRAFT', 'PUBLISHED', 'ARCHIVED']);
 export const developerStatusEnum = pgEnum('developer_status', ['DRAFT', 'PUBLISHED', 'ARCHIVED']);
+export const configurationAvailabilityStatusEnum = pgEnum('configuration_availability_status', [
+  'AVAILABLE',
+  'LIMITED',
+  'ON_REQUEST',
+  'SOLD_OUT',
+  'NOT_AVAILABLE',
+]);
 
 // Developers
 export const developers = pgTable('developers', {
@@ -110,7 +117,9 @@ export const projectConfigurations = pgTable('project_configurations', {
   floorPlanMediaId: text('floor_plan_media_id'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+}, (table) => [
+  unique('project_configurations_project_id_id_unique').on(table.projectId, table.id),
+]);
 
 // Project RERA
 export const projectRera = pgTable('project_rera', {
@@ -372,6 +381,31 @@ export const staffUsers = pgTable('staff_users', {
   index('idx_staff_users_email').on(table.email),
   index('idx_staff_users_role').on(table.role),
   index('idx_staff_users_enabled').on(table.enabled),
+]);
+
+// Project Configuration New Booking Availability
+export const projectConfigurationAvailabilities = pgTable('project_configuration_availabilities', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  configurationId: uuid('configuration_id').notNull().unique(),
+  availabilityStatus: configurationAvailabilityStatusEnum('availability_status').default('NOT_AVAILABLE').notNull(),
+  availableFrom: timestamp('available_from'),
+  lastVerifiedAt: timestamp('last_verified_at').defaultNow().notNull(),
+  updatedByStaffId: text('updated_by_staff_id').references(() => staffUsers.id, { onDelete: 'set null' }),
+  source: text('source'),
+  internalNotes: text('internal_notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => [
+  foreignKey({
+    name: 'project_configuration_availabilities_project_config_fk',
+    columns: [table.projectId, table.configurationId],
+    foreignColumns: [projectConfigurations.projectId, projectConfigurations.id],
+  }).onDelete('cascade').onUpdate('no action'),
+  index('idx_pca_project_id').on(table.projectId),
+  index('idx_pca_status').on(table.availabilityStatus),
+  index('idx_pca_project_status').on(table.projectId, table.availabilityStatus),
+  index('idx_pca_updated_by').on(table.updatedByStaffId),
 ]);
 
 // Enquiries

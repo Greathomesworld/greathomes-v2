@@ -66,7 +66,9 @@ export function NewBookingSection({ configurations }: NewBookingSectionProps) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {configurations.map(config => (
+        {configurations.map(config => {
+          const isPor = Boolean(config.priceOnRequest) || !(config.price && config.price > 0);
+          return (
           <article
             key={config.id}
             id={`booking-${config.id}`}
@@ -82,13 +84,15 @@ export function NewBookingSection({ configurations }: NewBookingSectionProps) {
 
               <div>
                 <span className="text-[11px] uppercase tracking-wider text-[var(--color-foreground)]/50 block mb-0.5">
-                  Starting Price
+                  {!isPor ? 'Starting Price' : 'Pricing'}
                 </span>
                 <div className="flex items-baseline gap-1.5">
                   <span className="text-2xl font-display font-bold text-[var(--color-foreground)]">
-                    {config.price && config.price > 0 ? formatIndianPrice(config.price) : 'Price on Request'}
+                    {!isPor && config.price ? formatIndianPrice(config.price) : 'Price on Request'}
                   </span>
-                  <span className="text-xs text-[var(--color-foreground)]/60 font-medium">onwards</span>
+                  {!isPor && (
+                    <span className="text-xs text-[var(--color-foreground)]/60 font-medium">onwards</span>
+                  )}
                 </div>
               </div>
 
@@ -105,7 +109,8 @@ export function NewBookingSection({ configurations }: NewBookingSectionProps) {
                     <span className="font-medium">{config.builtUpArea} sq.ft.</span>
                   </div>
                 )}
-                {typeof config.effectivePricePerSqft === 'number' &&
+                {!isPor &&
+                typeof config.effectivePricePerSqft === 'number' &&
                 Number.isFinite(config.effectivePricePerSqft) &&
                 config.effectivePricePerSqft > 0 ? (
                   <div className="flex justify-between pt-1">
@@ -129,7 +134,8 @@ export function NewBookingSection({ configurations }: NewBookingSectionProps) {
               </span>
             </div>
           </article>
-        ))}
+          );
+        })}
       </div>
     </section>
   );
