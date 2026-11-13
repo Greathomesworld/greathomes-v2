@@ -22,7 +22,7 @@ export function PropertyDetailShareButton({
     const shareUrl =
       typeof window !== 'undefined'
         ? `${window.location.origin}${canonicalPath}`
-        : `https://greathomes.co.in${canonicalPath}`;
+        : `https://www.greathomes.co.in${canonicalPath}`;
 
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {

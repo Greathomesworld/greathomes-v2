@@ -6,12 +6,42 @@ import { PropertyCard } from '@/src/components/discovery/PropertyCard';
 import { DiscoveryPagination } from '@/src/components/discovery/DiscoveryPagination';
 import { DiscoveryEmptyState } from '@/src/components/discovery/DiscoveryEmptyState';
 
+import { Metadata } from 'next';
+
 export const revalidate = 60;
 
-export const metadata = {
-  title: 'Buy Properties - Great Homes',
-  description: 'Explore curated residential homes across verified new bookings and verified resale inventory.',
-};
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}): Promise<Metadata> {
+  const params = await searchParams;
+  const activeParams = Object.keys(params).filter(
+    k => params[k] !== undefined && params[k] !== '' && (k !== 'page' || params[k] !== '1')
+  );
+  const isCleanPage1 = activeParams.length === 0;
+
+  return {
+    title: 'Buy Properties in Kolkata – Verified New & Resale Homes | Great Homes',
+    description:
+      'Explore curated residential homes across verified new bookings and verified resale inventory in Kolkata with transparent pricing intelligence.',
+    alternates: {
+      canonical: 'https://www.greathomes.co.in/buy',
+    },
+    robots: {
+      index: isCleanPage1,
+      follow: true,
+    },
+    openGraph: {
+      title: 'Buy Properties in Kolkata | Great Homes',
+      description:
+        'Explore curated residential homes across verified new bookings and resale inventory in Kolkata.',
+      url: 'https://www.greathomes.co.in/buy',
+      siteName: 'Great Homes',
+      type: 'website',
+    },
+  };
+}
 
 export default async function BuyPage({
   searchParams,

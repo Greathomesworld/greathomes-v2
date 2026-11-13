@@ -72,19 +72,27 @@ export async function generateMetadata(
   }
 
   const locationLabel = formatProjectLocationShortLabel(project.location);
-  const title = `${project.name}, ${locationLabel} | Price, Floor Plans & Amenities | Great Homes`;
-
   const devName = project.developer?.name ? ` by ${project.developer.name}` : '';
-  const configSummary = project.configurationsSummary || (project.configurations?.length ? project.configurations.map(c => c.name).join(', ') : '');
-  const priceStr = project.pricing?.startingPrice ? ` starting from ${formatIndianPrice(project.pricing.startingPrice)}` : '';
+  const bhkSummary = project.configurationsSummary || (project.configurations?.length ? project.configurations.map(c => c.name).join(', ') : 'Luxury Flats');
+
+  // Compact title formula (aiming <= 62 chars)
+  let title = `${project.name} — ${bhkSummary} in ${locationLabel}, Kolkata | Great Homes`;
+  if (title.length > 65) {
+    title = `${project.name} in ${locationLabel}, Kolkata | Great Homes`;
+  }
+
+  // Price on Request complete boundary check: never leak price if priceOnRequest is true or price <= 0
+  const hasPublicPrice = !project.pricing?.priceOnRequest && Boolean(project.pricing?.startingPrice && project.pricing.startingPrice > 0);
+  const priceStr = hasPublicPrice ? ` starting from ${formatIndianPrice(project.pricing.startingPrice!)}` : '';
   const reraStr = project.rera?.registrationNumber ? ` (RERA: ${project.rera.registrationNumber})` : '';
 
-  const description =
-    project.shortDescription ||
-    project.description ||
-    `Explore ${project.name}${devName} in ${locationLabel}, Kolkata${priceStr}. Discover verified configurations${configSummary ? ` (${configSummary})` : ''}, floor plans, amenities, pricing intelligence, and location details${reraStr} on Great Homes.`;
+  // Use shortDescription only if substantial (>= 100 chars), else synthetic fallback
+  const hasSubstantialShortDesc = Boolean(project.shortDescription && project.shortDescription.trim().length >= 100);
+  const description = hasSubstantialShortDesc
+    ? project.shortDescription!.trim()
+    : `Explore ${project.name}${devName} in ${locationLabel}, Kolkata${priceStr}. Discover verified configurations${bhkSummary ? ` (${bhkSummary})` : ''}, floor plans, amenities, pricing intelligence, and location details${reraStr} on Great Homes.`;
 
-  const canonicalUrl = `https://greathomes.co.in/projects/${project.slug}`;
+  const canonicalUrl = `https://www.greathomes.co.in/projects/${project.slug}`;
   const heroMedia = project.media?.find(m => m.isFeatured) || project.media?.[0];
 
   return {

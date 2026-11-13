@@ -7,12 +7,12 @@ export const metadata: Metadata = {
   title: 'Buyer Guides & Editorial Intelligence | Great Homes',
   description: 'Factual, independent property guides, area explanations, legal checks, and residential market intelligence for homebuyers in Kolkata.',
   alternates: {
-    canonical: 'https://greathomes.co.in/guides',
+    canonical: 'https://www.greathomes.co.in/guides',
   },
   openGraph: {
     title: 'Buyer Guides & Editorial Intelligence | Great Homes',
     description: 'Factual property guides, area explanations, legal checks, and market intelligence for homebuyers in Kolkata.',
-    url: 'https://greathomes.co.in/guides',
+    url: 'https://www.greathomes.co.in/guides',
     siteName: 'Great Homes',
     type: 'website',
   },

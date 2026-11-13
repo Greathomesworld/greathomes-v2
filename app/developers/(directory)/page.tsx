@@ -15,13 +15,13 @@ export const metadata: Metadata = {
   description:
     "Explore Kolkata's leading real estate developers and builders. Discover active residential developments, project portfolios, and location footprints across Kolkata.",
   alternates: {
-    canonical: '/developers',
+    canonical: 'https://www.greathomes.co.in/developers',
   },
   openGraph: {
     title: 'Real Estate Developers in Kolkata | Great Homes',
     description:
       "Explore Kolkata's leading real estate developers and builders. Discover active residential developments, project portfolios, and location footprints.",
-    url: 'https://greathomes.co.in/developers',
+    url: 'https://www.greathomes.co.in/developers',
     type: 'website',
   },
 };
@@ -73,7 +73,7 @@ export default async function DevelopersDirectoryPage() {
     name: 'Real Estate Developers in Kolkata',
     description:
       "Explore Kolkata's leading real estate developers and builders. Discover active residential developments and project portfolios.",
-    url: 'https://greathomes.co.in/developers',
+    url: 'https://www.greathomes.co.in/developers',
     mainEntity: {
       '@type': 'ItemList',
       numberOfItems: developers.length,
@@ -81,7 +81,7 @@ export default async function DevelopersDirectoryPage() {
         '@type': 'ListItem',
         position: idx + 1,
         name: dev.name,
-        url: `https://greathomes.co.in/developers/${dev.slug}`,
+        url: `https://www.greathomes.co.in/developers/${dev.slug}`,
       })),
     },
   };

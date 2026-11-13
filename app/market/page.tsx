@@ -13,12 +13,12 @@ export const metadata: Metadata = {
     follow: true,
   },
   alternates: {
-    canonical: 'https://greathomes.co.in/market',
+    canonical: 'https://www.greathomes.co.in/market',
   },
   openGraph: {
     title: 'Kolkata Residential Market Intelligence | Great Homes',
     description: 'Explore residential projects, pricing, configurations, RERA coverage and market activity across Kolkata with Great Homes.',
-    url: 'https://greathomes.co.in/market',
+    url: 'https://www.greathomes.co.in/market',
     siteName: 'Great Homes',
     type: 'website',
   },

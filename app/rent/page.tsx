@@ -6,12 +6,42 @@ import { PropertyCard } from '@/src/components/discovery/PropertyCard';
 import { DiscoveryPagination } from '@/src/components/discovery/DiscoveryPagination';
 import { DiscoveryEmptyState } from '@/src/components/discovery/DiscoveryEmptyState';
 
+import { Metadata } from 'next';
+
 export const revalidate = 60;
 
-export const metadata = {
-  title: 'Rental Residences - Great Homes',
-  description: 'Explore verified rental homes and apartments with clear terms and vetted landlords.',
-};
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}): Promise<Metadata> {
+  const params = await searchParams;
+  const activeParams = Object.keys(params).filter(
+    k => params[k] !== undefined && params[k] !== '' && (k !== 'page' || params[k] !== '1')
+  );
+  const isCleanPage1 = activeParams.length === 0;
+
+  return {
+    title: 'Rental Residences in Kolkata – Verified Apartments | Great Homes',
+    description:
+      'Explore verified rental homes and apartments in Kolkata with clear terms, transparent security deposits, and vetted landlords.',
+    alternates: {
+      canonical: 'https://www.greathomes.co.in/rent',
+    },
+    robots: {
+      index: isCleanPage1,
+      follow: true,
+    },
+    openGraph: {
+      title: 'Rental Residences in Kolkata | Great Homes',
+      description:
+        'Explore verified rental homes and apartments in Kolkata with clear terms and vetted landlords.',
+      url: 'https://www.greathomes.co.in/rent',
+      siteName: 'Great Homes',
+      type: 'website',
+    },
+  };
+}
 
 export default async function RentPage({
   searchParams,

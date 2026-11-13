@@ -49,7 +49,7 @@ export interface SeoAuditResult {
 }
 
 const CANONICAL_ROUTE_REGEX =
-  /^https:\/\/greathomes\.co\.in(\/(projects\/[a-z0-9]+(?:-[a-z0-9]+)*\/(resale|rent)|(projects|developers|locations|buy|rent|guides|reviews|market)(\/[a-z0-9]+(?:-[a-z0-9]+)*)?))?$/;
+  /^https:\/\/(www\.)?greathomes\.co\.in(\/(projects\/[a-z0-9]+(?:-[a-z0-9]+)*\/(resale|rent)|(projects|developers|locations|buy|rent|guides|reviews|market)(\/[a-z0-9]+(?:-[a-z0-9]+)*)?))?$/;
 
 const SLUG_FORMAT_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -62,7 +62,7 @@ const ENTITY_ROUTE_PREFIX: Partial<Record<SeoEntityType, string>> = {
 };
 
 /**
- * Validates that a canonical URL belongs to https://greathomes.co.in,
+ * Validates that a canonical URL belongs to https://www.greathomes.co.in,
  * matches the canonical route pattern, and aligns with the entity type and slug when provided.
  */
 export function validateCanonicalUrl(
@@ -78,13 +78,14 @@ export function validateCanonicalUrl(
   if (!CANONICAL_ROUTE_REGEX.test(cleanUrl)) {
     return {
       valid: false,
-      reason: 'Canonical URL does not match https://greathomes.co.in/<section>/<slug> format.',
+      reason: 'Canonical URL does not match https://www.greathomes.co.in/<section>/<slug> format.',
     };
   }
 
   if (entityType && ENTITY_ROUTE_PREFIX[entityType]) {
-    const expectedPrefix = `https://greathomes.co.in${ENTITY_ROUTE_PREFIX[entityType]}`;
-    if (!cleanUrl.startsWith(expectedPrefix)) {
+    const expectedPrefix = `https://www.greathomes.co.in${ENTITY_ROUTE_PREFIX[entityType]}`;
+    const legacyPrefix = `https://greathomes.co.in${ENTITY_ROUTE_PREFIX[entityType]}`;
+    if (!cleanUrl.startsWith(expectedPrefix) && !cleanUrl.startsWith(legacyPrefix)) {
       return {
         valid: false,
         reason: `Canonical URL must start with ${expectedPrefix} for ${entityType.toLowerCase()} records.`,
@@ -92,11 +93,13 @@ export function validateCanonicalUrl(
     }
     const cleanSlug = (slug || '').trim();
     if (cleanSlug) {
-      const exactMatch = cleanUrl === `${expectedPrefix}${cleanSlug}`;
+      const exactMatch = cleanUrl === `${expectedPrefix}${cleanSlug}` || cleanUrl === `${legacyPrefix}${cleanSlug}`;
       const projectInventoryMatch =
         entityType === 'PROJECT' &&
         (cleanUrl === `${expectedPrefix}${cleanSlug}/resale` ||
-          cleanUrl === `${expectedPrefix}${cleanSlug}/rent`);
+          cleanUrl === `${legacyPrefix}${cleanSlug}/resale` ||
+          cleanUrl === `${expectedPrefix}${cleanSlug}/rent` ||
+          cleanUrl === `${legacyPrefix}${cleanSlug}/rent`);
 
       if (!exactMatch && !projectInventoryMatch) {
         return {
@@ -330,7 +333,7 @@ export function buildDeveloperJsonLd(
   },
   projects?: Array<{ name: string; slug: string }>
 ) {
-  const canonicalUrl = `https://greathomes.co.in/developers/${developer.slug}`;
+  const canonicalUrl = `https://www.greathomes.co.in/developers/${developer.slug}`;
   const description =
     developer.shortDescription ||
     developer.description ||
@@ -361,13 +364,13 @@ export function buildDeveloperJsonLd(
           '@type': 'ListItem',
           position: 1,
           name: 'Home',
-          item: 'https://greathomes.co.in',
+          item: 'https://www.greathomes.co.in',
         },
         {
           '@type': 'ListItem',
           position: 2,
           name: 'Developers',
-          item: 'https://greathomes.co.in/developers',
+          item: 'https://www.greathomes.co.in/developers',
         },
         {
           '@type': 'ListItem',
@@ -388,7 +391,7 @@ export function buildDeveloperJsonLd(
         '@type': 'ListItem',
         position: idx + 1,
         name: p.name,
-        url: `https://greathomes.co.in/projects/${p.slug}`,
+        url: `https://www.greathomes.co.in/projects/${p.slug}`,
       })),
     });
   }

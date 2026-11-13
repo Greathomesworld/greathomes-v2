@@ -7,12 +7,12 @@ export const metadata: Metadata = {
   title: 'Independent Project Reviews & Assessments | Great Homes',
   description: 'Independent, factual editorial assessments of residential projects across Kolkata. Factual breakdown of configurations, pricing, RERA verification, and location connectivity.',
   alternates: {
-    canonical: 'https://greathomes.co.in/reviews',
+    canonical: 'https://www.greathomes.co.in/reviews',
   },
   openGraph: {
     title: 'Independent Project Reviews | Great Homes',
     description: 'Factual project reviews for Kolkata residential developments.',
-    url: 'https://greathomes.co.in/reviews',
+    url: 'https://www.greathomes.co.in/reviews',
     siteName: 'Great Homes',
     type: 'website',
   },

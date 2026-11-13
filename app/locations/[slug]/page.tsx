@@ -286,7 +286,7 @@ export default async function LocationDetailPage(props: LocationPageProps) {
   const structuredData = locationSeoService.buildJsonLd({
     location,
     path,
-    canonicalUrl: `https://greathomes.co.in/locations/${location.slug}`,
+    canonicalUrl: `https://www.greathomes.co.in/locations/${location.slug}`,
     description: intel.location.description || undefined,
   });
 

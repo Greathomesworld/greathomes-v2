@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   description:
     'Explore Kolkata residential areas, neighbourhoods and localities. Discover New Town, Rajarhat, Salt Lake, Ballygunge and property opportunities with Great Homes.',
   alternates: {
-    canonical: 'https://greathomes.co.in/locations',
+    canonical: 'https://www.greathomes.co.in/locations',
   },
   robots: {
     index: true,
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     title: 'Residential Areas in Kolkata | Locality Guide – Great Homes',
     description:
       'Explore Kolkata residential areas, neighbourhoods and localities. Discover New Town, Rajarhat, Salt Lake, Ballygunge and property opportunities with Great Homes.',
-    url: 'https://greathomes.co.in/locations',
+    url: 'https://www.greathomes.co.in/locations',
     siteName: 'Great Homes',
     type: 'website',
   },
@@ -50,7 +50,7 @@ export default async function LocationsDirectoryPage() {
         name: 'Residential Areas in Kolkata | Locality Guide – Great Homes',
         description:
           'Explore Kolkata residential areas, neighbourhoods and localities. Discover New Town, Rajarhat, Salt Lake, Ballygunge and property opportunities with Great Homes.',
-        url: 'https://greathomes.co.in/locations',
+        url: 'https://www.greathomes.co.in/locations',
         mainEntity: {
           '@type': 'ItemList',
           numberOfItems: summary.areas.length,
@@ -58,7 +58,7 @@ export default async function LocationsDirectoryPage() {
             '@type': 'ListItem',
             position: idx + 1,
             name: area.name,
-            url: `https://greathomes.co.in/locations/${area.slug}`,
+            url: `https://www.greathomes.co.in/locations/${area.slug}`,
           })),
         },
       },
@@ -69,13 +69,13 @@ export default async function LocationsDirectoryPage() {
             '@type': 'ListItem',
             position: 1,
             name: 'Home',
-            item: 'https://greathomes.co.in',
+            item: 'https://www.greathomes.co.in',
           },
           {
             '@type': 'ListItem',
             position: 2,
             name: 'Locations',
-            item: 'https://greathomes.co.in/locations',
+            item: 'https://www.greathomes.co.in/locations',
           },
         ],
       },

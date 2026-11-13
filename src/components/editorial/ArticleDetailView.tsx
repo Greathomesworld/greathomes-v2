@@ -12,7 +12,7 @@ interface ArticleDetailViewProps {
 export function ArticleDetailView({ article }: ArticleDetailViewProps) {
   const canonicalUrl = article.canonicalUrl?.startsWith('http')
     ? article.canonicalUrl
-    : `https://greathomes.co.in/guides/${article.slug}`;
+    : `https://www.greathomes.co.in/guides/${article.slug}`;
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -28,7 +28,7 @@ export function ArticleDetailView({ article }: ArticleDetailViewProps) {
     publisher: {
       '@type': 'Organization',
       name: 'Great Homes',
-      url: 'https://greathomes.co.in',
+      url: 'https://www.greathomes.co.in',
     },
     mainEntityOfPage: canonicalUrl,
   };

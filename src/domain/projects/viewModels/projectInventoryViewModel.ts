@@ -5,7 +5,7 @@ import { PublicProjectDto } from '../dto/projectDto';
 
 export const PROJECT_INVENTORY_PAGE_SIZE = 9;
 export const PROJECT_CAROUSEL_MAX_ITEMS = 6;
-const BASE_URL = 'https://greathomes.co.in';
+const BASE_URL = 'https://www.greathomes.co.in';
 
 const VALID_FURNISHING = new Set(['UNFURNISHED', 'SEMI_FURNISHED', 'FULLY_FURNISHED']);
 const VALID_FLOOR_CATEGORY = new Set(['LOWER_FLOOR', 'MID_FLOOR', 'HIGH_FLOOR']);
@@ -242,7 +242,7 @@ export function buildProjectInventorySeoMetadata(options: {
       : `Explore apartments for rent in ${project.name}${developerClause}, ${locationClause}. Review ${configClause}project configurations, carpet area details & register for rental availability alerts.`;
   }
 
-  const shouldIndex = !hasActiveFilters && !hasExplicitSort && page === 1;
+  const shouldIndex = totalEligibleCount > 0 && !hasActiveFilters && !hasExplicitSort && page === 1;
   const heroMedia = resolveCanonicalProjectHeroMedia(project, mode);
 
   return {

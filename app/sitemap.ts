@@ -13,7 +13,7 @@ import {
   getEligibleRentalListings,
 } from '@/src/domain/projects/viewModels/projectSectionEligibility';
 
-const BASE_URL = 'https://greathomes.co.in';
+const BASE_URL = 'https://www.greathomes.co.in';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 86400; // Cache for 24 hours
@@ -135,33 +135,64 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       return new Date(maxTime);
     };
 
-    const projectUrls: MetadataRoute.Sitemap = publishedProjects.map(p => ({
-      url: `${BASE_URL}/projects/${p.slug.trim()}`,
-      lastModified: resolveValidDate(p.updatedAt, now),
+    const projectUrls: MetadataRoute.Sitemap = publishedProjects.map(p => {
+      const heroImage = p.media?.find(m => m.isFeatured)?.url || p.media?.[0]?.url;
+      return {
+        url: `${BASE_URL}/projects/${p.slug.trim()}`,
+        lastModified: resolveValidDate(p.updatedAt, now),
+        changeFrequency: 'weekly' as const,
+        priority: 0.8,
+        ...(heroImage ? { images: [heroImage] } : {}),
+      };
+    });
+
+    // Qualified 12 BHK landing pages verified in Phase 4I-N.4
+    const bhkLandingPageSlugs = [
+      '2-bhk-flats-in-kolkata',
+      '3-bhk-flats-in-kolkata',
+      '4-bhk-flats-in-kolkata',
+      '5-bhk-flats-in-kolkata',
+      '2-bhk-flats-in-rajarhat',
+      '3-bhk-flats-in-rajarhat',
+      '4-bhk-flats-in-rajarhat',
+      '2-bhk-flats-in-new-town',
+      '3-bhk-flats-in-new-town',
+      '4-bhk-flats-in-new-town',
+      '3-bhk-flats-in-em-bypass',
+      '4-bhk-flats-in-em-bypass',
+    ];
+
+    const bhkLandingPageUrls: MetadataRoute.Sitemap = bhkLandingPageSlugs.map(slug => ({
+      url: `${BASE_URL}/buy/${slug}`,
+      lastModified: now,
       changeFrequency: 'weekly' as const,
-      priority: 0.8,
+      priority: 0.85,
     }));
 
-    // Include /projects/[slug]/resale and /projects/[slug]/rent for every PUBLISHED project
+    // Include /projects/[slug]/resale and /projects/[slug]/rent ONLY when eligible inventory exists
     const projectInventoryUrls: MetadataRoute.Sitemap = [];
     for (const p of publishedProjects) {
       const slug = p.slug.trim();
       const eligibleResale = getEligibleResaleListings(resaleListings || [], p.id);
       const eligibleRental = getEligibleRentalListings(rentalListings || [], p.id);
 
-      projectInventoryUrls.push({
-        url: `${BASE_URL}/projects/${slug}/resale`,
-        lastModified: resolveLatestInventoryDate(p.updatedAt, eligibleResale),
-        changeFrequency: 'daily' as const,
-        priority: 0.75,
-      });
+      if (eligibleResale.length > 0) {
+        projectInventoryUrls.push({
+          url: `${BASE_URL}/projects/${slug}/resale`,
+          lastModified: resolveLatestInventoryDate(p.updatedAt, eligibleResale),
+          changeFrequency: 'daily' as const,
+          priority: 0.75,
+        });
+      }
 
-      projectInventoryUrls.push({
-        url: `${BASE_URL}/projects/${slug}/rent`,
-        lastModified: resolveLatestInventoryDate(p.updatedAt, eligibleRental),
-        changeFrequency: 'daily' as const,
-        priority: 0.75,
-      });
+      if (eligibleRental.length > 0) {
+        projectInventoryUrls.push({
+          url: `${BASE_URL}/projects/${slug}/rent`,
+          lastModified: resolveLatestInventoryDate(p.updatedAt, eligibleRental),
+          changeFrequency: 'daily' as const,
+          priority: 0.75,
+        });
+      }
     }
 
     const developerUrls: MetadataRoute.Sitemap = (developersRes.items || [])
@@ -220,6 +251,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const seen = new Set<string>();
     const combined = [
       ...staticRoutes,
+      ...bhkLandingPageUrls,
       ...projectUrls,
       ...projectInventoryUrls,
       ...developerUrls,

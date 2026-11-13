@@ -3,7 +3,7 @@ import { PublicProjectDto } from '@/src/domain/projects/dto/projectDto';
 import { PublicResaleListingDto } from '@/src/domain/projects/dto/resaleDto';
 import { PublicRentalListingDto } from '@/src/domain/projects/dto/rentalDto';
 
-const BASE_URL = 'https://greathomes.co.in';
+const BASE_URL = 'https://www.greathomes.co.in';
 
 interface ProjectInventoryStructuredDataProps {
   project: PublicProjectDto;

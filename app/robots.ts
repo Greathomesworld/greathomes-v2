@@ -9,7 +9,7 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ['/api/', '/admin/', '/account/'],
       },
     ],
-    sitemap: 'https://greathomes.co.in/sitemap.xml',
-    host: 'https://greathomes.co.in',
+    sitemap: 'https://www.greathomes.co.in/sitemap.xml',
+    host: 'https://www.greathomes.co.in',
   };
 }

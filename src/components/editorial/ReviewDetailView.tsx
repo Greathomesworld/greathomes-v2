@@ -12,7 +12,7 @@ interface ReviewDetailViewProps {
 export function ReviewDetailView({ review }: ReviewDetailViewProps) {
   const canonicalUrl = review.canonicalUrl?.startsWith('http')
     ? review.canonicalUrl
-    : `https://greathomes.co.in/reviews/${review.slug}`;
+    : `https://www.greathomes.co.in/reviews/${review.slug}`;
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -28,7 +28,7 @@ export function ReviewDetailView({ review }: ReviewDetailViewProps) {
     publisher: {
       '@type': 'Organization',
       name: 'Great Homes',
-      url: 'https://greathomes.co.in',
+      url: 'https://www.greathomes.co.in',
     },
     mainEntityOfPage: canonicalUrl,
   };

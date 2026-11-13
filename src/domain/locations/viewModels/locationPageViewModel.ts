@@ -218,7 +218,7 @@ export function buildLocationPageViewModel(params: {
     : null;
 
   const canonicalPath = `/locations/${path.map(p => p.slug).join('/')}`;
-  const canonicalUrl = `https://greathomes.co.in/locations/${location.slug}`;
+  const canonicalUrl = `https://www.greathomes.co.in/locations/${location.slug}`;
 
   return {
     id: location.id,

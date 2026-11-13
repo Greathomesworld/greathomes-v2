@@ -41,7 +41,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     ? listing.description.slice(0, 155)
     : `Explore this verified ${listing.configuration} rental ${listing.propertyTypeDisplay.toLowerCase()}${locationContext}. Monthly rent: ${listing.formattedMonthlyRent}.`;
 
-  const canonicalUrl = `https://greathomes.co.in/rent/${listing.slug}`;
+  const canonicalUrl = `https://www.greathomes.co.in/rent/${listing.slug}`;
 
   return {
     title,
@@ -84,20 +84,20 @@ export default async function RentalListingDetailPage({ params }: PageProps) {
     limit: 6,
   });
 
-  const canonicalUrl = `https://greathomes.co.in/rent/${listing.slug}`;
+  const canonicalUrl = `https://www.greathomes.co.in/rent/${listing.slug}`;
 
   const breadcrumbItems = [
     {
       '@type': 'ListItem',
       position: 1,
       name: 'Home',
-      item: 'https://greathomes.co.in',
+      item: 'https://www.greathomes.co.in',
     },
     {
       '@type': 'ListItem',
       position: 2,
       name: 'Rent',
-      item: 'https://greathomes.co.in/rent',
+      item: 'https://www.greathomes.co.in/rent',
     },
     ...(listing.location
       ? [
@@ -105,7 +105,7 @@ export default async function RentalListingDetailPage({ params }: PageProps) {
             '@type': 'ListItem',
             position: 3,
             name: listing.location.name,
-            item: `https://greathomes.co.in${listing.location.url}`,
+            item: `https://www.greathomes.co.in${listing.location.url}`,
           },
         ]
       : []),
@@ -115,7 +115,7 @@ export default async function RentalListingDetailPage({ params }: PageProps) {
             '@type': 'ListItem',
             position: listing.location ? 4 : 3,
             name: listing.project.name,
-            item: `https://greathomes.co.in${listing.project.url}`,
+            item: `https://www.greathomes.co.in${listing.project.url}`,
           },
         ]
       : []),

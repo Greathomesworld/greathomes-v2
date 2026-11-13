@@ -258,7 +258,7 @@ function buildDeveloperSeoDescription(
  * Resolves a safe, normalized canonical URL on https://greathomes.co.in/developers/[slug].
  */
 function resolveDeveloperCanonicalUrl(developer: PublicDeveloperDto): string {
-  const defaultCanonical = `https://greathomes.co.in/developers/${developer.slug}`;
+  const defaultCanonical = `https://www.greathomes.co.in/developers/${developer.slug}`;
   if (!developer.seo?.canonicalUrl) {
     return defaultCanonical;
   }

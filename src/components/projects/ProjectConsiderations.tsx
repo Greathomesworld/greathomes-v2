@@ -55,11 +55,22 @@ export function ProjectConsiderations({ project }: ProjectConsiderationsProps) {
   }
 
   if (project.configurations && project.configurations.length > 0) {
+    const configCount = project.configurations.length;
     const bedroomCounts = Array.from(new Set(project.configurations.map(c => c.bedroomCount).filter(Boolean))) as number[];
-    const bhkLabel = bedroomCounts.length > 0 ? `${Math.min(...bedroomCounts)} to ${Math.max(...bedroomCounts)} BHK` : 'various';
+    const bhkLabel = bedroomCounts.length > 0
+      ? bedroomCounts.length === 1
+        ? `${bedroomCounts[0]} BHK`
+        : `${Math.min(...bedroomCounts)} to ${Math.max(...bedroomCounts)} BHK`
+      : 'standard';
+
+    const countPhrase = configCount === 1 ? '1 distinct residential configuration' : `${configCount} distinct residential configurations`;
+    const desc = configCount === 1
+      ? `${countPhrase} offered in ${bhkLabel} layout.`
+      : `${countPhrase} offered across ${bhkLabel} layouts.`;
+
     whyConsiderPoints.push({
-      title: 'Typology Flexibility',
-      desc: `${project.configurations.length} distinct residential configurations offered across ${bhkLabel} layouts.`,
+      title: configCount === 1 ? 'Curated Typology' : 'Typology Flexibility',
+      desc,
       icon: Home,
     });
   }
@@ -96,10 +107,11 @@ export function ProjectConsiderations({ project }: ProjectConsiderationsProps) {
     });
   }
 
-  if (project.pricing.startingPrice) {
+  const hasPublicStartingPrice = !project.pricing.priceOnRequest && Boolean(project.pricing.startingPrice && project.pricing.startingPrice > 0);
+  if (hasPublicStartingPrice) {
     thingsToConsiderPoints.push({
       title: 'Entry Price & Dynamic Inventory',
-      desc: `Starting at ${formatIndianPrice(project.pricing.startingPrice)} onwards. Developer unit availability varies by tower release phase.`,
+      desc: `Starting at ${formatIndianPrice(project.pricing.startingPrice!)} onwards. Developer unit availability varies by tower release phase.`,
     });
   }
 

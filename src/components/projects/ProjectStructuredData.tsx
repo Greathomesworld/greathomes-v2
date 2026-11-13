@@ -5,6 +5,7 @@ interface ProjectStructuredDataProps {
 }
 
 export function ProjectStructuredData({ project }: ProjectStructuredDataProps) {
+  const BASE_URL = 'https://www.greathomes.co.in';
   const hasPublicPrice = Boolean(
     !project.pricing.priceOnRequest &&
     project.pricing.startingPrice &&
@@ -14,11 +15,28 @@ export function ProjectStructuredData({ project }: ProjectStructuredDataProps) {
     c => !c.priceOnRequest && typeof c.price === 'number' && c.price > 0
   ).length;
 
+  const lat = project.location?.latitude;
+  const lng = project.location?.longitude;
+  const geoCoordinates =
+    typeof lat === 'number' && typeof lng === 'number' && !isNaN(lat) && !isNaN(lng)
+      ? {
+          '@type': 'GeoCoordinates',
+          latitude: lat,
+          longitude: lng,
+        }
+      : undefined;
+
+  const amenityFeatures = (project.amenities || []).map(a => ({
+    '@type': 'LocationFeatureSpecification',
+    name: a.name,
+    value: true,
+  }));
+
   const projectSchema = {
     '@type': project.propertyType === 'VILLA' ? 'SingleFamilyResidence' : 'ApartmentComplex',
     name: project.name,
     description: project.shortDescription || project.description,
-    url: `https://greathomes.co.in/projects/${project.slug}`,
+    url: `${BASE_URL}/projects/${project.slug}`,
     address: {
       '@type': 'PostalAddress',
       addressLocality: project.location.name,
@@ -29,9 +47,11 @@ export function ProjectStructuredData({ project }: ProjectStructuredDataProps) {
       '@type': 'Organization',
       name: project.developer.name,
       ...(project.developer.slug && !project.developer.slug.startsWith('neon-dev-')
-        ? { url: `https://greathomes.co.in/developers/${project.developer.slug}` }
+        ? { url: `${BASE_URL}/developers/${project.developer.slug}` }
         : {}),
     },
+    ...(geoCoordinates ? { geo: geoCoordinates } : {}),
+    ...(amenityFeatures.length > 0 ? { amenityFeature: amenityFeatures } : {}),
     ...(hasPublicPrice
       ? {
           offers: {
@@ -52,13 +72,13 @@ export function ProjectStructuredData({ project }: ProjectStructuredDataProps) {
       '@type': 'ListItem',
       position: 1,
       name: 'Home',
-      item: 'https://greathomes.co.in',
+      item: `${BASE_URL}`,
     },
     {
       '@type': 'ListItem',
       position: 2,
       name: 'Projects',
-      item: 'https://greathomes.co.in/projects',
+      item: `${BASE_URL}/projects`,
     },
   ];
 
@@ -69,7 +89,7 @@ export function ProjectStructuredData({ project }: ProjectStructuredDataProps) {
         '@type': 'ListItem',
         position: currentPos++,
         name: node.name,
-        item: `https://greathomes.co.in/locations/${node.slug}`,
+        item: `${BASE_URL}/locations/${node.slug}`,
       });
     }
   } else {
@@ -77,7 +97,7 @@ export function ProjectStructuredData({ project }: ProjectStructuredDataProps) {
       '@type': 'ListItem',
       position: currentPos++,
       name: project.location.name,
-      item: `https://greathomes.co.in/locations/${project.location.slug}`,
+      item: `${BASE_URL}/locations/${project.location.slug}`,
     });
   }
 
@@ -85,7 +105,7 @@ export function ProjectStructuredData({ project }: ProjectStructuredDataProps) {
     '@type': 'ListItem',
     position: currentPos,
     name: project.name,
-    item: `https://greathomes.co.in/projects/${project.slug}`,
+    item: `${BASE_URL}/projects/${project.slug}`,
   });
 
   const breadcrumbListSchema = {
@@ -96,7 +116,7 @@ export function ProjectStructuredData({ project }: ProjectStructuredDataProps) {
   const realEstateListingSchema = {
     '@type': 'RealEstateListing',
     name: `${project.name} — Residential Offerings`,
-    url: `https://greathomes.co.in/projects/${project.slug}`,
+    url: `${BASE_URL}/projects/${project.slug}`,
     description: project.shortDescription || project.description,
   };
 

@@ -375,7 +375,8 @@ export class DeveloperService {
 
   /**
    * Validates and normalizes a developer canonical URL.
-   * Allows only https://greathomes.co.in/developers/[slug] or relative /developers/[slug].
+   * Allows https://www.greathomes.co.in/developers/[slug], https://greathomes.co.in/developers/[slug], or relative /developers/[slug].
+   * Normalizes to canonical https://www.greathomes.co.in/developers/[slug].
    */
   public validateAndNormalizeCanonicalUrl(rawUrl: string | null | undefined): string | null {
     if (rawUrl === null || rawUrl === undefined) return null;
@@ -396,7 +397,7 @@ export class DeveloperService {
           "Invalid canonical URL. Relative canonical path must match '/developers/[slug]'."
         );
       }
-      return `https://greathomes.co.in/developers/${match[1]}`;
+      return `https://www.greathomes.co.in/developers/${match[1]}`;
     }
 
     let parsed: URL;
@@ -404,13 +405,13 @@ export class DeveloperService {
       parsed = new URL(trimmed);
     } catch {
       throw new ValidationError(
-        "Invalid canonical URL. Must be a valid Great Homes URL (https://greathomes.co.in/developers/[slug]) or relative path (/developers/[slug])."
+        "Invalid canonical URL. Must be a valid Great Homes URL (https://www.greathomes.co.in/developers/[slug]) or relative path (/developers/[slug])."
       );
     }
 
     if (
       parsed.protocol !== 'https:' ||
-      parsed.hostname !== 'greathomes.co.in' ||
+      (parsed.hostname !== 'www.greathomes.co.in' && parsed.hostname !== 'greathomes.co.in') ||
       parsed.port !== '' ||
       parsed.username !== '' ||
       parsed.password !== '' ||
@@ -418,7 +419,7 @@ export class DeveloperService {
       parsed.hash !== ''
     ) {
       throw new ValidationError(
-        "Invalid canonical URL. Only 'https://greathomes.co.in/developers/[slug]' without query parameters or fragments is allowed."
+        "Invalid canonical URL. Only 'https://www.greathomes.co.in/developers/[slug]' without query parameters or fragments is allowed."
       );
     }
 
@@ -429,7 +430,7 @@ export class DeveloperService {
       );
     }
 
-    return `https://greathomes.co.in/developers/${match[1]}`;
+    return `https://www.greathomes.co.in/developers/${match[1]}`;
   }
 
   /**

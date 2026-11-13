@@ -13,7 +13,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
   const canonicalUrl = article.canonicalUrl?.startsWith('http')
     ? article.canonicalUrl
-    : `https://greathomes.co.in/guides/${article.slug}`;
+    : `https://www.greathomes.co.in/guides/${article.slug}`;
 
   return {
     title: `${article.seoTitle || article.title} | Great Homes`,

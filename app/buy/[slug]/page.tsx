@@ -4,12 +4,16 @@ import { Metadata } from 'next';
 import { ensureSeedData } from '@/src/infrastructure/seed';
 import { resaleListingService } from '@/src/domain/projects/services/resaleService';
 import { propertyDiscoveryService } from '@/src/domain/projects/services/propertyDiscoveryService';
+import { bhkLandingService } from '@/src/domain/projects/services/bhkLandingService';
+import { BhkLandingPageRenderer } from '@/src/components/discovery/BhkLandingPageRenderer';
 import { RecentlyViewedTracker } from '@/src/components/customer/RecentlyViewedTracker';
 import { PropertyDetailLayout } from '@/src/components/properties/detail/PropertyDetailLayout';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
 }
+
+const BASE_URL = 'https://www.greathomes.co.in';
 
 const getResaleDetailCached = cache(async (slugOrId: string) => {
   await ensureSeedData();
@@ -18,6 +22,20 @@ const getResaleDetailCached = cache(async (slugOrId: string) => {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
+
+  // Stage 1: Detect BHK Landing Page route pattern
+  const bhkMatch = slug.match(/^(\d+)-bhk-flats-in-([a-z0-9-]+)$/);
+  if (bhkMatch) {
+    const bedroomCount = parseInt(bhkMatch[1], 10);
+    const localitySlug = bhkMatch[2];
+    const data = await bhkLandingService.resolveBhkLandingData(bedroomCount, localitySlug);
+    if (!data) {
+      notFound();
+    }
+    return bhkLandingService.generateSeoMetadata(data);
+  }
+
+  // Stage 2: Fall through to verified Resale Listing Detail
   const listing = await getResaleDetailCached(slug);
 
   if (!listing || !listing.slug) {
@@ -41,7 +59,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     ? listing.description.slice(0, 155)
     : `Explore this verified ${listing.configuration} resale ${listing.propertyTypeDisplay.toLowerCase()}${locationContext}. Asking price: ${listing.formattedAskingPrice}.`;
 
-  const canonicalUrl = `https://greathomes.co.in/buy/${listing.slug}`;
+  const canonicalUrl = `${BASE_URL}/buy/${listing.slug}`;
 
   return {
     title,
@@ -66,6 +84,21 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function ResaleListingDetailPage({ params }: PageProps) {
   const { slug } = await params;
+
+  // Stage 1: Handle BHK Landing Page route
+  const bhkMatch = slug.match(/^(\d+)-bhk-flats-in-([a-z0-9-]+)$/);
+  if (bhkMatch) {
+    const bedroomCount = parseInt(bhkMatch[1], 10);
+    const localitySlug = bhkMatch[2];
+    const data = await bhkLandingService.resolveBhkLandingData(bedroomCount, localitySlug);
+    if (!data) {
+      notFound();
+    }
+    const jsonLd = bhkLandingService.generateJsonLd(data);
+    return <BhkLandingPageRenderer data={data} jsonLd={jsonLd} />;
+  }
+
+  // Stage 2: Fall through to verified Resale Listing Detail
   const listing = await getResaleDetailCached(slug);
 
   if (!listing || !listing.slug) {
@@ -84,20 +117,20 @@ export default async function ResaleListingDetailPage({ params }: PageProps) {
     limit: 6,
   });
 
-  const canonicalUrl = `https://greathomes.co.in/buy/${listing.slug}`;
+  const canonicalUrl = `${BASE_URL}/buy/${listing.slug}`;
 
   const breadcrumbItems = [
     {
       '@type': 'ListItem',
       position: 1,
       name: 'Home',
-      item: 'https://greathomes.co.in',
+      item: `${BASE_URL}`,
     },
     {
       '@type': 'ListItem',
       position: 2,
       name: 'Buy',
-      item: 'https://greathomes.co.in/buy',
+      item: `${BASE_URL}/buy`,
     },
     ...(listing.location
       ? [
@@ -105,7 +138,7 @@ export default async function ResaleListingDetailPage({ params }: PageProps) {
             '@type': 'ListItem',
             position: 3,
             name: listing.location.name,
-            item: `https://greathomes.co.in${listing.location.url}`,
+            item: `${BASE_URL}${listing.location.url}`,
           },
         ]
       : []),
@@ -115,14 +148,13 @@ export default async function ResaleListingDetailPage({ params }: PageProps) {
             '@type': 'ListItem',
             position: listing.location ? 4 : 3,
             name: listing.project.name,
-            item: `https://greathomes.co.in${listing.project.url}`,
+            item: `${BASE_URL}${listing.project.url}`,
           },
         ]
       : []),
     {
       '@type': 'ListItem',
-      position:
-        3 + (listing.location ? 1 : 0) + (listing.project ? 1 : 0),
+      position: 3 + (listing.location ? 1 : 0) + (listing.project ? 1 : 0),
       name: listing.title,
       item: canonicalUrl,
     },

@@ -33,7 +33,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://greathomes.co.in'),
+  metadataBase: new URL('https://www.greathomes.co.in'),
   title: 'Great Homes | Verified Residential Property Discovery in Kolkata',
   description: 'Discover verified projects, resale homes and rentals across Kolkata — with the property intelligence and assistance you need to make a confident decision.',
   icons: {
@@ -47,7 +47,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Great Homes | Verified Residential Property Discovery in Kolkata',
     description: 'Discover verified projects, resale homes and rentals across Kolkata — with the property intelligence and assistance you need to make a confident decision.',
-    url: 'https://greathomes.co.in',
+    url: 'https://www.greathomes.co.in',
     siteName: 'Great Homes',
     locale: 'en_IN',
     type: 'website',
@@ -69,25 +69,25 @@ export default function RootLayout({
     '@graph': [
       {
         '@type': 'WebSite',
-        '@id': 'https://greathomes.co.in/#website',
-        url: 'https://greathomes.co.in',
+        '@id': 'https://www.greathomes.co.in/#website',
+        url: 'https://www.greathomes.co.in',
         name: 'Great Homes',
         description: 'Verified residential property discovery and real estate intelligence in Kolkata',
         publisher: {
-          '@id': 'https://greathomes.co.in/#organization',
+          '@id': 'https://www.greathomes.co.in/#organization',
         },
         potentialAction: {
           '@type': 'SearchAction',
-          target: 'https://greathomes.co.in/projects?q={search_term_string}',
+          target: 'https://www.greathomes.co.in/projects?q={search_term_string}',
           'query-input': 'required name=search_term_string',
         },
       },
       {
         '@type': 'RealEstateAgent',
-        '@id': 'https://greathomes.co.in/#organization',
+        '@id': 'https://www.greathomes.co.in/#organization',
         name: 'Great Homes',
-        url: 'https://greathomes.co.in',
-        logo: 'https://greathomes.co.in/icon.png',
+        url: 'https://www.greathomes.co.in',
+        logo: 'https://www.greathomes.co.in/icon.png',
         description: 'Residential property discovery and assisted home-buying web platform for Kolkata.',
         areaServed: {
           '@type': 'City',

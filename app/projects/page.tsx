@@ -6,12 +6,42 @@ import { PropertyCard } from '@/src/components/discovery/PropertyCard';
 import { DiscoveryPagination } from '@/src/components/discovery/DiscoveryPagination';
 import { DiscoveryEmptyState } from '@/src/components/discovery/DiscoveryEmptyState';
 
+import { Metadata } from 'next';
+
 export const revalidate = 60;
 
-export const metadata = {
-  title: 'Discover Projects - Great Homes',
-  description: 'Explore premier residential developments, master plans, and landmark communities.',
-};
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}): Promise<Metadata> {
+  const params = await searchParams;
+  const activeParams = Object.keys(params).filter(
+    k => params[k] !== undefined && params[k] !== '' && (k !== 'page' || params[k] !== '1')
+  );
+  const isCleanPage1 = activeParams.length === 0;
+
+  return {
+    title: 'Discover Projects in Kolkata | Luxury Residential Developments – Great Homes',
+    description:
+      'Explore premier residential developments, master plans, and landmark communities across Kolkata with verified floor plans, amenities, and pricing intelligence.',
+    alternates: {
+      canonical: 'https://www.greathomes.co.in/projects',
+    },
+    robots: {
+      index: isCleanPage1,
+      follow: true,
+    },
+    openGraph: {
+      title: 'Discover Projects in Kolkata | Great Homes',
+      description:
+        'Explore premier residential developments across Kolkata with verified floor plans and pricing.',
+      url: 'https://www.greathomes.co.in/projects',
+      siteName: 'Great Homes',
+      type: 'website',
+    },
+  };
+}
 
 export default async function ProjectsPage({
   searchParams,

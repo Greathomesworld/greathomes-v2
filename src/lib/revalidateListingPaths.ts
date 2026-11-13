@@ -1,4 +1,5 @@
 import { revalidatePath } from 'next/cache';
+import type { Location } from '@/src/domain/locations/entities';
 
 export interface RevalidateListingOptions {
   slug?: string | null;
@@ -40,8 +41,8 @@ export function revalidateResalePaths(options?: RevalidateListingOptions) {
         revalidatePath(`/locations/${lSlug}`);
       }
     }
-  } catch {
-    // Safe fallback when invoked outside a Next.js request context (e.g. unit tests)
+  } catch (err) {
+    console.warn('[CacheInvalidation] revalidateResalePaths skipped or non-request context:', err);
   }
 }
 
@@ -76,8 +77,8 @@ export function revalidateRentalPaths(options?: RevalidateListingOptions) {
         revalidatePath(`/locations/${lSlug}`);
       }
     }
-  } catch {
-    // Safe fallback when invoked outside a Next.js request context (e.g. unit tests)
+  } catch (err) {
+    console.warn('[CacheInvalidation] revalidateRentalPaths skipped or non-request context:', err);
   }
 }
 
@@ -96,8 +97,8 @@ export function revalidateDeveloperPaths(options?: RevalidateDeveloperOptions) {
     if (options?.previousSlug && options.previousSlug !== options.slug) {
       revalidatePath(`/developers/${options.previousSlug}`);
     }
-  } catch {
-    // Safe fallback when invoked outside a Next.js request context (e.g. unit tests)
+  } catch (err) {
+    console.warn('[CacheInvalidation] revalidateDeveloperPaths skipped or non-request context:', err);
   }
 }
 
@@ -113,9 +114,18 @@ export interface RevalidateProjectDeveloperOptions {
   previousLocationId?: string | null;
   locationSlug?: string | null;
   previousLocationSlug?: string | null;
+  bedroomCounts?: number[];
 }
 
-export async function revalidateProjectAndDeveloperPaths(options: RevalidateProjectDeveloperOptions) {
+/**
+ * Authoritative cache invalidation lifecycle for Project mutation & publishing.
+ * Invalidates project detail, inventory subpages, parent locations, corridors,
+ * developer profiles, affected BHK landing pages, discovery hubs, and sitemap.
+ * Executes post-commit with structured logging and non-throwing failure isolation.
+ */
+export async function revalidateProjectLifecyclePaths(options: RevalidateProjectDeveloperOptions) {
+  const revalidatedPaths: string[] = [];
+
   try {
     const { projectRepository } = await import('@/src/infrastructure/repositories/projectProvider');
     const { developerRepository } = await import('@/src/infrastructure/repositories/developerProvider');
@@ -126,6 +136,7 @@ export async function revalidateProjectAndDeveloperPaths(options: RevalidateProj
     const developerSlugs = new Set<string>();
     const locationIds = new Set<string>();
     const locationSlugs = new Set<string>();
+    const bedroomCounts = new Set<number>(options.bedroomCounts || []);
 
     if (options.projectSlug) projectSlugs.add(options.projectSlug);
     if (options.previousProjectSlug) projectSlugs.add(options.previousProjectSlug);
@@ -138,47 +149,102 @@ export async function revalidateProjectAndDeveloperPaths(options: RevalidateProj
     if (options.locationSlug) locationSlugs.add(options.locationSlug);
     if (options.previousLocationSlug) locationSlugs.add(options.previousLocationSlug);
 
-    if (options.projectId && (projectSlugs.size === 0 || developerIds.size === 0 || locationIds.size === 0)) {
-      const proj = await projectRepository.findById(options.projectId);
-      if (proj) {
-        if (proj.slug) projectSlugs.add(proj.slug);
-        if (proj.developerId) developerIds.add(proj.developerId);
-        if (proj.locationId) locationIds.add(proj.locationId);
+    // If projectId provided, resolve project record to get developer, location, configs
+    if (options.projectId) {
+      try {
+        const proj = await projectRepository.findById(options.projectId);
+        if (proj) {
+          if (proj.slug) projectSlugs.add(proj.slug);
+          if (proj.developerId) developerIds.add(proj.developerId);
+          if (proj.locationId) locationIds.add(proj.locationId);
+        }
+      } catch (err) {
+        console.warn(`[CacheInvalidation] Failed to resolve project ${options.projectId}:`, err);
       }
     }
 
+    // Resolve developer slugs
     for (const devId of developerIds) {
-      const dev = await developerRepository.findById(devId);
-      if (dev?.slug) developerSlugs.add(dev.slug);
+      try {
+        const dev = await developerRepository.findById(devId);
+        if (dev?.slug) developerSlugs.add(dev.slug);
+      } catch (err) {
+        console.warn(`[CacheInvalidation] Failed to resolve developer ${devId}:`, err);
+      }
+    }
+
+    // Resolve location slugs and traverse parent corridor chains
+    const allLocations: Location[] = await locationRepository.findAll().catch((): Location[] => []);
+    const locMap = new Map<string, Location>();
+    for (const l of allLocations) {
+      if (l.id) locMap.set(l.id, l);
     }
 
     for (const locId of locationIds) {
-      const loc = await locationRepository.findById(locId);
-      if (loc?.slug) locationSlugs.add(loc.slug);
+      let cur: Location | undefined = locMap.get(locId);
+      const visited = new Set<string>();
+      while (cur && !visited.has(cur.id)) {
+        visited.add(cur.id);
+        if (cur.slug) locationSlugs.add(cur.slug);
+        cur = cur.parentId ? locMap.get(cur.parentId) : undefined;
+      }
     }
 
-    revalidatePath('/');
-    revalidatePath('/projects');
-    revalidatePath('/developers');
-    revalidatePath('/locations');
-    revalidatePath('/sitemap.xml');
+    // Global discovery & navigation hubs
+    const staticHubs = ['/', '/projects', '/buy', '/rent', '/developers', '/locations', '/sitemap.xml'];
+    for (const hub of staticHubs) {
+      revalidatePath(hub);
+      revalidatedPaths.push(hub);
+    }
 
+    // Project detail and inventory pages
     for (const pSlug of projectSlugs) {
-      revalidatePath(`/projects/${pSlug}`);
-      revalidatePath(`/projects/${pSlug}/resale`);
-      revalidatePath(`/projects/${pSlug}/rent`);
+      const paths = [`/projects/${pSlug}`, `/projects/${pSlug}/resale`, `/projects/${pSlug}/rent`];
+      for (const p of paths) {
+        revalidatePath(p);
+        revalidatedPaths.push(p);
+      }
     }
 
+    // Developer profiles
     for (const dSlug of developerSlugs) {
-      revalidatePath(`/developers/${dSlug}`);
+      const p = `/developers/${dSlug}`;
+      revalidatePath(p);
+      revalidatedPaths.push(p);
     }
 
+    // Location corridor pages
     for (const lSlug of locationSlugs) {
-      revalidatePath(`/locations/${lSlug}`);
+      const p = `/locations/${lSlug}`;
+      revalidatePath(p);
+      revalidatedPaths.push(p);
     }
-  } catch {
-    // Safe fallback when invoked outside a Next.js request context
+
+    // Affected BHK landing pages (e.g. 2, 3, 4, 5 BHK in affected locations and Kolkata)
+    const effectiveBhkCounts = bedroomCounts.size > 0 ? Array.from(bedroomCounts) : [2, 3, 4, 5];
+    const candidateLocalities = new Set(['kolkata', ...Array.from(locationSlugs)]);
+    for (const bhk of effectiveBhkCounts) {
+      for (const loc of candidateLocalities) {
+        const bhkPath = `/buy/${bhk}-bhk-flats-in-${loc}`;
+        try {
+          revalidatePath(bhkPath);
+          revalidatedPaths.push(bhkPath);
+        } catch {
+          // ignore individual path revalidate error
+        }
+      }
+    }
+
+    console.info(`[CacheInvalidation] Successfully revalidated ${revalidatedPaths.length} paths post-commit:`, {
+      timestamp: new Date().toISOString(),
+      projectSlugs: Array.from(projectSlugs),
+      developerSlugs: Array.from(developerSlugs),
+      locationSlugs: Array.from(locationSlugs),
+      totalPaths: revalidatedPaths.length,
+    });
+  } catch (err) {
+    console.error('[CacheInvalidation] Non-fatal error during lifecycle cache invalidation:', err);
   }
 }
 
-
+export const revalidateProjectAndDeveloperPaths = revalidateProjectLifecyclePaths;

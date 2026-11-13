@@ -73,6 +73,21 @@ const CURATED_SEO_METADATA: Record<string, { title: string; description: string 
   },
 };
 
+/**
+ * 8 Verified Tier 2 Curated Editorial Locations with comprehensive locality guides
+ * index: true, follow: true despite 0 active inventory.
+ */
+export const TIER_2_CURATED_SLUGS = new Set([
+  'alipore',
+  'ballygunge',
+  'behala',
+  'golf-green',
+  'jodhpur-park',
+  'lake-gardens',
+  'howrah',
+  'hooghly',
+]);
+
 export class LocationSeoService {
   /**
    * Evaluates SEO eligibility for a location deterministically.
@@ -81,7 +96,7 @@ export class LocationSeoService {
   evaluateEligibility(params: EvaluateLocationSeoParams): LocationSeoEligibility {
     const { location, path = [], childLocations = [], projects = [], isAlias = false } = params;
     const cleanSlug = (location.slug || '').toLowerCase().trim();
-    const canonicalUrl = `https://greathomes.co.in/locations/${cleanSlug}`;
+    const canonicalUrl = `https://www.greathomes.co.in/locations/${cleanSlug}`;
 
     // 1. Build unique, location-specific SEO title and description
     const curated = CURATED_SEO_METADATA[cleanSlug];
@@ -200,17 +215,12 @@ export class LocationSeoService {
       };
     }
 
-    // 7. Content signals
+    // 7. Content & Inventory signals (Strict 3-Tier Classification)
     const publishedProjectsCount = projects.filter(
       p => (p.lifecycleStatus || 'PUBLISHED') === 'PUBLISHED'
     ).length;
-    const publishedChildrenCount = childLocations.filter(
-      c => isPublicCanonicalLocation(c)
-    ).length;
-    const fullDesc = getLocationFullDescription(location);
-    const hasMeaningfulContent = Boolean(fullDesc && fullDesc.trim().length >= 20);
 
-    // Rule A: Projects present
+    // Tier 1: Locations with 1 or more published projects (direct or rolled up)
     if (publishedProjectsCount > 0) {
       return {
         eligible: true,
@@ -224,8 +234,8 @@ export class LocationSeoService {
       };
     }
 
-    // Rule B: Child locations present (e.g. City or State or Region with sub-areas)
-    if (publishedChildrenCount > 0) {
+    // Tier 2: 8 Curated editorial guide locations with verified editorial depth despite 0 active inventory
+    if (TIER_2_CURATED_SLUGS.has(cleanSlug)) {
       return {
         eligible: true,
         reason: 'SUFFICIENT_CONTENT',
@@ -238,21 +248,7 @@ export class LocationSeoService {
       };
     }
 
-    // Rule C: Meaningful editorial description provided
-    if (hasMeaningfulContent) {
-      return {
-        eligible: true,
-        reason: 'SUFFICIENT_CONTENT',
-        index: true,
-        follow: true,
-        canonicalUrl,
-        title,
-        description,
-        imageUrl,
-      };
-    }
-
-    // Rule D: Thin page (Published but 0 projects, 0 children, 0 description) -> noindex, follow
+    // Tier 3: All other zero-inventory locations -> noindex, follow (thin programmatic placeholders)
     return {
       eligible: false,
       reason: 'INSUFFICIENT_CONTENT',
@@ -323,13 +319,13 @@ export class LocationSeoService {
         '@type': 'ListItem',
         position: 1,
         name: 'Home',
-        item: 'https://greathomes.co.in',
+        item: 'https://www.greathomes.co.in',
       },
       {
         '@type': 'ListItem',
         position: 2,
         name: 'Locations',
-        item: 'https://greathomes.co.in/locations',
+        item: 'https://www.greathomes.co.in/locations',
       },
     ];
 
@@ -340,7 +336,7 @@ export class LocationSeoService {
           '@type': 'ListItem',
           position: pos++,
           name: ancestor.name,
-          item: `https://greathomes.co.in/locations/${ancestor.slug}`,
+          item: `https://www.greathomes.co.in/locations/${ancestor.slug}`,
         });
       }
     }
@@ -421,9 +417,17 @@ export class LocationSeoService {
     for (const p of allPublishedProjects) {
       const locId = p.location?.id || p.locationId;
       if (locId) {
-        const list = projectsByLocation.get(locId) || [];
-        list.push(p);
-        projectsByLocation.set(locId, list);
+        let cur = allMap.get(locId);
+        const visited = new Set<string>();
+        while (cur && !visited.has(cur.id)) {
+          visited.add(cur.id);
+          const list = projectsByLocation.get(cur.id) || [];
+          if (!list.some(existing => existing.id === p.id)) {
+            list.push(p);
+          }
+          projectsByLocation.set(cur.id, list);
+          cur = cur.parentId ? allMap.get(cur.parentId) : undefined;
+        }
       }
     }
 
@@ -501,9 +505,17 @@ export class LocationSeoService {
     for (const p of allPublishedProjects) {
       const locId = p.location?.id || p.locationId;
       if (locId) {
-        const list = projectsByLocation.get(locId) || [];
-        list.push(p);
-        projectsByLocation.set(locId, list);
+        let cur = allMap.get(locId);
+        const visited = new Set<string>();
+        while (cur && !visited.has(cur.id)) {
+          visited.add(cur.id);
+          const list = projectsByLocation.get(cur.id) || [];
+          if (!list.some(existing => existing.id === p.id)) {
+            list.push(p);
+          }
+          projectsByLocation.set(cur.id, list);
+          cur = cur.parentId ? allMap.get(cur.parentId) : undefined;
+        }
       }
     }
 
