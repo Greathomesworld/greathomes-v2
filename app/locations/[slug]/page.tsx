@@ -8,6 +8,7 @@ import { locationService, LOCATION_ALIASES } from '@/src/domain/locations/servic
 import { locationSeoService } from '@/src/domain/locations/services/locationSeoService';
 import { locationIntelligenceService } from '@/src/domain/marketIntelligence/services/locationIntelligenceService';
 import { propertyDiscoveryService } from '@/src/domain/projects/services/propertyDiscoveryService';
+import { safeJsonLd } from '@/src/lib/safeJsonLd';
 import { ensureSeedData } from '@/src/infrastructure/seed';
 import { getDb } from '@/src/db/client';
 import {
@@ -301,7 +302,7 @@ export default async function LocationDetailPage(props: LocationPageProps) {
       {/* Structured Data (Place + BreadcrumbList JSON-LD) */}
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(structuredData) }}
       />
 
       {/* Breadcrumb Bar */}

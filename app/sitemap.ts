@@ -15,22 +15,37 @@ import {
 
 const BASE_URL = 'https://www.greathomes.co.in';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 86400; // Cache for 24 hours
+// Revalidate cached sitemap every hour via ISR (do not pair with force-dynamic, which disables caching)
+export const revalidate = 3600;
+
+const SITEMAP_MEMORY_TTL_MS = 10 * 60 * 1000; // 10-minute process-level cache guard
+let cachedSitemap: { entries: MetadataRoute.Sitemap; expiresAt: number } | null = null;
+let inflightSitemapPromise: Promise<MetadataRoute.Sitemap> | null = null;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const nowMs = Date.now();
+  if (cachedSitemap && cachedSitemap.expiresAt > nowMs) {
+    return cachedSitemap.entries;
+  }
+  if (inflightSitemapPromise) {
+    return inflightSitemapPromise;
+  }
+
+  inflightSitemapPromise = buildSitemap().finally(() => {
+    inflightSitemapPromise = null;
+  });
+  return inflightSitemapPromise;
+}
+
+async function buildSitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
-  let hasDb = false;
   try {
     const db = getDb();
-    if (db) {
-      hasDb = true;
-    } else {
+    if (!db) {
       await ensureSeedData();
     }
   } catch {
     // If DATABASE_URL is not provided (e.g. during offline build prerendering), safe static fallback will be used
-    hasDb = false;
   }
 
   const staticRoutes: MetadataRoute.Sitemap = [
@@ -218,7 +233,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       .filter(r => Boolean(r.slug && r.slug.trim()) && r.isVerified === true)
       .map(r => ({
         url: `${BASE_URL}/buy/${r.slug.trim()}`,
-        lastModified: now,
+        lastModified: resolveValidDate((r as any).updatedAt || (r as any).createdAt, now),
         changeFrequency: 'daily' as const,
         priority: 0.7,
       }));
@@ -228,7 +243,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       .filter(r => Boolean(r.slug && r.slug.trim()) && r.isVerified === true)
       .map(r => ({
         url: `${BASE_URL}/rent/${r.slug.trim()}`,
-        lastModified: now,
+        lastModified: resolveValidDate((r as any).updatedAt || (r as any).createdAt, now),
         changeFrequency: 'daily' as const,
         priority: 0.7,
       }));
@@ -261,11 +276,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       ...editorialUrls,
     ];
 
-    return combined.filter(entry => {
+    const deduped = combined.filter(entry => {
       if (seen.has(entry.url)) return false;
       seen.add(entry.url);
       return true;
     });
+
+    cachedSitemap = {
+      entries: deduped,
+      expiresAt: Date.now() + SITEMAP_MEMORY_TTL_MS,
+    };
+
+    return deduped;
   } catch (err) {
     console.error('[SEO Sitemap] Failed to load dynamic entries, falling back to static routes:', err);
     return staticRoutes;

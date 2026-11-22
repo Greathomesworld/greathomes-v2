@@ -55,16 +55,19 @@ export interface PublicResaleListingDto {
   slug?: string | null;
   project?: BoundedResaleProjectDto | null;
   location?: BoundedLocationDto | null;
+  customLocalityDisplay?: string | null;
+  customProjectDisplay?: string | null;
   propertyType: PropertyType;
-  configuration: string;
-  bedroomCount: number;
+  configuration?: string | null;
+  bedroomCount?: number | null;
   carpetArea?: number | null;
   builtUpArea?: number | null;
   superBuiltUpArea?: number | null;
+  plotArea?: number | null;
   askingPrice: number; // Total asking price only. NO per-sqft calculation.
-  furnishing: FurnishingStatus;
+  furnishing?: FurnishingStatus | null;
   facing: FacingDirection;
-  floorCategory: FloorCategory; // Coarse: LOWER_FLOOR, MID_FLOOR, HIGH_FLOOR
+  floorCategory?: FloorCategory | null; // Coarse: GROUND_FLOOR, LOWER_FLOOR, MID_FLOOR, HIGHER_FLOOR, HIGH_FLOOR
   possession: PossessionStatus;
   possessionDate?: string | null;
   description?: string | null;

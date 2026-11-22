@@ -183,7 +183,7 @@ export default function AdminStaffPage() {
 
       const data = await res.json();
       if (!res.ok) {
-        alert(data.message || 'Failed to update status.');
+        setError(data.message || 'Failed to update status.');
         setStatusActionLoading(false);
         return;
       }
@@ -191,7 +191,7 @@ export default function AdminStaffPage() {
       setStatusConfirmStaff(null);
       fetchStaff();
     } catch {
-      alert('A network error occurred.');
+      setError('A network error occurred while updating staff status.');
     } finally {
       setStatusActionLoading(false);
     }
@@ -201,7 +201,11 @@ export default function AdminStaffPage() {
   const totalStaff = total || staffList.length;
   const activeCount = staffList.filter((s) => s.enabled).length;
   const superAdminCount = activeSuperAdminCount;
-  const operationsCount = staffList.filter((s) => ['ADMIN', 'CONTENT_MANAGER', 'PROPERTY_MANAGER', 'SALES'].includes(s.role)).length;
+  const operationsCount = staffList.filter((s) =>
+    ['ADMIN', 'VERIFICATION_EXECUTIVE', 'CONTENT_MANAGER', 'PROPERTY_MANAGER', 'SALES'].includes(
+      s.role
+    )
+  ).length;
 
   const filterOptions: FilterOption[] = [
     {
@@ -211,6 +215,7 @@ export default function AdminStaffPage() {
         { label: 'All Roles', value: 'ALL' },
         { label: 'Super Admin', value: 'SUPER_ADMIN' },
         { label: 'Operations Admin', value: 'ADMIN' },
+        { label: 'Verification Executive', value: 'VERIFICATION_EXECUTIVE' },
         { label: 'Content Manager', value: 'CONTENT_MANAGER' },
         { label: 'Property Manager', value: 'PROPERTY_MANAGER' },
         { label: 'Sales Specialist', value: 'SALES' },

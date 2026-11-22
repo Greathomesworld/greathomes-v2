@@ -443,13 +443,16 @@ export async function POST(req: NextRequest) {
                   const refCheck = await mediaRepository.checkReferenced(prev.mediaId);
                   if (!refCheck.referenced) {
                     const prevAsset = await mediaRepository.findById(prev.mediaId);
+                    const isSharedObject = prevAsset
+                      ? await mediaRepository.isStorageObjectShared(prevAsset)
+                      : false;
                     await mediaRepository.delete(prev.mediaId);
                     const oldKey =
                       prevAsset?.storageKey ||
                       (prev.url.startsWith('/uploads/')
                         ? prev.url.replace(/^\/uploads\//, '')
                         : '');
-                    if (oldKey) {
+                    if (oldKey && !isSharedObject) {
                       await storage.delete(oldKey).catch(() => false);
                     }
                   }
@@ -689,15 +692,19 @@ export async function POST(req: NextRequest) {
 
     return withCorrelationHeaders(response, reqContext.requestId);
   } catch (error: any) {
-    console.error('Media upload error:', error);
+    console.error('Media upload error:', error?.message || error);
     const isValidation =
-      error.message?.includes('validation') ||
-      error.message?.includes('Security violation') ||
-      error.message?.includes('Malformed SVG');
+      typeof error?.message === 'string' &&
+      (error.message.includes('validation') ||
+        error.message.includes('Security violation') ||
+        error.message.includes('Malformed SVG'));
     const status = isValidation ? 400 : 500;
+    const safeErrorMessage = isValidation
+      ? error.message
+      : 'Media upload failed due to an internal error. Please try again.';
     return withCorrelationHeaders(
       NextResponse.json(
-        { success: false, error: error.message || 'Media upload failed' },
+        { success: false, error: safeErrorMessage },
         { status }
       ),
       reqContext.requestId

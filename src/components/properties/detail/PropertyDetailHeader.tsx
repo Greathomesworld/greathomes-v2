@@ -12,11 +12,26 @@ export function PropertyDetailHeader({ listing }: PropertyDetailHeaderProps) {
   const primaryPrice = isResale ? listing.formattedAskingPrice : listing.formattedMonthlyRent;
   const priceLabel = isResale ? 'Asking Price' : 'Monthly Rent';
 
-  const mobileMainHeadline = `${listing.bedroomCount} BHK ${listing.propertyTypeDisplay}`;
+  const hasBeds =
+    typeof listing.bedroomCount === 'number' &&
+    Number.isFinite(listing.bedroomCount) &&
+    listing.bedroomCount > 0;
+
+  const mobileMainHeadline =
+    listing.propertyType === 'PLOT'
+      ? 'Residential Plot'
+      : hasBeds
+      ? `${listing.bedroomCount} BHK ${listing.propertyTypeDisplay}`
+      : listing.configuration || listing.propertyTypeDisplay;
+
   const mobileSubHeadline = listing.project
     ? `at ${listing.project.name}`
+    : listing.customProjectDisplay
+    ? `at ${listing.customProjectDisplay}`
     : listing.location
     ? `in ${listing.location.name}`
+    : listing.customLocalityDisplay
+    ? `in ${listing.customLocalityDisplay}`
     : 'in Kolkata';
 
   return (
@@ -40,7 +55,7 @@ export function PropertyDetailHeader({ listing }: PropertyDetailHeaderProps) {
             <span className="font-medium text-[#111111]/85">{listing.locationDisplay}</span>
           )}
 
-          {listing.project && (
+          {listing.project ? (
             <>
               <span className="text-[#111111]/35">·</span>
               <Link
@@ -50,7 +65,14 @@ export function PropertyDetailHeader({ listing }: PropertyDetailHeaderProps) {
                 {`Part of ${listing.project.name}`}
               </Link>
             </>
-          )}
+          ) : listing.customProjectDisplay ? (
+            <>
+              <span className="text-[#111111]/35">·</span>
+              <span className="font-display font-semibold text-[#111111]/85">
+                {listing.customProjectDisplay}
+              </span>
+            </>
+          ) : null}
         </div>
       </div>
 

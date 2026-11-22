@@ -177,6 +177,8 @@ export function ComparisonTray({ showWhenEmpty = false }: ComparisonTrayProps = 
     };
   }, []);
 
+  if (pathname?.startsWith('/post-property')) return null;
+
   if ((!activeMode || ids.length === 0) && !showWhenEmpty) return null;
 
   const effectiveMode: ComparisonTrayMode = activeMode || 'projects';

@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyInternalStaff } from '@/src/domain/auth/authorizationBoundary';
-import { developerService, ValidationError, NotFoundError } from '@/src/domain/developers/services/developerService';
+import { verifyStaffCapability } from '@/src/domain/auth/capabilities';
+import { developerService } from '@/src/domain/developers/services/developerService';
 import { ensureSeedData } from '@/src/infrastructure/seed';
 
 export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const auth = await verifyInternalStaff(req);
+  const auth = await verifyStaffCapability(req, 'developer.update');
   if (!auth.authorized) {
     return NextResponse.json(
-      { error: auth.error || 'Unauthorized' },
-      { status: auth.statusCode || 401 }
+      { error: auth.error || 'Forbidden' },
+      { status: auth.statusCode || auth.status || 401 }
     );
   }
 
@@ -49,8 +49,9 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
 
     return NextResponse.json(updated);
   } catch (error: any) {
+    console.error('[Admin Developer Publish] Unexpected error:', error?.message || 'Unknown error');
     return NextResponse.json(
-      { error: 'SERVER_ERROR', message: error.message || 'Internal server error' },
+      { error: 'SERVER_ERROR', message: 'Failed to publish developer.' },
       { status: 500 }
     );
   }

@@ -27,6 +27,7 @@ import {
 } from '../viewModels/listingDetailViewModel';
 import { getEligibleResaleListings } from '../viewModels/projectSectionEligibility';
 import { generateNewListingSlug } from './listingSlugGenerator';
+import { parseListingDate } from './listingDateNormalizer';
 import { normalizeMediaPublicUrl } from '@/src/lib/mediaUtils';
 import {
   projectRepository,
@@ -368,18 +369,21 @@ export class ResaleListingService {
       project: projectDto,
       location: locationDto,
       propertyType: listing.propertyType,
-      configuration: listing.configuration,
-      bedroomCount: listing.bedroomCount,
+      configuration: listing.configuration ?? null,
+      bedroomCount: listing.bedroomCount ?? null,
       carpetArea: listing.carpetArea ?? null,
       builtUpArea: listing.builtUpArea ?? null,
       superBuiltUpArea: listing.superBuiltUpArea ?? null,
+      plotArea: listing.plotArea ?? null,
       askingPrice: listing.askingPrice,
-      furnishing: listing.furnishing,
+      furnishing: listing.furnishing ?? null,
       facing: listing.facing,
-      floorCategory: listing.floorCategory,
+      floorCategory: listing.floorCategory ?? null,
       possession: listing.possession,
       possessionDate: listing.possessionDate ? listing.possessionDate.toISOString() : null,
       description: listing.description ?? null,
+      customLocalityDisplay: listing.customLocalityDisplay ?? null,
+      customProjectDisplay: listing.customProjectDisplay ?? null,
       listingParty: {
         type: listing.listingPartyType,
         label: listingPartyLabel,
@@ -447,18 +451,21 @@ export class ResaleListingService {
     longitude?: number | null;
     geometry?: string | null;
     propertyType: any;
-    configuration: string;
-    bedroomCount: number;
+    configuration?: string | null;
+    bedroomCount?: number | null;
     carpetArea?: number | null;
     builtUpArea?: number | null;
     superBuiltUpArea?: number | null;
+    plotArea?: number | null;
     askingPrice: number;
-    furnishing: FurnishingStatus;
+    furnishing?: FurnishingStatus | null;
     facing: FacingDirection;
-    floorCategory: FloorCategory;
+    floorCategory?: FloorCategory | null;
     possession: PossessionStatus;
     possessionDate?: Date | null;
     description?: string | null;
+    customLocalityDisplay?: string | null;
+    customProjectDisplay?: string | null;
     listingPartyType: ListingPartyType;
     listingPartyDisplayName?: string | null;
     ownerName?: string | null;
@@ -536,12 +543,21 @@ export class ResaleListingService {
       throw new ValidationError('Asking price must be a positive number.');
     }
 
-    // 3. Validate bedroom count & configuration
-    if (data.bedroomCount === undefined || data.bedroomCount < 0) {
-      throw new ValidationError('Bedroom count must be a non-negative number.');
-    }
-    if (!data.configuration || data.configuration.trim().length === 0) {
-      throw new ValidationError('Configuration is required.');
+    const isPlot = data.propertyType === 'PLOT';
+    const isIndependentHouse = data.propertyType === 'INDEPENDENT_HOUSE';
+
+    // 3. Validate bedroom count & configuration / plotArea
+    if (isPlot) {
+      if (!data.plotArea || typeof data.plotArea !== 'number' || data.plotArea <= 0) {
+        throw new ValidationError('Plot area must be a positive number for Plot listings.');
+      }
+    } else {
+      if (data.bedroomCount === undefined || data.bedroomCount === null || data.bedroomCount < 0) {
+        throw new ValidationError('Bedroom count must be a non-negative number.');
+      }
+      if (!data.configuration || data.configuration.trim().length === 0) {
+        throw new ValidationError('Configuration is required.');
+      }
     }
 
     // 4. Validate listing party type
@@ -555,7 +571,9 @@ export class ResaleListingService {
       projectSlug,
       locationName,
       locationSlug,
-      bedroomCount: data.bedroomCount,
+      propertyType: data.propertyType,
+      bedroomCount: isPlot ? null : data.bedroomCount ?? null,
+      plotArea: data.plotArea ?? null,
       listingType: 'resale',
       checkExists: async (s) => Boolean(await this.repo.findBySlug(s)),
     });
@@ -567,18 +585,25 @@ export class ResaleListingService {
       longitude: lngToSave,
       geometry: geomToSave,
       propertyType: data.propertyType,
-      configuration: data.configuration.trim(),
-      bedroomCount: data.bedroomCount,
-      carpetArea: data.carpetArea ?? null,
-      builtUpArea: data.builtUpArea ?? null,
-      superBuiltUpArea: data.superBuiltUpArea ?? null,
+      configuration: isPlot ? (data.configuration?.trim() || null) : data.configuration!.trim(),
+      bedroomCount: isPlot ? null : (data.bedroomCount ?? null),
+      carpetArea: isPlot ? null : (data.carpetArea ?? null),
+      builtUpArea: isPlot ? null : (data.builtUpArea ?? null),
+      superBuiltUpArea: isPlot ? null : (data.superBuiltUpArea ?? null),
+      plotArea: data.plotArea ?? null,
       askingPrice: data.askingPrice,
-      furnishing: data.furnishing || 'SEMI_FURNISHED',
+      furnishing: isPlot ? (data.furnishing ?? null) : (data.furnishing || 'SEMI_FURNISHED'),
       facing: data.facing || 'NORTH',
-      floorCategory: data.floorCategory || 'MID_FLOOR',
+      floorCategory: isPlot
+        ? null
+        : isIndependentHouse
+        ? (data.floorCategory ?? null)
+        : (data.floorCategory || 'MID_FLOOR'),
       possession: data.possession || 'READY',
-      possessionDate: data.possessionDate ?? null,
+      possessionDate: parseListingDate(data.possessionDate, 'Possession date', ValidationError),
       description: data.description ?? null,
+      customLocalityDisplay: data.customLocalityDisplay ?? null,
+      customProjectDisplay: data.customProjectDisplay ?? null,
       listingPartyType: data.listingPartyType,
       listingPartyDisplayName: data.listingPartyDisplayName ?? null,
       ownerName: data.ownerName ?? null,
@@ -613,7 +638,9 @@ export class ResaleListingService {
           projectSlug,
           locationName,
           locationSlug,
-          bedroomCount: data.bedroomCount,
+          propertyType: data.propertyType,
+          bedroomCount: isPlot ? null : data.bedroomCount ?? null,
+          plotArea: data.plotArea ?? null,
           listingType: 'resale',
           checkExists: async (s) => Boolean(await this.repo.findBySlug(s)),
         });
@@ -696,11 +723,7 @@ export class ResaleListingService {
 
     const normalizedPossessionDate =
       data.possessionDate !== undefined
-        ? data.possessionDate
-          ? data.possessionDate instanceof Date
-            ? data.possessionDate
-            : new Date(data.possessionDate as any)
-          : null
+        ? parseListingDate(data.possessionDate, 'Possession date', ValidationError)
         : existing.possessionDate;
 
     const updated = await this.repo.update(id, {

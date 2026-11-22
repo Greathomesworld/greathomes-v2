@@ -24,17 +24,7 @@ async function runFreshMigration() {
   console.log('GREAT HOMES V2 — FRESH DATABASE MIGRATION TEST');
   console.log('================================================================================\n');
 
-  let testDatabaseUrl = process.env.TEST_DATABASE_URL?.trim();
-  try {
-    const fs = await import('node:fs');
-    if (fs.existsSync('/app/.dev.env.json')) {
-      const devEnv = JSON.parse(fs.readFileSync('/app/.dev.env.json', 'utf8'));
-      if (devEnv.TEST_DATABASE_URL) {
-        testDatabaseUrl = devEnv.TEST_DATABASE_URL.trim();
-        process.env.TEST_DATABASE_URL = testDatabaseUrl;
-      }
-    }
-  } catch {}
+  const testDatabaseUrl = process.env.TEST_DATABASE_URL?.trim();
 
   const currentDatabaseUrl = process.env.DATABASE_URL?.trim();
   const allowDisposableTests = process.env.ALLOW_DISPOSABLE_DB_TESTS?.trim();

@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyInternalStaff } from '@/src/lib/auth';
+import { verifyStaffCapability } from '@/src/domain/auth/capabilities';
 import { editorialService } from '@/src/domain/editorial/services/editorialService';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await verifyInternalStaff(req);
-  if (!auth.authenticated) {
-    return NextResponse.json({ error: 'Unauthorized staff access' }, { status: 401 });
+  const auth = await verifyStaffCapability(req, 'seo.read');
+  if (!auth.authorized) {
+    return NextResponse.json(
+      { error: auth.error || 'Forbidden' },
+      { status: auth.statusCode || auth.status || 401 }
+    );
   }
 
   try {
@@ -19,14 +22,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     response.headers.set('Cache-Control', 'no-store');
     return response;
   } catch (error: any) {
-    return NextResponse.json({ error: 'Failed to fetch article', details: error.message }, { status: 500 });
+    console.error('[Admin Content Detail GET] Unexpected error:', error?.message || 'Unknown error');
+    return NextResponse.json({ error: 'Failed to fetch article' }, { status: 500 });
   }
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await verifyInternalStaff(req);
-  if (!auth.authenticated) {
-    return NextResponse.json({ error: 'Unauthorized staff access' }, { status: 401 });
+  const auth = await verifyStaffCapability(req, 'seo.update');
+  if (!auth.authorized) {
+    return NextResponse.json(
+      { error: auth.error || 'Forbidden' },
+      { status: auth.statusCode || auth.status || 401 }
+    );
   }
 
   try {
@@ -41,6 +48,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     response.headers.set('Cache-Control', 'no-store');
     return response;
   } catch (error: any) {
-    return NextResponse.json({ error: 'Failed to update article', details: error.message }, { status: 500 });
+    console.error('[Admin Content Detail PATCH] Unexpected error:', error?.message || 'Unknown error');
+    return NextResponse.json({ error: 'Failed to update article' }, { status: 500 });
   }
 }

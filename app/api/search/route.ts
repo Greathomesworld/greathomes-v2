@@ -1,16 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { searchService } from '@/src/domain/search/searchService';
 import { extractRequestContext, withCorrelationHeaders } from '@/src/lib/requestContext';
-import { checkRateLimit, createRateLimitResponse } from '@/src/lib/rateLimit';
+import { isPersistenceUnavailableError } from '@/src/lib/persistenceGuard';
+import {
+  checkRateLimit,
+  createRateLimitResponse,
+  createRateLimitUnavailableResponse,
+  isRateLimitUnavailableError,
+} from '@/src/lib/rateLimit';
 
 export async function GET(req: NextRequest) {
   const { requestId, ipAddress } = extractRequestContext(req);
 
   // Rate limiting: max 1000 search requests per minute per IP
   const rateLimitKey = `search_${ipAddress || 'anonymous'}`;
-  const rateLimitResult = checkRateLimit(rateLimitKey, 1000, 60000);
-  if (!rateLimitResult.allowed) {
-    return createRateLimitResponse(requestId, rateLimitResult);
+  try {
+    const rateLimitResult = await checkRateLimit(rateLimitKey, 1000, 60000);
+    if (!rateLimitResult.allowed) {
+      return createRateLimitResponse(requestId, rateLimitResult);
+    }
+  } catch (err) {
+    if (isRateLimitUnavailableError(err)) {
+      return createRateLimitUnavailableResponse(requestId);
+    }
+    throw err;
   }
 
   try {
@@ -33,6 +46,13 @@ export async function GET(req: NextRequest) {
     const response = NextResponse.json({ success: true, ...result }, { status: 200 });
     return withCorrelationHeaders(response, requestId);
   } catch (error: any) {
+    if (isPersistenceUnavailableError(error)) {
+      const response = NextResponse.json(
+        { success: false, code: 'PERSISTENCE_UNAVAILABLE', message: error.message },
+        { status: 503 }
+      );
+      return withCorrelationHeaders(response, requestId);
+    }
     console.error('Search API error:', error);
     const response = NextResponse.json(
       { success: false, message: 'An unexpected error occurred while executing search.' },

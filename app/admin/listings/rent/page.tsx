@@ -13,6 +13,7 @@ import { AdminConfirmDialog } from '@/src/components/admin/AdminConfirmDialog';
 import { AdminLoadingState } from '@/src/components/admin/AdminLoadingState';
 import { AdminErrorState } from '@/src/components/admin/AdminErrorState';
 import { getAdminHeaders } from '@/src/lib/adminAuth';
+import { safeFetchJson } from '@/src/lib/safeApiFetch';
 import { formatIndianPrice } from '@/src/components/discovery/formatters';
 import { Plus, RefreshCw, Eye, Edit3, Trash2, ArrowUpDown } from 'lucide-react';
 
@@ -48,16 +49,16 @@ export default function AdminRentalPage() {
       setLoading(true);
       setError(null);
 
-      const res = await fetch('/api/rent', {
+      const res = await safeFetchJson<{ data?: any[] }>('/api/rent', {
         headers: getAdminHeaders(),
       });
 
       if (!res.ok) {
-        throw new Error(`Failed to load rental listings: ${res.statusText}`);
+        setError(res.error || 'Failed to load rental listings');
+        return;
       }
 
-      const json = await res.json();
-      setListings(json.data || []);
+      setListings(res.data?.data || []);
     } catch (err: any) {
       setError(err.message || 'Error fetching rental listings');
     } finally {
@@ -73,13 +74,14 @@ export default function AdminRentalPage() {
     if (!deleteId) return;
     try {
       setIsDeleting(true);
-      const res = await fetch(`/api/rent/${deleteId}`, {
+      const res = await safeFetchJson(`/api/rent/${deleteId}`, {
         method: 'DELETE',
         headers: getAdminHeaders(),
       });
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to delete rental listing');
+        setError(res.error || 'Failed to delete rental listing');
+        setDeleteId(null);
+        return;
       }
       setDeleteId(null);
       await fetchListings();

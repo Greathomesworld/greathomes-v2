@@ -20,7 +20,7 @@ import { normalizeMediaPublicUrl, normalizeMediaAssetUrls } from '@/src/lib/medi
 
 export interface MediaAsset {
   id: string;
-  entityType: 'PROJECT' | 'DEVELOPER' | 'RESALE' | 'RENTAL' | 'GENERAL';
+  entityType: 'PROJECT' | 'DEVELOPER' | 'RESALE' | 'RENTAL' | 'GENERAL' | 'SUBMISSION';
   entityId: string;
   filename: string;
   mimeType: string;
@@ -89,7 +89,65 @@ if (!globalForMedia.__ghMediaAssets) {
   globalForMedia.__ghMediaAssets = new Map<string, MediaAsset>();
 }
 
-export function mapRowToMediaAsset(row: typeof mediaAssets.$inferSelect): MediaAsset {
+export type MediaAssetRowShape = Omit<typeof mediaAssets.$inferSelect, 'customerId'> & {
+  customerId?: string | null;
+};
+
+const LEGACY_MEDIA_ASSET_SELECTION = {
+  id: mediaAssets.id,
+  entityType: mediaAssets.entityType,
+  entityId: mediaAssets.entityId,
+  filename: mediaAssets.filename,
+  mimeType: mediaAssets.mimeType,
+  category: mediaAssets.category,
+  mediaType: mediaAssets.mediaType,
+  width: mediaAssets.width,
+  height: mediaAssets.height,
+  fileSizeBytes: mediaAssets.fileSizeBytes,
+  storageProvider: mediaAssets.storageProvider,
+  storageKey: mediaAssets.storageKey,
+  url: mediaAssets.url,
+  originalUrl: mediaAssets.originalUrl,
+  thumbnailUrl: mediaAssets.thumbnailUrl,
+  webpUrl: mediaAssets.webpUrl,
+  avifUrl: mediaAssets.avifUrl,
+  watermarkedUrl: mediaAssets.watermarkedUrl,
+  watermarkApplied: mediaAssets.watermarkApplied,
+  altText: mediaAssets.altText,
+  caption: mediaAssets.caption,
+  sortOrder: mediaAssets.sortOrder,
+  isFeatured: mediaAssets.isFeatured,
+  processingStatus: mediaAssets.processingStatus,
+  variants: mediaAssets.variants,
+  createdAt: mediaAssets.createdAt,
+  updatedAt: mediaAssets.updatedAt,
+};
+
+let cachedMediaCustomerIdCol: { value: boolean; expiresAt: number } | null = null;
+
+async function hasMediaCustomerIdColumn(db: NonNullable<ReturnType<typeof getDb>>): Promise<boolean> {
+  if (cachedMediaCustomerIdCol && cachedMediaCustomerIdCol.expiresAt > Date.now()) {
+    return cachedMediaCustomerIdCol.value;
+  }
+  try {
+    const res: any = await db.execute(sql`
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'media_assets'
+        AND column_name = 'customer_id'
+      LIMIT 1
+    `);
+    const rows = Array.isArray(res?.rows) ? res.rows : Array.isArray(res) ? res : [];
+    const hasCol = rows.length > 0;
+    cachedMediaCustomerIdCol = { value: hasCol, expiresAt: Date.now() + 10_000 };
+    return hasCol;
+  } catch {
+    return false;
+  }
+}
+
+export function mapRowToMediaAsset(row: MediaAssetRowShape): MediaAsset {
   const rawVariants = (row.variants as unknown as MediaVariantSet) || undefined;
   const normalizedVariants = rawVariants
     ? {
@@ -179,38 +237,96 @@ export class MediaRepository {
     const db = this.db;
     if (db) {
       try {
-        const [inserted] = await db
-          .insert(mediaAssets)
-          .values({
-            id: asset.id,
-            entityType: asset.entityType,
-            entityId: asset.entityId,
-            filename: asset.filename,
-            mimeType: asset.mimeType,
-            category: asset.category,
-            mediaType: asset.mediaType,
-            width: asset.width,
-            height: asset.height,
-            fileSizeBytes: asset.fileSizeBytes,
-            storageProvider: asset.storageProvider,
-            storageKey: asset.storageKey,
-            url: asset.url,
-            originalUrl: asset.originalUrl,
-            thumbnailUrl: asset.thumbnailUrl || null,
-            webpUrl: asset.webpUrl || null,
-            avifUrl: asset.avifUrl || null,
-            watermarkedUrl: asset.watermarkedUrl || null,
-            watermarkApplied: asset.watermarkApplied,
-            altText: asset.altText || null,
-            caption: asset.caption || null,
-            sortOrder: asset.sortOrder,
-            isFeatured: asset.isFeatured,
-            processingStatus: asset.processingStatus,
-            variants: asset.variants ? (asset.variants as unknown as Record<string, unknown>) : null,
-            createdAt: asset.createdAt ? new Date(asset.createdAt) : new Date(),
-            updatedAt: asset.updatedAt ? new Date(asset.updatedAt) : new Date(),
-          } as any)
-          .returning();
+        const hasCustCol = await hasMediaCustomerIdColumn(db);
+        const insertValues = {
+          id: asset.id,
+          entityType: asset.entityType,
+          entityId: asset.entityId,
+          filename: asset.filename,
+          mimeType: asset.mimeType,
+          category: asset.category,
+          mediaType: asset.mediaType,
+          width: asset.width,
+          height: asset.height,
+          fileSizeBytes: asset.fileSizeBytes,
+          storageProvider: asset.storageProvider,
+          storageKey: asset.storageKey,
+          url: asset.url,
+          originalUrl: asset.originalUrl,
+          thumbnailUrl: asset.thumbnailUrl || null,
+          webpUrl: asset.webpUrl || null,
+          avifUrl: asset.avifUrl || null,
+          watermarkedUrl: asset.watermarkedUrl || null,
+          watermarkApplied: asset.watermarkApplied,
+          altText: asset.altText || null,
+          caption: asset.caption || null,
+          sortOrder: asset.sortOrder,
+          isFeatured: asset.isFeatured,
+          processingStatus: asset.processingStatus,
+          variants: asset.variants ? (asset.variants as unknown as Record<string, unknown>) : null,
+          createdAt: asset.createdAt ? new Date(asset.createdAt) : new Date(),
+          updatedAt: asset.updatedAt ? new Date(asset.updatedAt) : new Date(),
+        };
+
+        let inserted: MediaAssetRowShape;
+        if (hasCustCol) {
+          const [row] = await db.insert(mediaAssets).values(insertValues as any).returning();
+          inserted = row;
+        } else {
+          const variantsJson = insertValues.variants ? JSON.stringify(insertValues.variants) : null;
+          const res: any = await db.execute(sql`
+            INSERT INTO media_assets (
+              id, entity_type, entity_id, filename, mime_type, category, media_type,
+              width, height, file_size_bytes, storage_provider, storage_key,
+              url, original_url, thumbnail_url, webp_url, avif_url, watermarked_url,
+              watermark_applied, alt_text, caption, sort_order, is_featured,
+              processing_status, variants, created_at, updated_at
+            ) VALUES (
+              ${insertValues.id}, ${insertValues.entityType}, ${insertValues.entityId},
+              ${insertValues.filename}, ${insertValues.mimeType}, ${insertValues.category},
+              ${insertValues.mediaType}, ${insertValues.width}, ${insertValues.height},
+              ${insertValues.fileSizeBytes}, ${insertValues.storageProvider}, ${insertValues.storageKey},
+              ${insertValues.url}, ${insertValues.originalUrl}, ${insertValues.thumbnailUrl},
+              ${insertValues.webpUrl}, ${insertValues.avifUrl}, ${insertValues.watermarkedUrl},
+              ${insertValues.watermarkApplied}, ${insertValues.altText}, ${insertValues.caption},
+              ${insertValues.sortOrder}, ${insertValues.isFeatured}, ${insertValues.processingStatus},
+              ${variantsJson}::jsonb, ${insertValues.createdAt}, ${insertValues.updatedAt}
+            )
+            RETURNING
+              id,
+              entity_type AS "entityType",
+              entity_id AS "entityId",
+              filename,
+              mime_type AS "mimeType",
+              category,
+              media_type AS "mediaType",
+              width,
+              height,
+              file_size_bytes AS "fileSizeBytes",
+              storage_provider AS "storageProvider",
+              storage_key AS "storageKey",
+              url,
+              original_url AS "originalUrl",
+              thumbnail_url AS "thumbnailUrl",
+              webp_url AS "webpUrl",
+              avif_url AS "avifUrl",
+              watermarked_url AS "watermarkedUrl",
+              watermark_applied AS "watermarkApplied",
+              alt_text AS "altText",
+              caption,
+              sort_order AS "sortOrder",
+              is_featured AS "isFeatured",
+              processing_status AS "processingStatus",
+              variants,
+              created_at AS "createdAt",
+              updated_at AS "updatedAt"
+          `);
+          const rows = Array.isArray(res?.rows) ? res.rows : Array.isArray(res) ? res : [];
+          inserted = rows[0] || {
+            ...insertValues,
+            customerId: null,
+          };
+        }
 
         const mapped = mapRowToMediaAsset(inserted);
         this.store.set(mapped.id, mapped);
@@ -232,7 +348,14 @@ export class MediaRepository {
     const db = this.db;
     if (db) {
       try {
-        const [row] = await db.select().from(mediaAssets).where(eq(mediaAssets.id, id)).limit(1);
+        const hasCustCol = await hasMediaCustomerIdColumn(db);
+        const [row] = hasCustCol
+          ? await db.select().from(mediaAssets).where(eq(mediaAssets.id, id)).limit(1)
+          : await db
+              .select(LEGACY_MEDIA_ASSET_SELECTION)
+              .from(mediaAssets)
+              .where(eq(mediaAssets.id, id))
+              .limit(1);
         if (row) {
           const mapped = mapRowToMediaAsset(row);
           this.store.set(mapped.id, mapped);
@@ -293,11 +416,14 @@ export class MediaRepository {
         if (updates.processingStatus !== undefined) setPayload.processingStatus = updates.processingStatus;
         if (updates.variants !== undefined) setPayload.variants = updates.variants;
 
-        const [row] = await db
-          .update(mediaAssets)
-          .set(setPayload)
-          .where(eq(mediaAssets.id, id))
-          .returning();
+        const hasCustCol = await hasMediaCustomerIdColumn(db);
+        const [row] = hasCustCol
+          ? await db.update(mediaAssets).set(setPayload).where(eq(mediaAssets.id, id)).returning()
+          : await db
+              .update(mediaAssets)
+              .set(setPayload)
+              .where(eq(mediaAssets.id, id))
+              .returning(LEGACY_MEDIA_ASSET_SELECTION);
 
         if (row) {
           const mapped = mapRowToMediaAsset(row);
@@ -385,11 +511,18 @@ export class MediaRepository {
           }
 
           const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-          const rows = await db
-            .select()
-            .from(mediaAssets)
-            .where(whereClause)
-            .orderBy(asc(mediaAssets.sortOrder), asc(mediaAssets.createdAt));
+          const hasCustCol = await hasMediaCustomerIdColumn(db);
+          const rows = hasCustCol
+            ? await db
+                .select()
+                .from(mediaAssets)
+                .where(whereClause)
+                .orderBy(asc(mediaAssets.sortOrder), asc(mediaAssets.createdAt))
+            : await db
+                .select(LEGACY_MEDIA_ASSET_SELECTION)
+                .from(mediaAssets)
+                .where(whereClause)
+                .orderBy(asc(mediaAssets.sortOrder), asc(mediaAssets.createdAt));
 
           const mapped = rows.map(mapRowToMediaAsset);
           for (const m of mapped) {
@@ -490,11 +623,18 @@ export class MediaRepository {
             )
           );
 
-        const [row] = await db
-          .update(mediaAssets)
-          .set({ isFeatured: true, updatedAt: now } as any)
-          .where(eq(mediaAssets.id, id))
-          .returning();
+        const hasCustCol = await hasMediaCustomerIdColumn(db);
+        const [row] = hasCustCol
+          ? await db
+              .update(mediaAssets)
+              .set({ isFeatured: true, updatedAt: now } as any)
+              .where(eq(mediaAssets.id, id))
+              .returning()
+          : await db
+              .update(mediaAssets)
+              .set({ isFeatured: true, updatedAt: now } as any)
+              .where(eq(mediaAssets.id, id))
+              .returning(LEGACY_MEDIA_ASSET_SELECTION);
 
         if (row) {
           const mapped = mapRowToMediaAsset(row);

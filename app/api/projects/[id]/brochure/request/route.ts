@@ -18,17 +18,17 @@ import {
   setVisitorSessionCookies,
 } from '@/src/domain/visitorIntelligence/validation';
 import { extractRequestContext, withCorrelationHeaders } from '@/src/lib/requestContext';
-import { checkRateLimit, createRateLimitResponse } from '@/src/lib/rateLimit';
+import { isPersistenceUnavailableError } from '@/src/lib/persistenceGuard';
+import {
+  checkRateLimit,
+  createRateLimitResponse,
+  createRateLimitUnavailableResponse,
+  isRateLimitUnavailableError,
+} from '@/src/lib/rateLimit';
 import { createBrochureDownloadToken } from '@/src/lib/brochureToken';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-
-// Short-window in-memory idempotency cache (15s) to prevent accidental double-click duplicate leads
-const recentBrochureRequests = new Map<
-  string,
-  { enquiryId: string; referenceNumber: string; timestamp: number }
->();
 
 function deriveStorageKeyFromUrl(url: string): string {
   const cleanUrl = url.split('?')[0].trim();
@@ -50,9 +50,16 @@ export async function POST(
 
   // Rate limiting: max 20 brochure requests per minute per IP
   const rateLimitKey = `brochure_request_${ipAddress || 'anonymous'}`;
-  const rateLimitResult = checkRateLimit(rateLimitKey, 20, 60000);
-  if (!rateLimitResult.allowed) {
-    return createRateLimitResponse(requestId, rateLimitResult);
+  try {
+    const rateLimitResult = await checkRateLimit(rateLimitKey, 20, 60000);
+    if (!rateLimitResult.allowed) {
+      return createRateLimitResponse(requestId, rateLimitResult);
+    }
+  } catch (err) {
+    if (isRateLimitUnavailableError(err)) {
+      return createRateLimitUnavailableResponse(requestId);
+    }
+    throw err;
   }
 
   try {
@@ -234,59 +241,43 @@ export async function POST(
     const visitorId = safeAttribution.visitorId;
     const sessionId = safeAttribution.sessionId;
 
-    // 7. Persist lead (with 15-second double-click idempotency guard)
-    const dedupeKey = `${project.id}::${normalizedPhone}`;
-    const nowMs = Date.now();
-    const recentEntry = recentBrochureRequests.get(dedupeKey);
+    // 7. Persist lead using durable database-backed enquiry idempotency
+    const result = await enquiryService.submitEnquiry(
+      {
+        contextType: 'PROJECT',
+        projectSlug: project.slug,
+        name: rawName,
+        phone: normalizedPhone,
+        email: validatedEmail || undefined,
+        preferredContact: 'WHATSAPP',
+        requestSiteVisit: false,
+        message: `Brochure download requested for ${project.name}.`,
+        source: 'BROCHURE_DOWNLOAD',
+        sourcePage,
+        marketingConsent,
+        customerId: verifiedCustomerId || undefined,
+        visitorId: visitorId || undefined,
+        sessionId: sessionId || undefined,
+      },
+      req
+    );
 
-    let enquiryId: string;
-    let referenceNumber: string;
-
-    if (recentEntry && nowMs - recentEntry.timestamp < 15000) {
-      enquiryId = recentEntry.enquiryId;
-      referenceNumber = recentEntry.referenceNumber;
-    } else {
-      const result = await enquiryService.submitEnquiry(
-        {
-          contextType: 'PROJECT',
-          projectSlug: project.slug,
-          name: rawName,
-          phone: normalizedPhone,
-          email: validatedEmail || undefined,
-          preferredContact: 'WHATSAPP',
-          requestSiteVisit: false,
-          message: `Brochure download requested for ${project.name}.`,
-          source: 'BROCHURE_DOWNLOAD',
-          sourcePage,
-          marketingConsent,
-          customerId: verifiedCustomerId || undefined,
-          visitorId: visitorId || undefined,
-          sessionId: sessionId || undefined,
-        },
-        req
+    if (!result.success || !result.enquiryId) {
+      return withCorrelationHeaders(
+        NextResponse.json(
+          {
+            success: false,
+            message: 'Unable to record your brochure request at this moment. Please try again.',
+          },
+          { status: 500 }
+        ),
+        requestId
       );
-
-      if (!result.success || !result.enquiryId) {
-        return withCorrelationHeaders(
-          NextResponse.json(
-            {
-              success: false,
-              message: 'Unable to record your brochure request at this moment. Please try again.',
-            },
-            { status: 500 }
-          ),
-          requestId
-        );
-      }
-
-      enquiryId = result.enquiryId;
-      referenceNumber = result.referenceNumber || `GH-ENQ-${enquiryId.slice(-6).toUpperCase()}`;
-      recentBrochureRequests.set(dedupeKey, {
-        enquiryId,
-        referenceNumber,
-        timestamp: nowMs,
-      });
     }
+
+    const enquiryId = result.enquiryId;
+    const referenceNumber =
+      result.referenceNumber || `GH-ENQ-${enquiryId.slice(-6).toUpperCase()}`;
 
     // 8. Issue short-lived signed download authorization token bound to project + active brochure + enquiry
     const brochureIdentifier = activeBrochure.mediaId || activeBrochure.id;
@@ -324,8 +315,8 @@ export async function POST(
       setVisitorSessionCookies(response, visitorId, sessionId);
     }
 
-    // Non-blocking first-party conversion telemetry
-    if (!optedOut) {
+    // Non-blocking first-party conversion telemetry (skip on idempotent replay)
+    if (!optedOut && !result.deduplicated) {
       try {
         const ingested = await customerIntelligenceService.ingestEvent(
           req,
@@ -362,6 +353,18 @@ export async function POST(
         NextResponse.json(
           { success: false, message: error.message },
           { status: 400 }
+        ),
+        requestId
+      );
+    }
+    if (isRateLimitUnavailableError(error)) {
+      return createRateLimitUnavailableResponse(requestId);
+    }
+    if (isPersistenceUnavailableError(error)) {
+      return withCorrelationHeaders(
+        NextResponse.json(
+          { success: false, code: 'PERSISTENCE_UNAVAILABLE', message: error.message },
+          { status: 503 }
         ),
         requestId
       );

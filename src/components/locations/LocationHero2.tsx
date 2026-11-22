@@ -51,6 +51,7 @@ export function LocationHero2({
         day: 'numeric',
         month: 'short',
         year: 'numeric',
+        timeZone: 'Asia/Kolkata',
       })
     : null;
 

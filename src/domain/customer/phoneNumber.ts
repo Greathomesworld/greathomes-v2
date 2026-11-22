@@ -2,9 +2,18 @@
  * Normalizes India mobile numbers into +91XXXXXXXXXX.
  * Only Indian mobile numbers are supported by the first customer OTP release.
  */
+export class PhoneValidationError extends Error {
+  statusCode: number;
+  constructor(message: string, statusCode = 400) {
+    super(message);
+    this.name = 'PhoneValidationError';
+    this.statusCode = statusCode;
+  }
+}
+
 export function normalizeIndianPhone(value: unknown): string {
   if (typeof value !== 'string') {
-    throw Object.assign(new Error('Enter a valid Indian mobile number.'), { statusCode: 400 });
+    throw new PhoneValidationError('Enter a valid Indian mobile number.', 400);
   }
 
   let digits = value.replace(/\D/g, '');
@@ -12,7 +21,7 @@ export function normalizeIndianPhone(value: unknown): string {
   if (digits.length === 12 && digits.startsWith('91')) digits = digits.slice(2);
 
   if (!/^[6-9]\d{9}$/.test(digits)) {
-    throw Object.assign(new Error('Enter a valid 10-digit Indian mobile number.'), { statusCode: 400 });
+    throw new PhoneValidationError('Enter a valid 10-digit Indian mobile number.', 400);
   }
 
   return `+91${digits}`;

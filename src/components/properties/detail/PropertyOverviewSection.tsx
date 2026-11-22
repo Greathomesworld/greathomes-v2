@@ -21,23 +21,32 @@ interface PropertyOverviewSectionProps {
 export function PropertyOverviewSection({ listing }: PropertyOverviewSectionProps) {
   const [expanded, setExpanded] = useState(false);
   const isResale = listing.mode === 'RESALE';
+  const isPlot = listing.propertyType === 'PLOT';
 
   const verifiedWord = listing.isVerified ? 'verified ' : '';
+  const placePhrase = listing.project
+    ? ` within the ${listing.project.name} community`
+    : listing.customProjectDisplay
+    ? ` at ${listing.customProjectDisplay}`
+    : listing.location
+    ? ` in ${listing.location.name}, Kolkata`
+    : listing.customLocalityDisplay
+    ? ` in ${listing.customLocalityDisplay}, Kolkata`
+    : ' in Kolkata';
+
+  const subjectPhrase = isPlot
+    ? listing.plotAreaDisplay
+      ? `${listing.plotAreaDisplay} residential plot`
+      : 'residential plot'
+    : `${listing.configuration || listing.propertyTypeDisplay} ${listing.propertyTypeDisplay.toLowerCase()}`;
+
   const defaultNarrative = isResale
-    ? `An exclusive ${verifiedWord}${listing.configuration} resale ${listing.propertyTypeDisplay.toLowerCase()} offering refined layouts, natural ventilation, and strategic residential positioning${
-        listing.project
-          ? ` within the ${listing.project.name} community`
-          : listing.location
-          ? ` in ${listing.location.name}, Kolkata`
-          : ' in Kolkata'
-      }.`
-    : `A well-appointed ${verifiedWord}${listing.configuration} rental ${listing.propertyTypeDisplay.toLowerCase()} offering practical living space, natural light, and convenient residential access${
-        listing.project
-          ? ` within the ${listing.project.name} community`
-          : listing.location
-          ? ` in ${listing.location.name}, Kolkata`
-          : ' in Kolkata'
-      }.`;
+    ? isPlot
+      ? `An exclusive ${verifiedWord}resale ${subjectPhrase} offering clear frontage and strategic residential positioning${placePhrase}.`
+      : `An exclusive ${verifiedWord}${subjectPhrase} for resale offering refined layouts, natural ventilation, and strategic residential positioning${placePhrase}.`
+    : isPlot
+    ? `A well-positioned ${verifiedWord}rental ${subjectPhrase} offering accessible frontage and convenient residential access${placePhrase}.`
+    : `A well-appointed ${verifiedWord}${subjectPhrase} for rent offering practical living space, natural light, and convenient residential access${placePhrase}.`;
 
   const descriptionText = listing.description?.trim() || defaultNarrative;
   const isLongDescription = descriptionText.length > 210;
@@ -46,30 +55,44 @@ export function PropertyOverviewSection({ listing }: PropertyOverviewSectionProp
   const factualBulletPoints = [
     {
       icon: ShieldCheck,
-      text: `${listing.configuration} ${listing.propertyTypeDisplay} (${listing.furnishingDisplay})`,
+      text: isPlot
+        ? `Residential Plot${listing.plotAreaDisplay ? ` · ${listing.plotAreaDisplay}` : ''}`
+        : `${listing.configuration ? `${listing.configuration} ` : ''}${listing.propertyTypeDisplay}${
+            listing.furnishingDisplay ? ` (${listing.furnishingDisplay})` : ''
+          }`,
     },
     {
       icon: Sparkles,
-      text:
-        listing.facingDisplay !== 'Not Specified'
+      text: listing.floorCategoryDisplay
+        ? listing.facingDisplay !== 'Not Specified'
           ? `${listing.facingDisplay} facing orientation · ${listing.floorCategoryDisplay}`
-          : `Positioned on ${listing.floorCategoryDisplay} with natural ventilation`,
+          : `Positioned on ${listing.floorCategoryDisplay} with natural ventilation`
+        : listing.facingDisplay !== 'Not Specified'
+        ? `${listing.facingDisplay} facing orientation · ${listing.possessionDisplay}`
+        : `${listing.possessionDisplay} · ${listing.primaryAreaDisplay || listing.propertyTypeDisplay}`,
     },
     {
       icon: Building2,
       text: listing.project
         ? `Access to ${listing.project.name} residential community amenities`
+        : listing.customProjectDisplay
+        ? `${listing.customProjectDisplay} · ${listing.listingPartyLabel}`
         : `${listing.possessionDisplay} · ${listing.listingPartyLabel}`,
     },
     {
       icon: MapPin,
       text: listing.location
         ? `Located in ${listing.location.name}, Kolkata residential micro-market`
+        : listing.customLocalityDisplay
+        ? `Located in ${listing.customLocalityDisplay}, Kolkata residential micro-market`
         : 'Located in an established residential corridor in Kolkata',
     },
   ];
 
   const areaBadges = [
+    listing.plotAreaDisplay
+      ? { label: 'Plot Area', value: listing.plotAreaDisplay }
+      : null,
     listing.carpetAreaDisplay
       ? { label: 'Carpet Area', value: listing.carpetAreaDisplay }
       : null,

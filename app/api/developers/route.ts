@@ -48,33 +48,57 @@ export async function GET(request: NextRequest) {
       pagination: result.pagination,
     });
   } catch (error: any) {
+    console.error('[Developers GET] Unexpected error:', error?.message || 'Unknown error');
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }
 }
 
 export async function POST(request: NextRequest) {
-  // Authorization boundary: internal staff only
-  const auth = await verifyInternalStaff(request);
+  const { verifyStaffCapability } = await import('@/src/domain/auth/capabilities');
+  const { isPersistenceUnavailableError } = await import('@/src/lib/persistenceGuard');
+  const { auditService } = await import('@/src/domain/audit/auditService');
+  // Authorization boundary: internal staff with developer.create capability only
+  const auth = await verifyStaffCapability(request, 'developer.create');
   if (!auth.authorized) {
     return NextResponse.json(
-      { error: auth.error || 'Unauthorized' },
-      { status: auth.statusCode || 401 }
+      { error: auth.error || 'Forbidden' },
+      { status: auth.statusCode || auth.status || 401 }
     );
   }
 
+  let body: any;
   try {
-    const body = await request.json();
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON request body.' }, { status: 400 });
+  }
+
+  try {
     const allowPotentialDuplicate = request.nextUrl.searchParams.get('allowPotentialDuplicate') === 'true';
 
     const developer = await developerService.createDeveloper(body, {
       allowPotentialDuplicate,
     });
 
+    await auditService.record(request, auth.staff ? { id: auth.staff.id, role: auth.role } : null, {
+      action: 'CREATE_DEVELOPER',
+      resourceType: 'DEVELOPER',
+      resourceId: developer.id,
+      success: true,
+      metadata: { name: developer.name, slug: developer.slug },
+    });
+
     return NextResponse.json(developer, { status: 201 });
   } catch (error: any) {
+    if (isPersistenceUnavailableError(error)) {
+      return NextResponse.json(
+        { error: 'Developer service is temporarily unavailable.', code: 'PERSISTENCE_UNAVAILABLE' },
+        { status: 503 }
+      );
+    }
     if (error instanceof ValidationError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
@@ -91,8 +115,9 @@ export async function POST(request: NextRequest) {
         { status: 409 }
       );
     }
+    console.error('[Developers POST] Unexpected error:', error?.message || 'Unknown error');
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

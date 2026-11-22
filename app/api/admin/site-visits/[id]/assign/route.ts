@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyInternalStaff } from '@/src/lib/auth';
+import { verifyStaffCapability } from '@/src/domain/auth/capabilities';
 import { siteVisitService } from '@/src/domain/siteVisit/services/siteVisitService';
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await verifyInternalStaff(req);
-  if (!auth.authorized && !auth.authenticated) {
-    return NextResponse.json({ error: 'Unauthorized staff access' }, { status: 401 });
+  const auth = await verifyStaffCapability(req, 'enquiry.assign');
+  if (!auth.authorized) {
+    return NextResponse.json(
+      { error: auth.error || 'Forbidden' },
+      { status: auth.statusCode || auth.status || 401 }
+    );
   }
 
   try {

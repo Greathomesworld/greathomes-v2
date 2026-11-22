@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyInternalStaff } from '@/src/lib/auth';
+import { verifyStaffCapability } from '@/src/domain/auth/capabilities';
 import { editorialService } from '@/src/domain/editorial/services/editorialService';
 import { EditorialContentType, EditorialStatus } from '@/src/domain/editorial/entities';
 
 export async function GET(req: NextRequest) {
-  const auth = await verifyInternalStaff(req);
-  if (!auth.authenticated) {
-    return NextResponse.json({ error: 'Unauthorized staff access' }, { status: 401 });
+  const auth = await verifyStaffCapability(req, 'seo.read');
+  if (!auth.authorized) {
+    return NextResponse.json(
+      { error: auth.error || 'Forbidden' },
+      { status: auth.statusCode || auth.status || 401 }
+    );
   }
 
   try {
@@ -22,14 +25,18 @@ export async function GET(req: NextRequest) {
     response.headers.set('Cache-Control', 'no-store');
     return response;
   } catch (error: any) {
-    return NextResponse.json({ error: 'Failed to list admin articles', details: error.message }, { status: 500 });
+    console.error('[Admin Content GET] Unexpected error:', error?.message || 'Unknown error');
+    return NextResponse.json({ error: 'Failed to list admin articles' }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await verifyInternalStaff(req);
-  if (!auth.authenticated) {
-    return NextResponse.json({ error: 'Unauthorized staff access' }, { status: 401 });
+  const auth = await verifyStaffCapability(req, 'seo.create');
+  if (!auth.authorized) {
+    return NextResponse.json(
+      { error: auth.error || 'Forbidden' },
+      { status: auth.statusCode || auth.status || 401 }
+    );
   }
 
   try {
@@ -43,6 +50,7 @@ export async function POST(req: NextRequest) {
     response.headers.set('Cache-Control', 'no-store');
     return response;
   } catch (error: any) {
-    return NextResponse.json({ error: 'Failed to create article', details: error.message }, { status: 500 });
+    console.error('[Admin Content POST] Unexpected error:', error?.message || 'Unknown error');
+    return NextResponse.json({ error: 'Failed to create article' }, { status: 500 });
   }
 }

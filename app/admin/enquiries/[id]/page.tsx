@@ -17,6 +17,14 @@ import {
   ENQUIRY_PRIORITY_LABELS,
 } from '@/src/domain/enquiry/entities/enquiryEntity';
 import {
+  classifySiteVisitState,
+  computeRequirementsCompleteness,
+  formatBudgetDisplay,
+  formatBuyerPropertyType,
+  formatBuyingTimeline,
+  formatPurchasePurpose,
+} from '@/src/domain/enquiry/buyerRequirements';
+import {
   MessageSquare,
   Phone,
   Mail,
@@ -37,6 +45,7 @@ import {
   ShieldCheck,
   FileText,
   Trash2,
+  ClipboardList,
 } from 'lucide-react';
 
 interface StaffOption {
@@ -234,6 +243,21 @@ export default function AdminEnquiryDetailPage({
 
   if (!enquiry) return null;
 
+  const requirementsSummary = computeRequirementsCompleteness(enquiry);
+  const siteVisitState = classifySiteVisitState({
+    status: enquiry.status,
+    siteVisitId: enquiry.siteVisitId,
+    requestSiteVisit,
+    metadata: enquiry.metadata,
+  });
+  const buyerBhk = enquiry.metadata?.preferredBhk || null;
+  const buyerPropertyType = formatBuyerPropertyType(enquiry.metadata?.propertyType);
+  const buyerBudget = formatBudgetDisplay(enquiry.metadata);
+  const buyerTimeline = formatBuyingTimeline(enquiry.metadata?.purchaseTimeline);
+  const buyerPurpose = formatPurchasePurpose(
+    enquiry.metadata?.purchasePurpose || enquiry.metadata?.purpose
+  );
+
   return (
     <div className="space-y-6 pb-20">
       <AdminPageHeader
@@ -350,38 +374,60 @@ export default function AdminEnquiryDetailPage({
               </div>
             </div>
 
-            {/* Site Visit Request Banner */}
+            {/* Site Visit Status Banner — cleanly distinguishes interest vs actual scheduled visit */}
             <div className="pt-2">
               <div
-                className={`p-3 rounded-lg border flex items-center justify-between ${
-                  requestSiteVisit
-                    ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
-                    : 'bg-neutral-50 border-neutral-200 text-neutral-600'
+                className={`p-3 rounded-lg border flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 ${
+                  siteVisitState.state === 'VISIT_COMPLETED'
+                    ? 'bg-sky-50/80 border-sky-200 text-sky-950'
+                    : siteVisitState.state === 'VISIT_SCHEDULED'
+                      ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
+                      : siteVisitState.state === 'INTEREST_EXPRESSED'
+                        ? 'bg-amber-50/80 border-amber-200 text-amber-950'
+                        : 'bg-neutral-50 border-neutral-200 text-neutral-600'
                 }`}
               >
-                <div className="flex items-center gap-2.5">
-                  <CheckCircle2
-                    className={`h-5 w-5 ${requestSiteVisit ? 'text-emerald-600' : 'text-neutral-400'}`}
+                <div className="flex items-start sm:items-center gap-2.5">
+                  <Calendar
+                    className={`h-5 w-5 shrink-0 mt-0.5 sm:mt-0 ${
+                      siteVisitState.state === 'VISIT_COMPLETED'
+                        ? 'text-sky-600'
+                        : siteVisitState.state === 'VISIT_SCHEDULED'
+                          ? 'text-emerald-600'
+                          : siteVisitState.state === 'INTEREST_EXPRESSED'
+                            ? 'text-amber-600'
+                            : 'text-neutral-400'
+                    }`}
                   />
                   <div>
                     <p className="text-xs font-bold font-display">
-                      {requestSiteVisit ? 'Site Visit Requested by Buyer' : 'No Site Visit Requested Initially'}
+                      {siteVisitState.state === 'VISIT_COMPLETED'
+                        ? 'Site Visit Completed'
+                        : siteVisitState.state === 'VISIT_SCHEDULED'
+                          ? 'Site Visit Scheduled'
+                          : siteVisitState.state === 'INTEREST_EXPRESSED'
+                            ? 'Site Visit Interest Expressed (Not Yet Scheduled)'
+                            : 'No Site Visit Interest'}
                     </p>
-                    <p className="text-[11px] text-neutral-500 font-body">
-                      {requestSiteVisit
-                        ? 'Buyer explicitly opted in for property inspection assistance.'
-                        : 'Buyer submitted general advisory / pricing information request.'}
+                    <p className="text-[11px] text-neutral-600 font-body">
+                      {siteVisitState.state === 'VISIT_COMPLETED'
+                        ? `Completed property walkthrough${enquiry.siteVisitId ? ` · Visit ID: ${enquiry.siteVisitId}` : ''}.`
+                        : siteVisitState.state === 'VISIT_SCHEDULED'
+                          ? `Scheduled site visit record linked${enquiry.siteVisitId ? ` · Visit ID: ${enquiry.siteVisitId}` : ''}.`
+                          : siteVisitState.state === 'INTEREST_EXPRESSED'
+                            ? 'Buyer expressed interest in a site visit. No visit date/time is booked yet — advisor should coordinate.'
+                            : 'Buyer has not requested or expressed interest in a site visit.'}
                     </p>
                   </div>
                 </div>
-                <label className="flex items-center gap-2 text-xs font-bold font-display cursor-pointer">
+                <label className="flex items-center gap-2 text-xs font-bold font-display cursor-pointer shrink-0">
                   <input
                     type="checkbox"
                     checked={requestSiteVisit}
                     onChange={(e) => setRequestSiteVisit(e.target.checked)}
                     className="rounded text-terracotta focus:ring-terracotta h-4 w-4"
                   />
-                  <span>Require Visit</span>
+                  <span>Visit Interest</span>
                 </label>
               </div>
             </div>
@@ -425,6 +471,143 @@ export default function AdminEnquiryDetailPage({
                     <span>Open Visitor & Customer 360</span>
                     <ExternalLink className="h-3.5 w-3.5" />
                   </Link>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Section 1B: Buyer Requirements & Preferences */}
+          <div className="bg-white p-6 rounded-xl border border-neutral-200/80 shadow-2xs space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-neutral-100">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-neutral-900 font-display flex items-center gap-2">
+                <ClipboardList className="h-4 w-4 text-terracotta" />
+                Buyer Requirements &amp; Preferences
+              </h3>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`text-[11px] font-display font-bold px-2.5 py-0.5 rounded border ${
+                    requirementsSummary.requirementsStatus === 'COMPLETE'
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                      : requirementsSummary.requirementsStatus === 'PARTIAL'
+                        ? 'bg-sky-50 text-sky-800 border-sky-200'
+                        : requirementsSummary.requirementsStatus === 'SKIPPED'
+                          ? 'bg-neutral-100 text-neutral-700 border-neutral-200'
+                          : 'bg-amber-50 text-amber-800 border-amber-200'
+                  }`}
+                >
+                  {requirementsSummary.captureStatusLabel}
+                </span>
+                <span className="text-[11px] font-mono text-neutral-500">
+                  {requirementsSummary.providedCount}/{requirementsSummary.totalOptionalFields} provided
+                </span>
+              </div>
+            </div>
+
+            {/* Completeness progress bar */}
+            <div className="space-y-1">
+              <div className="w-full h-1.5 rounded-full bg-neutral-100 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    requirementsSummary.requirementsStatus === 'COMPLETE'
+                      ? 'bg-emerald-500'
+                      : requirementsSummary.requirementsStatus === 'PARTIAL'
+                        ? 'bg-terracotta'
+                        : 'bg-neutral-300'
+                  }`}
+                  style={{ width: `${requirementsSummary.percentage}%` }}
+                />
+              </div>
+              {enquiry.metadata?.ctaSource && (
+                <p className="text-[11px] font-mono text-neutral-500">
+                  CTA Source: {enquiry.metadata.ctaSource}
+                  {enquiry.metadata?.requirementsUpdatedAt
+                    ? ` · Updated ${new Date(enquiry.metadata.requirementsUpdatedAt).toLocaleString('en-IN')}`
+                    : ''}
+                </p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-1">
+              <div>
+                <span className="text-[11px] font-semibold text-neutral-500 font-display block">
+                  Preferred BHK
+                </span>
+                <p className={`text-sm mt-0.5 font-display ${buyerBhk ? 'font-bold text-neutral-900' : 'text-neutral-400 italic font-body text-xs'}`}>
+                  {buyerBhk || 'Not provided'}
+                </p>
+              </div>
+
+              <div>
+                <span className="text-[11px] font-semibold text-neutral-500 font-display block">
+                  Property Type
+                </span>
+                <p className={`text-sm mt-0.5 font-display ${buyerPropertyType ? 'font-bold text-neutral-900' : 'text-neutral-400 italic font-body text-xs'}`}>
+                  {buyerPropertyType || 'Not provided'}
+                </p>
+              </div>
+
+              <div>
+                <span className="text-[11px] font-semibold text-neutral-500 font-display block">
+                  Budget
+                </span>
+                <p className={`text-sm mt-0.5 font-display ${buyerBudget ? 'font-bold text-neutral-900' : 'text-neutral-400 italic font-body text-xs'}`}>
+                  {buyerBudget || 'Not provided'}
+                </p>
+              </div>
+
+              <div>
+                <span className="text-[11px] font-semibold text-neutral-500 font-display block">
+                  Buying Timeline
+                </span>
+                <p className={`text-sm mt-0.5 font-display ${buyerTimeline ? 'font-bold text-neutral-900' : 'text-neutral-400 italic font-body text-xs'}`}>
+                  {buyerTimeline || 'Not provided'}
+                </p>
+              </div>
+
+              <div>
+                <span className="text-[11px] font-semibold text-neutral-500 font-display block">
+                  Purchase Purpose
+                </span>
+                <p className={`text-sm mt-0.5 font-display ${buyerPurpose ? 'font-bold text-neutral-900' : 'text-neutral-400 italic font-body text-xs'}`}>
+                  {buyerPurpose || 'Not provided'}
+                </p>
+              </div>
+
+              <div>
+                <span className="text-[11px] font-semibold text-neutral-500 font-display block">
+                  Site Visit Interest
+                </span>
+                <p
+                  className={`text-xs mt-1 font-display font-bold ${
+                    siteVisitState.state === 'VISIT_COMPLETED'
+                      ? 'text-sky-700'
+                      : siteVisitState.state === 'VISIT_SCHEDULED'
+                        ? 'text-emerald-700'
+                        : siteVisitState.state === 'INTEREST_EXPRESSED'
+                          ? 'text-amber-700'
+                          : 'text-neutral-400 italic font-normal font-body'
+                  }`}
+                >
+                  {siteVisitState.state === 'VISIT_COMPLETED'
+                    ? 'Visit Completed'
+                    : siteVisitState.state === 'VISIT_SCHEDULED'
+                      ? 'Visit Scheduled'
+                      : siteVisitState.state === 'INTEREST_EXPRESSED'
+                        ? 'Yes — Interest Expressed (Not Yet Scheduled)'
+                        : 'Not requested'}
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-neutral-100">
+              <span className="text-[11px] font-semibold text-neutral-500 font-display block">
+                Additional Requirements / Questions
+              </span>
+              <div className="mt-1.5 p-3 bg-neutral-50 rounded-lg border border-neutral-200/80 text-xs text-neutral-800 font-body leading-relaxed whitespace-pre-wrap">
+                {enquiry.message ? (
+                  enquiry.message
+                ) : (
+                  <span className="text-neutral-400 italic">Not provided</span>
                 )}
               </div>
             </div>
@@ -507,6 +690,18 @@ export default function AdminEnquiryDetailPage({
                     )}
                   </p>
                 </div>
+                {enquiry.metadata?.listingSource && (
+                  <div>
+                    <span className="text-neutral-500 font-display">Listing Channel:</span>
+                    <p className="font-semibold text-neutral-800 mt-0.5 font-display text-[11px]">
+                      {enquiry.metadata.listingSource === 'OWNER_SUBMITTED_PROPERTY'
+                        ? 'Owner-Submitted Property'
+                        : enquiry.metadata.listingSource === 'PARTNER_SUBMITTED_PROPERTY'
+                        ? 'Partner-Submitted Property'
+                        : enquiry.metadata.listingSource}
+                    </p>
+                  </div>
+                )}
               </div>
 
               {enquiry.metadata && typeof enquiry.metadata.marketingConsent === 'boolean' && (

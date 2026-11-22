@@ -7,6 +7,7 @@ import {
   HeadObjectCommand,
   GetObjectCommand,
 } from '@aws-sdk/client-s3';
+import { getSignedUrl as awsGetSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { isTestIsolationActive, TEST_STORAGE_DIR, ensureTestSandboxDir } from '@/src/lib/testIsolationContext';
 import { getActiveMediaPublicBaseUrl, normalizeMediaPublicUrl } from '@/src/lib/mediaUtils';
 
@@ -44,14 +45,23 @@ export class LocalStorageProvider implements StorageProvider {
   private baseDir: string;
 
   constructor(baseDir?: string) {
-    this.baseDir = baseDir || path.join(process.cwd(), 'public', 'uploads');
+    this.baseDir = path.resolve(baseDir || path.join(process.cwd(), 'public', 'uploads'));
   }
 
   private resolveSafePath(key: string): string {
-    // Sanitize key to prevent path traversal attacks
-    const normalizedKey = key.replace(/^(\.\.(\/|\\|$))+/, '').replace(/^\/+/, '');
+    if (typeof key !== 'string' || key.includes('\0')) {
+      throw new Error('Security violation: Invalid storage key.');
+    }
+    const rawParts = key.replace(/\\/g, '/').split('/').filter(Boolean);
+    if (rawParts.length === 0 || rawParts.some(part => part === '..' || part === '.')) {
+      throw new Error('Security violation: Invalid storage key path traversal detected.');
+    }
+    const normalizedKey = rawParts.join('/');
     const resolved = path.resolve(this.baseDir, normalizedKey);
-    if (!resolved.startsWith(this.baseDir)) {
+    const baseWithSep = this.baseDir.endsWith(path.sep)
+      ? this.baseDir
+      : `${this.baseDir}${path.sep}`;
+    if (resolved !== this.baseDir && !resolved.startsWith(baseWithSep)) {
       throw new Error('Security violation: Invalid storage key path traversal detected.');
     }
     return resolved;
@@ -191,8 +201,19 @@ export class S3StorageProvider implements StorageProvider {
     });
   }
 
+  private validateStorageKey(key: string): string {
+    if (typeof key !== 'string' || key.includes('\0')) {
+      throw new Error('Security violation: Invalid storage key.');
+    }
+    const rawParts = key.replace(/\\/g, '/').split('/').filter(Boolean);
+    if (rawParts.length === 0 || rawParts.some((part) => part === '..' || part === '.')) {
+      throw new Error('Security violation: Invalid storage key path traversal detected.');
+    }
+    return rawParts.join('/');
+  }
+
   async put(key: string, buffer: Buffer, options: StoragePutOptions): Promise<StoragePutResult> {
-    const normalizedKey = key.replace(/^\/+/, '');
+    const normalizedKey = this.validateStorageKey(key);
     const cacheControl =
       options.cacheControl ||
       (options.isImmutableOriginal
@@ -229,7 +250,7 @@ export class S3StorageProvider implements StorageProvider {
 
   async delete(key: string): Promise<boolean> {
     try {
-      const normalizedKey = key.replace(/^\/+/, '');
+      const normalizedKey = this.validateStorageKey(key);
       await this.client.send(
         new DeleteObjectCommand({
           Bucket: this.bucket,
@@ -244,7 +265,7 @@ export class S3StorageProvider implements StorageProvider {
 
   async exists(key: string): Promise<boolean> {
     try {
-      const normalizedKey = key.replace(/^\/+/, '');
+      const normalizedKey = this.validateStorageKey(key);
       await this.client.send(
         new HeadObjectCommand({
           Bucket: this.bucket,
@@ -259,7 +280,7 @@ export class S3StorageProvider implements StorageProvider {
 
   async read(key: string): Promise<Buffer | null> {
     try {
-      const normalizedKey = key.replace(/^\/+/, '');
+      const normalizedKey = this.validateStorageKey(key);
       const res = await this.client.send(
         new GetObjectCommand({
           Bucket: this.bucket,
@@ -283,8 +304,20 @@ export class S3StorageProvider implements StorageProvider {
     return `${getActiveMediaPublicBaseUrl()}/${normalized}`;
   }
 
-  async getSignedUrl(key: string, _expiresInSeconds = 3600): Promise<string> {
-    return this.getPublicUrl(key);
+  async getSignedUrl(key: string, expiresInSeconds = 3600): Promise<string> {
+    const normalizedKey = this.validateStorageKey(key);
+    const clampedExpiresIn = Number.isFinite(expiresInSeconds)
+      ? Math.min(86400, Math.max(60, Math.floor(expiresInSeconds)))
+      : 3600;
+
+    return awsGetSignedUrl(
+      this.client,
+      new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: normalizedKey,
+      }),
+      { expiresIn: clampedExpiresIn }
+    );
   }
 }
 

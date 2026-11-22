@@ -17,6 +17,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
     response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=1800');
     return response;
   } catch (error: any) {
-    return NextResponse.json({ error: 'Failed to fetch article', details: error.message }, { status: 500 });
+    console.error('[Content Slug GET] Unexpected error:', error?.message || 'Unknown error');
+    return NextResponse.json({ error: 'Failed to fetch article' }, { status: 500 });
   }
 }

@@ -1,4 +1,6 @@
-import { isProduction } from './config.ts';
+import { isProductionDeployment } from './config.ts';
+import { isPersistenceUnavailableError } from './persistenceGuard.ts';
+import { isRateLimitUnavailableError } from './rateLimit.ts';
 
 export type ApiErrorCode =
   | 'VALIDATION_ERROR'
@@ -8,6 +10,7 @@ export type ApiErrorCode =
   | 'METHOD_NOT_ALLOWED'
   | 'CONFLICT'
   | 'RATE_LIMITED'
+  | 'SERVICE_UNAVAILABLE'
   | 'INTERNAL_SERVER_ERROR';
 
 export interface ApiErrorDetail {
@@ -49,12 +52,17 @@ export function createApiErrorResponse(
   let code: ApiErrorCode = 'INTERNAL_SERVER_ERROR';
   let message = 'An unexpected server error occurred.';
   let details: any = undefined;
+  const prod = isProductionDeployment();
 
   if (error instanceof AppError) {
     status = overrideStatus || error.statusCode;
     code = error.code;
     message = error.message;
     details = error.details;
+  } else if (isPersistenceUnavailableError(error) || isRateLimitUnavailableError(error)) {
+    status = overrideStatus || 503;
+    code = 'SERVICE_UNAVAILABLE';
+    message = 'The service is temporarily unavailable. Please try again in a moment.';
   } else if (error instanceof Error) {
     const errorName = error.name || '';
     const errorMsg = error.message || '';
@@ -67,6 +75,14 @@ export function createApiErrorResponse(
       status = overrideStatus || 400;
       code = 'VALIDATION_ERROR';
       message = error.message;
+    } else if (errorName === 'UnauthorizedError') {
+      status = overrideStatus || 401;
+      code = 'UNAUTHORIZED';
+      message = error.message || 'Authentication required.';
+    } else if (errorName === 'ForbiddenError') {
+      status = overrideStatus || 403;
+      code = 'FORBIDDEN';
+      message = error.message || 'You do not have permission to perform this action.';
     } else if (
       errorName === 'NotFoundError' ||
       errorName === 'EnquiryNotFoundError' ||
@@ -92,12 +108,12 @@ export function createApiErrorResponse(
       status = overrideStatus || 400;
       code = 'VALIDATION_ERROR';
       message = error.message;
-    } else if (/SELECT|INSERT|UPDATE|DELETE|WHERE|FROM/i.test(errorMsg)) {
+    } else if (/SELECT|INSERT|UPDATE|DELETE|WHERE|FROM|relation|column|postgres|ECONN/i.test(errorMsg)) {
       status = overrideStatus || 500;
       code = 'INTERNAL_SERVER_ERROR';
-      message = 'A database query error occurred.';
+      message = 'An internal server error occurred.';
     } else {
-      message = isProduction() ? 'An internal server error occurred.' : error.message;
+      message = prod ? 'An internal server error occurred.' : error.message;
     }
   }
 
@@ -106,11 +122,12 @@ export function createApiErrorResponse(
       code,
       message,
       requestId,
-      ...(details && !isProduction() ? { details } : {}),
+      ...(details && !prod ? { details } : {}),
     },
   };
 
   const response = Response.json(payload, { status });
   response.headers.set('x-request-id', requestId);
+  response.headers.set('Cache-Control', 'no-store, max-age=0');
   return response;
 }

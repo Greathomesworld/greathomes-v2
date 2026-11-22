@@ -3,6 +3,7 @@ import { Metadata } from 'next';
 import { marketIntelligenceService } from '@/src/domain/marketIntelligence/services/marketIntelligenceService';
 import { Breadcrumbs } from '@/src/components/navigation/Breadcrumbs';
 import { LocationsDirectoryClient } from '@/src/components/locations/LocationsDirectoryClient';
+import { safeJsonLd } from '@/src/lib/safeJsonLd';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 300;
@@ -86,7 +87,7 @@ export default async function LocationsDirectoryPage() {
     <div className="min-h-screen bg-[#FAFAF8] text-[#111111] w-full min-w-0 overflow-x-hidden">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(structuredData) }}
       />
 
       <div className="bg-white border-b border-[rgba(17,17,17,0.08)]">

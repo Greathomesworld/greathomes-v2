@@ -27,6 +27,7 @@ export async function GET(req: NextRequest) {
     response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=1800');
     return response;
   } catch (error: any) {
-    return NextResponse.json({ error: 'Failed to fetch public editorial content', details: error.message }, { status: 500 });
+    console.error('[Content GET] Unexpected error:', error?.message || 'Unknown error');
+    return NextResponse.json({ error: 'Failed to fetch public editorial content' }, { status: 500 });
   }
 }

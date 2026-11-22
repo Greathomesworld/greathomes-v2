@@ -1,70 +1,275 @@
-import { eq, desc, asc, and, or, sql, gte, lte, ilike } from 'drizzle-orm';
+import { eq, desc, asc, and, or, sql, gte, ilike, inArray } from 'drizzle-orm';
 import { getDbReady } from '@/src/db/client';
-import { enquiries } from '@/src/db/schema';
+import { enquiries, siteVisits } from '@/src/db/schema';
 import { EnquiryEntity, EnquiryPriority, EnquiryStatus } from '@/src/domain/enquiry/entities/enquiryEntity';
-import { EnquiryRepository } from '@/src/domain/enquiry/repositories/enquiryRepository';
+import {
+  AtomicRequirementsUpdatePayload,
+  AtomicRequirementsUpdateResult,
+  EnquiryCreateInput,
+  EnquiryRepository,
+  IdempotentEnquiryCreateResult,
+  IdempotentEnquirySiteVisitInput,
+} from '@/src/domain/enquiry/repositories/enquiryRepository';
 import { AdminEnquiryFilterDto, AdminEnquiryMetricsDto } from '@/src/domain/enquiry/dto/enquiryDto';
+import {
+  PersistenceUnavailableError,
+  runWithPersistenceGuard,
+} from '@/src/lib/persistenceGuard';
+
+export type EnquiryDbResolver = () => Promise<ReturnType<typeof getDbReady>> | ReturnType<typeof getDbReady>;
+
+function isUniqueConstraintError(err: any): boolean {
+  if (!err) return false;
+  return err?.code === '23505' || err?.cause?.code === '23505';
+}
 
 export class EnquiryRepositoryPostgres implements EnquiryRepository {
-  async create(data: Omit<EnquiryEntity, 'id' | 'createdAt' | 'updatedAt' | 'status' | 'priority'> & Partial<Pick<EnquiryEntity, 'status' | 'priority'>>): Promise<EnquiryEntity> {
-    const db = await getDbReady();
-    if (!db) throw new Error('PostgreSQL database instance is unavailable.');
+  constructor(private readonly dbResolver: EnquiryDbResolver = getDbReady) {}
 
+  private async requireDb() {
+    let db: Awaited<ReturnType<typeof getDbReady>> = null;
+    try {
+      db = await this.dbResolver();
+    } catch {
+      throw new PersistenceUnavailableError(
+        'Enquiry persistence is temporarily unavailable. Please try again later.'
+      );
+    }
+    if (!db) {
+      throw new PersistenceUnavailableError(
+        'Enquiry persistence is temporarily unavailable. PostgreSQL connection is not configured.'
+      );
+    }
+    return db;
+  }
+
+  private buildInsertValues(
+    id: string,
+    data: EnquiryCreateInput,
+    overrideStatus?: EnquiryStatus
+  ): Record<string, any> {
+    return {
+      id,
+      contextType: data.contextType,
+      customerId: data.customerId ?? data.metadata?.customerId ?? null,
+      visitorId: data.visitorId ?? data.metadata?.visitorId ?? null,
+      sessionId: data.sessionId ?? data.metadata?.sessionId ?? null,
+      projectId: data.projectId,
+      projectSlug: data.projectSlug,
+      projectName: data.projectName,
+      configurationId: data.configurationId,
+      listingId: data.listingId,
+      listingSlug: data.listingSlug,
+      listingTitle: data.listingTitle,
+      configuration: data.configuration,
+      propertyType: data.propertyType,
+      priceDisplay: data.priceDisplay,
+      locationName: data.locationName,
+      buyerName: data.buyerName,
+      buyerPhone: data.buyerPhone,
+      buyerEmail: data.buyerEmail,
+      preferredContact: data.preferredContact,
+      requestSiteVisit: data.requestSiteVisit ?? false,
+      message: data.message,
+      status: overrideStatus || data.status || 'NEW',
+      priority: data.priority || 'NORMAL',
+      assignedTo: data.assignedTo,
+      assignedToName: data.assignedToName,
+      source: data.source,
+      sourcePage: data.sourcePage,
+      internalNotes: data.internalNotes,
+      lastContactedAt: data.lastContactedAt ? new Date(data.lastContactedAt) : undefined,
+      nextFollowUpAt: data.nextFollowUpAt ? new Date(data.nextFollowUpAt) : undefined,
+      siteVisitId: data.siteVisitId,
+      idempotencyKey: data.idempotencyKey ?? null,
+      metadata: data.metadata ? JSON.stringify(data.metadata) : undefined,
+    };
+  }
+
+  private async resolveExistingByIdempotencyKey(
+    runner: any,
+    idempotencyKey: string
+  ): Promise<IdempotentEnquiryCreateResult | null> {
+    const existingRows = await runner
+      .select()
+      .from(enquiries)
+      .where(eq(enquiries.idempotencyKey, idempotencyKey))
+      .limit(1);
+
+    if (!existingRows || existingRows.length === 0) {
+      return null;
+    }
+
+    const existing = this.mapRowToEntity(existingRows[0]);
+    let siteVisitInfo: { id: string; status: string } | null = null;
+
+    if (existing.siteVisitId) {
+      const svRows = await runner
+        .select({ id: siteVisits.id, status: siteVisits.status })
+        .from(siteVisits)
+        .where(eq(siteVisits.id, existing.siteVisitId))
+        .limit(1);
+
+      if (svRows && svRows.length > 0) {
+        siteVisitInfo = { id: svRows[0].id, status: svRows[0].status };
+      } else {
+        siteVisitInfo = { id: existing.siteVisitId, status: 'REQUESTED' };
+      }
+    }
+
+    return {
+      enquiry: existing,
+      created: false,
+      siteVisit: siteVisitInfo,
+    };
+  }
+
+  async create(data: EnquiryCreateInput): Promise<EnquiryEntity> {
+    const db = await this.requireDb();
     const id = `enq_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-    const [row] = await db
-      .insert(enquiries)
-      .values({
-        id,
-        contextType: data.contextType,
-        customerId: data.customerId ?? data.metadata?.customerId ?? null,
-        visitorId: data.visitorId ?? data.metadata?.visitorId ?? null,
-        sessionId: data.sessionId ?? data.metadata?.sessionId ?? null,
-        projectId: data.projectId,
-        projectSlug: data.projectSlug,
-        projectName: data.projectName,
-        configurationId: data.configurationId,
-        listingId: data.listingId,
-        listingSlug: data.listingSlug,
-        listingTitle: data.listingTitle,
-        configuration: data.configuration,
-        propertyType: data.propertyType,
-        priceDisplay: data.priceDisplay,
-        locationName: data.locationName,
-        buyerName: data.buyerName,
-        buyerPhone: data.buyerPhone,
-        buyerEmail: data.buyerEmail,
-        preferredContact: data.preferredContact,
-        requestSiteVisit: data.requestSiteVisit ?? false,
-        message: data.message,
-        status: data.status || 'NEW',
-        priority: data.priority || 'NORMAL',
-        assignedTo: data.assignedTo,
-        assignedToName: data.assignedToName,
-        source: data.source,
-        sourcePage: data.sourcePage,
-        internalNotes: data.internalNotes,
-        lastContactedAt: data.lastContactedAt ? new Date(data.lastContactedAt) : undefined,
-        nextFollowUpAt: data.nextFollowUpAt ? new Date(data.nextFollowUpAt) : undefined,
-        siteVisitId: data.siteVisitId,
-        metadata: data.metadata ? JSON.stringify(data.metadata) : undefined,
-      } as any)
-      .returning();
 
-    return this.mapRowToEntity(row);
+    return await runWithPersistenceGuard(
+      'Enquiry',
+      async () => {
+        const [row] = await db
+          .insert(enquiries)
+          .values(this.buildInsertValues(id, data) as any)
+          .returning();
+
+        return this.mapRowToEntity(row);
+      },
+      isUniqueConstraintError
+    );
+  }
+
+  async findByIdempotencyKey(idempotencyKey: string): Promise<EnquiryEntity | null> {
+    if (!idempotencyKey) return null;
+    const db = await this.requireDb();
+
+    return await runWithPersistenceGuard('Enquiry', async () => {
+      const rows = await db
+        .select()
+        .from(enquiries)
+        .where(eq(enquiries.idempotencyKey, idempotencyKey))
+        .limit(1);
+      if (rows.length === 0) return null;
+      return this.mapRowToEntity(rows[0]);
+    });
+  }
+
+  async createIdempotent(
+    data: EnquiryCreateInput,
+    options?: {
+      siteVisit?: IdempotentEnquirySiteVisitInput | null;
+    }
+  ): Promise<IdempotentEnquiryCreateResult> {
+    const db = await this.requireDb();
+
+    return await runWithPersistenceGuard('Enquiry', async () => {
+      try {
+        return await db.transaction(async (tx: any) => {
+          const id = `enq_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+          const values = this.buildInsertValues(
+            id,
+            data,
+            options?.siteVisit ? 'SITE_VISIT_SCHEDULED' : undefined
+          );
+
+          let insertedRows: any[];
+          if (data.idempotencyKey) {
+            insertedRows = await tx
+              .insert(enquiries)
+              .values(values as any)
+              .onConflictDoNothing({
+                target: enquiries.idempotencyKey,
+                where: sql`${enquiries.idempotencyKey} IS NOT NULL`,
+              })
+              .returning();
+          } else {
+            insertedRows = await tx
+              .insert(enquiries)
+              .values(values as any)
+              .returning();
+          }
+
+          if (!insertedRows || insertedRows.length === 0) {
+            if (data.idempotencyKey) {
+              const existing = await this.resolveExistingByIdempotencyKey(tx, data.idempotencyKey);
+              if (existing) return existing;
+            }
+            throw new Error('Enquiry idempotency conflict occurred without retrievable existing record.');
+          }
+
+          let row = insertedRows[0];
+          let siteVisitInfo: { id: string; status: string } | null = null;
+
+          if (options?.siteVisit) {
+            const svId = `sv_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+            await tx.insert(siteVisits).values({
+              id: svId,
+              enquiryId: row.id,
+              customerId: row.customerId || null,
+              projectId: row.projectId || null,
+              configurationId: row.configurationId || null,
+              listingId: row.listingId || null,
+              visitType: options.siteVisit.visitType || 'IN_PERSON',
+              preferredDate: options.siteVisit.preferredDate,
+              preferredTimeWindow: options.siteVisit.preferredTimeWindow,
+              status: 'REQUESTED',
+              buyerNote: options.siteVisit.buyerNote || row.message || null,
+              staffNote: null,
+              assignedTo: null,
+              assignedToName: null,
+              rescheduleReason: null,
+              cancelReason: null,
+              confirmedAt: null,
+              completedAt: null,
+              cancelledAt: null,
+            } as any);
+
+            const [updatedRow] = await tx
+              .update(enquiries)
+              .set({
+                siteVisitId: svId,
+                status: 'SITE_VISIT_SCHEDULED',
+                updatedAt: new Date(),
+              } as any)
+              .where(eq(enquiries.id, row.id))
+              .returning();
+
+            if (updatedRow) {
+              row = updatedRow;
+            }
+            siteVisitInfo = { id: svId, status: 'REQUESTED' };
+          }
+
+          return {
+            enquiry: this.mapRowToEntity(row),
+            created: true,
+            siteVisit: siteVisitInfo,
+          };
+        });
+      } catch (err: any) {
+        if (isUniqueConstraintError(err) && data.idempotencyKey) {
+          const existing = await this.resolveExistingByIdempotencyKey(db, data.idempotencyKey);
+          if (existing) return existing;
+        }
+        throw err;
+      }
+    });
   }
 
   async findById(id: string): Promise<EnquiryEntity | null> {
-    const db = await getDbReady();
-    if (!db) return null;
-
-    const rows = await db.select().from(enquiries).where(eq(enquiries.id, id));
-    if (rows.length === 0) return null;
-    return this.mapRowToEntity(rows[0]);
+    const db = await this.requireDb();
+    return await runWithPersistenceGuard('Enquiry', async () => {
+      const rows = await db.select().from(enquiries).where(eq(enquiries.id, id));
+      if (rows.length === 0) return null;
+      return this.mapRowToEntity(rows[0]);
+    });
   }
 
   async update(id: string, data: Partial<Omit<EnquiryEntity, 'id' | 'createdAt' | 'updatedAt'>>): Promise<EnquiryEntity | null> {
-    const db = await getDbReady();
-    if (!db) return null;
+    const db = await this.requireDb();
 
     const valuesToUpdate: Record<string, any> = {
       updatedAt: new Date(),
@@ -75,6 +280,9 @@ export class EnquiryRepositoryPostgres implements EnquiryRepository {
     if (data.customerId !== undefined) valuesToUpdate.customerId = data.customerId;
     if (data.visitorId !== undefined) valuesToUpdate.visitorId = data.visitorId;
     if (data.sessionId !== undefined) valuesToUpdate.sessionId = data.sessionId;
+    if (data.configuration !== undefined) valuesToUpdate.configuration = data.configuration;
+    if (data.propertyType !== undefined) valuesToUpdate.propertyType = data.propertyType;
+    if (data.message !== undefined) valuesToUpdate.message = data.message;
     if (data.assignedTo !== undefined) valuesToUpdate.assignedTo = data.assignedTo;
     if (data.assignedToName !== undefined) valuesToUpdate.assignedToName = data.assignedToName;
     if (data.internalNotes !== undefined) valuesToUpdate.internalNotes = data.internalNotes;
@@ -90,27 +298,117 @@ export class EnquiryRepositoryPostgres implements EnquiryRepository {
       valuesToUpdate.metadata = data.metadata ? JSON.stringify(data.metadata) : null;
     }
 
-    const [updatedRow] = await db
-      .update(enquiries)
-      .set(valuesToUpdate)
-      .where(eq(enquiries.id, id))
-      .returning();
+    return await runWithPersistenceGuard('Enquiry', async () => {
+      const [updatedRow] = await db
+        .update(enquiries)
+        .set(valuesToUpdate)
+        .where(eq(enquiries.id, id))
+        .returning();
 
-    if (!updatedRow) return null;
-    return this.mapRowToEntity(updatedRow);
+      if (!updatedRow) return null;
+      return this.mapRowToEntity(updatedRow);
+    });
+  }
+
+  async rotateContinuationTokenAtomic(
+    id: string,
+    evaluator: (locked: EnquiryEntity) => { eligible: boolean; nextMetadata?: Record<string, any> }
+  ): Promise<{ updated: EnquiryEntity | null; rotated: boolean }> {
+    const db = await this.requireDb();
+
+    return await runWithPersistenceGuard('Enquiry', async () => {
+      return await db.transaction(async (tx: any) => {
+        const baseQuery = tx.select().from(enquiries).where(eq(enquiries.id, id)).limit(1);
+        const rows =
+          typeof (baseQuery as any)?.for === 'function'
+            ? await (baseQuery as any).for('update')
+            : await baseQuery;
+        if (!rows || rows.length === 0) {
+          return { updated: null, rotated: false };
+        }
+
+        const lockedEntity = this.mapRowToEntity(rows[0]);
+        const decision = evaluator(lockedEntity);
+        if (!decision.eligible || !decision.nextMetadata) {
+          return { updated: lockedEntity, rotated: false };
+        }
+
+        const [updatedRow] = await tx
+          .update(enquiries)
+          .set({
+            metadata: JSON.stringify(decision.nextMetadata),
+            updatedAt: new Date(),
+          } as any)
+          .where(eq(enquiries.id, id))
+          .returning();
+
+        if (!updatedRow) {
+          return { updated: null, rotated: false };
+        }
+        return { updated: this.mapRowToEntity(updatedRow), rotated: true };
+      });
+    });
+  }
+
+  async updateBuyerRequirementsAtomic(
+    id: string,
+    allowedStatuses: EnquiryStatus[],
+    evaluator: (locked: EnquiryEntity) => AtomicRequirementsUpdatePayload
+  ): Promise<AtomicRequirementsUpdateResult> {
+    const db = await this.requireDb();
+
+    return await runWithPersistenceGuard('Enquiry', async () => {
+      return await db.transaction(async (tx: any) => {
+        const baseQuery = tx.select().from(enquiries).where(eq(enquiries.id, id)).limit(1);
+        const rows =
+          typeof (baseQuery as any)?.for === 'function'
+            ? await (baseQuery as any).for('update')
+            : await baseQuery;
+        if (!rows || rows.length === 0) {
+          return { outcome: 'NOT_FOUND' as const };
+        }
+
+        const lockedEntity = this.mapRowToEntity(rows[0]);
+        if (!allowedStatuses.includes(lockedEntity.status)) {
+          return { outcome: 'STATE_LOCKED' as const, currentStatus: lockedEntity.status };
+        }
+
+        const patch = evaluator(lockedEntity);
+        const valuesToUpdate: Record<string, any> = {
+          metadata: JSON.stringify(patch.metadata),
+          updatedAt: new Date(),
+        };
+        if (patch.configuration !== undefined) valuesToUpdate.configuration = patch.configuration;
+        if (patch.propertyType !== undefined) valuesToUpdate.propertyType = patch.propertyType;
+        if (patch.message !== undefined) valuesToUpdate.message = patch.message;
+        if (patch.requestSiteVisit !== undefined) valuesToUpdate.requestSiteVisit = patch.requestSiteVisit;
+
+        const [updatedRow] = await tx
+          .update(enquiries)
+          .set(valuesToUpdate)
+          .where(and(eq(enquiries.id, id), inArray(enquiries.status, allowedStatuses)))
+          .returning();
+
+        if (!updatedRow) {
+          return { outcome: 'STATE_LOCKED' as const, currentStatus: lockedEntity.status };
+        }
+
+        return { outcome: 'UPDATED' as const, enquiry: this.mapRowToEntity(updatedRow) };
+      });
+    });
   }
 
   async delete(id: string): Promise<boolean> {
-    const db = await getDbReady();
-    if (!db) return false;
-
-    const res = await db.delete(enquiries).where(eq(enquiries.id, id)).returning();
-    return res.length > 0;
+    const db = await this.requireDb();
+    return await runWithPersistenceGuard('Enquiry', async () => {
+      const res = await db.delete(enquiries).where(eq(enquiries.id, id)).returning();
+      return res.length > 0;
+    });
   }
 
   async list(filter?: AdminEnquiryFilterDto): Promise<{ items: EnquiryEntity[]; total: number }> {
-    const db = await getDbReady();
-    if (!db) return { items: [], total: 0 };
+    const db = await this.requireDb();
+    return await runWithPersistenceGuard('Enquiry', async () => {
 
     const conditions = [];
 
@@ -148,9 +446,9 @@ export class EnquiryRepositoryPostgres implements EnquiryRepository {
 
     if (filter?.status && filter.status !== 'ALL') {
       const targetStatus = filter.status.toUpperCase();
-      if (targetStatus === 'NEW') {
+      if (targetStatus === 'NEW' || targetStatus === 'RECEIVED') {
         conditions.push(or(eq(enquiries.status, 'NEW'), eq(enquiries.status, 'RECEIVED')));
-      } else if (targetStatus === 'QUALIFIED') {
+      } else if (targetStatus === 'QUALIFIED' || targetStatus === 'IN_REVIEW') {
         conditions.push(or(eq(enquiries.status, 'QUALIFIED'), eq(enquiries.status, 'IN_REVIEW')));
       } else {
         conditions.push(eq(enquiries.status, targetStatus));
@@ -235,53 +533,45 @@ export class EnquiryRepositoryPostgres implements EnquiryRepository {
       .limit(limit)
       .offset(offset);
 
-    return {
-      items: rows.map(r => this.mapRowToEntity(r)),
-      total,
-    };
+      return {
+        items: rows.map(r => this.mapRowToEntity(r)),
+        total,
+      };
+    });
   }
 
   async getMetrics(): Promise<AdminEnquiryMetricsDto> {
-    const db = await getDbReady();
-    if (!db) {
+    const db = await this.requireDb();
+
+    return await runWithPersistenceGuard('Enquiry', async () => {
+      const [res] = await db
+        .select({
+          total: sql<number>`count(*)::int`,
+          newCount: sql<number>`count(CASE WHEN ${enquiries.status} IN ('NEW', 'RECEIVED') THEN 1 END)::int`,
+          contactedCount: sql<number>`count(CASE WHEN ${enquiries.status} = 'CONTACTED' THEN 1 END)::int`,
+          qualifiedCount: sql<number>`count(CASE WHEN ${enquiries.status} IN ('QUALIFIED', 'IN_REVIEW') THEN 1 END)::int`,
+          siteVisitsCount: sql<number>`count(CASE WHEN ${enquiries.status} IN ('SITE_VISIT_SCHEDULED', 'SITE_VISIT_COMPLETED') OR ${enquiries.siteVisitId} IS NOT NULL THEN 1 END)::int`,
+          siteVisitInterestCount: sql<number>`count(CASE WHEN ${enquiries.requestSiteVisit} = true AND ${enquiries.siteVisitId} IS NULL AND ${enquiries.status} NOT IN ('SITE_VISIT_SCHEDULED', 'SITE_VISIT_COMPLETED') THEN 1 END)::int`,
+          convertedCount: sql<number>`count(CASE WHEN ${enquiries.status} = 'CONVERTED' THEN 1 END)::int`,
+          lostCount: sql<number>`count(CASE WHEN ${enquiries.status} = 'LOST' THEN 1 END)::int`,
+          closedCount: sql<number>`count(CASE WHEN ${enquiries.status} = 'CLOSED' THEN 1 END)::int`,
+          urgentCount: sql<number>`count(CASE WHEN ${enquiries.priority} = 'URGENT' THEN 1 END)::int`,
+        })
+        .from(enquiries);
+
       return {
-        total: 0,
-        newCount: 0,
-        contactedCount: 0,
-        qualifiedCount: 0,
-        siteVisitsCount: 0,
-        convertedCount: 0,
-        lostCount: 0,
-        closedCount: 0,
-        urgentCount: 0,
+        total: res?.total || 0,
+        newCount: res?.newCount || 0,
+        contactedCount: res?.contactedCount || 0,
+        qualifiedCount: res?.qualifiedCount || 0,
+        siteVisitsCount: res?.siteVisitsCount || 0,
+        siteVisitInterestCount: res?.siteVisitInterestCount || 0,
+        convertedCount: res?.convertedCount || 0,
+        lostCount: res?.lostCount || 0,
+        closedCount: res?.closedCount || 0,
+        urgentCount: res?.urgentCount || 0,
       };
-    }
-
-    const [res] = await db
-      .select({
-        total: sql<number>`count(*)::int`,
-        newCount: sql<number>`count(CASE WHEN ${enquiries.status} IN ('NEW', 'RECEIVED') THEN 1 END)::int`,
-        contactedCount: sql<number>`count(CASE WHEN ${enquiries.status} = 'CONTACTED' THEN 1 END)::int`,
-        qualifiedCount: sql<number>`count(CASE WHEN ${enquiries.status} IN ('QUALIFIED', 'IN_REVIEW') THEN 1 END)::int`,
-        siteVisitsCount: sql<number>`count(CASE WHEN ${enquiries.status} IN ('SITE_VISIT_SCHEDULED', 'SITE_VISIT_COMPLETED') OR ${enquiries.requestSiteVisit} = true THEN 1 END)::int`,
-        convertedCount: sql<number>`count(CASE WHEN ${enquiries.status} = 'CONVERTED' THEN 1 END)::int`,
-        lostCount: sql<number>`count(CASE WHEN ${enquiries.status} = 'LOST' THEN 1 END)::int`,
-        closedCount: sql<number>`count(CASE WHEN ${enquiries.status} = 'CLOSED' THEN 1 END)::int`,
-        urgentCount: sql<number>`count(CASE WHEN ${enquiries.priority} = 'URGENT' THEN 1 END)::int`,
-      })
-      .from(enquiries);
-
-    return {
-      total: res?.total || 0,
-      newCount: res?.newCount || 0,
-      contactedCount: res?.contactedCount || 0,
-      qualifiedCount: res?.qualifiedCount || 0,
-      siteVisitsCount: res?.siteVisitsCount || 0,
-      convertedCount: res?.convertedCount || 0,
-      lostCount: res?.lostCount || 0,
-      closedCount: res?.closedCount || 0,
-      urgentCount: res?.urgentCount || 0,
-    };
+    });
   }
 
   private mapRowToEntity(row: any): EnquiryEntity {
@@ -327,6 +617,7 @@ export class EnquiryRepositoryPostgres implements EnquiryRepository {
       lastContactedAt: row.lastContactedAt ? new Date(row.lastContactedAt) : undefined,
       nextFollowUpAt: row.nextFollowUpAt ? new Date(row.nextFollowUpAt) : undefined,
       siteVisitId: row.siteVisitId ?? undefined,
+      idempotencyKey: row.idempotencyKey ?? null,
       metadata: parsedMetadata,
       createdAt: new Date(row.createdAt),
       updatedAt: new Date(row.updatedAt),

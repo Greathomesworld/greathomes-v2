@@ -14,7 +14,12 @@ import {
   VISITOR_COOKIE_NAME,
 } from '@/src/domain/visitorIntelligence/validation';
 import { extractRequestContext, withCorrelationHeaders } from '@/src/lib/requestContext';
-import { checkRateLimit, createRateLimitResponse } from '@/src/lib/rateLimit';
+import {
+  checkRateLimit,
+  createRateLimitResponse,
+  createRateLimitUnavailableResponse,
+  isRateLimitUnavailableError,
+} from '@/src/lib/rateLimit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -44,9 +49,16 @@ export async function POST(req: NextRequest) {
 
   // Rate limit: max 120 telemetry calls per minute per IP
   const rateLimitKey = `telemetry_post_${ipAddress || 'anonymous'}`;
-  const rateLimitResult = checkRateLimit(rateLimitKey, 120, 60_000);
-  if (!rateLimitResult.allowed) {
-    return createRateLimitResponse(requestId, rateLimitResult);
+  try {
+    const rateLimitResult = await checkRateLimit(rateLimitKey, 120, 60_000);
+    if (!rateLimitResult.allowed) {
+      return createRateLimitResponse(requestId, rateLimitResult);
+    }
+  } catch (err) {
+    if (isRateLimitUnavailableError(err)) {
+      return createRateLimitUnavailableResponse(requestId);
+    }
+    throw err;
   }
 
   try {
@@ -174,9 +186,10 @@ export async function POST(req: NextRequest) {
     setVisitorSessionCookies(response, result.visitorId, result.sessionId);
     return withCorrelationHeaders(response, requestId);
   } catch (error: any) {
+    console.error('[Telemetry Events POST] Unexpected error:', error?.message || 'Unknown error');
     return withCorrelationHeaders(
       NextResponse.json(
-        { accepted: false, error: error?.message || 'Telemetry error' },
+        { accepted: false, error: 'Telemetry error' },
         { status: 500 }
       ),
       requestId

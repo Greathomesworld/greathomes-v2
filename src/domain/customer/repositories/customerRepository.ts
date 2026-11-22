@@ -12,7 +12,7 @@ import {
 export interface CustomerListFilter {
   search?: string;
   allowPiiSearch?: boolean;
-  status?: 'ACTIVE' | 'SUSPENDED' | 'DELETED' | 'ALL';
+  status?: 'ACTIVE' | 'DISABLED' | 'DELETED' | 'ALL';
   limit?: number;
   offset?: number;
 }

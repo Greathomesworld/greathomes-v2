@@ -23,6 +23,7 @@ export function PropertyLocationSection({
     resolvedLocation?.name ||
     locationInfo?.name ||
     listing.project?.locationName ||
+    listing.customLocalityDisplay ||
     'Kolkata';
   const localityUrl =
     resolvedLocation?.url ||

@@ -25,6 +25,9 @@ import { searchConsoleService } from '../src/domain/google/searchConsoleService'
 import { projectIntelligenceService } from '../src/domain/projects/services/projectIntelligenceService';
 import { resaleListingService } from '../src/domain/projects/services/resaleService';
 import { rentalListingService } from '../src/domain/projects/services/rentalService';
+import { resaleListingRepository } from '../src/domain/projects/repositories/resaleRepository';
+import { rentalListingRepository } from '../src/domain/projects/repositories/rentalRepository';
+import { enquiryRepository } from '../src/domain/enquiry/repositories/enquiryRepository';
 import { locationSeoService, TIER_2_CURATED_SLUGS } from '../src/domain/locations/services/locationSeoService';
 import { isPublicCanonicalLocation } from '../src/domain/locations/locationRegionMapper';
 import { bhkLandingService } from '../src/domain/projects/services/bhkLandingService';
@@ -80,8 +83,12 @@ async function ensureSeoMemoryFixtures(): Promise<void> {
   const previousEnableSeeding = process.env.ENABLE_SEEDING;
 
   try {
+    (process.env as any).NODE_ENV = 'test';
     process.env.PERSISTENCE_PROVIDER = 'memory';
     process.env.ENABLE_SEEDING = 'true';
+    resaleListingRepository.enableTestMemoryPersistence(true);
+    rentalListingRepository.enableTestMemoryPersistence(true);
+    enquiryRepository.enableTestMemoryPersistence(true);
 
     assertMemoryOnlyTestEnvironment();
 

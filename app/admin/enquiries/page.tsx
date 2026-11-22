@@ -16,6 +16,10 @@ import { getAdminHeaders } from '@/src/lib/adminAuth';
 import { EnquiryEntity, EnquiryPriority, EnquiryStatus } from '@/src/domain/enquiry/entities/enquiryEntity';
 import { AdminEnquiryMetricsDto } from '@/src/domain/enquiry/dto/enquiryDto';
 import {
+  classifySiteVisitState,
+  computeRequirementsCompleteness,
+} from '@/src/domain/enquiry/buyerRequirements';
+import {
   MessageSquare,
   RefreshCw,
   Phone,
@@ -162,36 +166,65 @@ export default function AdminEnquiriesPage() {
     },
     {
       header: 'Interest & Context',
-      cell: (item) => (
-        <div className="max-w-xs">
-          <div className="flex flex-wrap items-center gap-1.5 mb-1">
-            <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-neutral-700 bg-neutral-100 px-2 py-0.5 rounded">
-              {getContextIcon(item.contextType)}
-              {item.contextType}
-            </span>
-            {item.source === 'BROCHURE_DOWNLOAD' && (
-              <span className="text-[10px] font-bold text-indigo-800 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded-md flex items-center gap-1 font-display">
-                <span>Brochure Download</span>
+      cell: (item) => {
+        const visitState = classifySiteVisitState(item);
+        const reqSummary = computeRequirementsCompleteness(item);
+        return (
+          <div className="max-w-xs">
+            <div className="flex flex-wrap items-center gap-1.5 mb-1">
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-neutral-700 bg-neutral-100 px-2 py-0.5 rounded">
+                {getContextIcon(item.contextType)}
+                {item.contextType}
               </span>
-            )}
-            {item.requestSiteVisit && (
-              <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full flex items-center gap-1 font-display">
-                <CheckCircle2 className="h-2.5 w-2.5 text-emerald-600" />
-                Visit Req.
-              </span>
+              {item.source === 'BROCHURE_DOWNLOAD' && (
+                <span className="text-[10px] font-bold text-indigo-800 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded-md flex items-center gap-1 font-display">
+                  <span>Brochure Download</span>
+                </span>
+              )}
+              {visitState.state === 'VISIT_COMPLETED' && (
+                <span className="text-[10px] font-bold text-sky-800 bg-sky-50 border border-sky-200 px-1.5 py-0.5 rounded-full flex items-center gap-1 font-display">
+                  <CheckCircle2 className="h-2.5 w-2.5 text-sky-600" />
+                  Visit Done
+                </span>
+              )}
+              {visitState.state === 'VISIT_SCHEDULED' && (
+                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full flex items-center gap-1 font-display">
+                  <Calendar className="h-2.5 w-2.5 text-emerald-600" />
+                  Visit Scheduled
+                </span>
+              )}
+              {visitState.state === 'INTEREST_EXPRESSED' && (
+                <span className="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full flex items-center gap-1 font-display">
+                  <Calendar className="h-2.5 w-2.5 text-amber-600" />
+                  Visit Interest
+                </span>
+              )}
+              {reqSummary.hasAnyRequirements ? (
+                <span className="text-[10px] font-semibold text-neutral-700 bg-neutral-50 border border-neutral-200 px-1.5 py-0.5 rounded font-display">
+                  Reqs {reqSummary.providedCount}/{reqSummary.totalOptionalFields}
+                </span>
+              ) : reqSummary.captureStage === 'STEP1_CAPTURED' ? (
+                <span className="text-[10px] font-semibold text-amber-700 bg-amber-50/70 border border-amber-200/80 px-1.5 py-0.5 rounded font-display">
+                  Reqs Incomplete
+                </span>
+              ) : reqSummary.captureStage === 'STEP2_SKIPPED' ? (
+                <span className="text-[10px] font-semibold text-neutral-500 bg-neutral-50 border border-neutral-200 px-1.5 py-0.5 rounded font-display">
+                  Reqs Skipped
+                </span>
+              ) : null}
+            </div>
+            <p className="text-xs font-semibold text-neutral-900 font-display line-clamp-1">
+              {item.projectName || item.listingTitle || item.projectSlug || 'General Inquiry'}
+            </p>
+            {(item.configuration || item.priceDisplay) && (
+              <p className="text-[11px] text-neutral-500 font-body">
+                {item.configuration ? `${item.configuration} ` : ''}
+                {item.priceDisplay ? `• ${item.priceDisplay}` : ''}
+              </p>
             )}
           </div>
-          <p className="text-xs font-semibold text-neutral-900 font-display line-clamp-1">
-            {item.projectName || item.listingTitle || item.projectSlug || 'General Inquiry'}
-          </p>
-          {(item.configuration || item.priceDisplay) && (
-            <p className="text-[11px] text-neutral-500 font-body">
-              {item.configuration ? `${item.configuration} ` : ''}
-              {item.priceDisplay ? `• ${item.priceDisplay}` : ''}
-            </p>
-          )}
-        </div>
-      ),
+        );
+      },
     },
     {
       header: 'Status',
@@ -290,8 +323,14 @@ export default function AdminEnquiriesPage() {
         <AdminStatCard
           title="Site Visits"
           value={metrics ? metrics.siteVisitsCount.toString() : '—'}
-          subtext="Visit Requests"
+          subtext="Scheduled / Completed"
           icon={<CheckCircle2 className="h-5 w-5 text-amber-600" />}
+          badgeText={
+            metrics && metrics.siteVisitInterestCount && metrics.siteVisitInterestCount > 0
+              ? `${metrics.siteVisitInterestCount} interested`
+              : undefined
+          }
+          badgeVariant="amber"
         />
         <AdminStatCard
           title="Qualified"
@@ -330,9 +369,9 @@ export default function AdminEnquiriesPage() {
                   className="bg-neutral-50 border border-neutral-200 rounded-lg px-2.5 py-1.5 text-xs font-display focus:outline-none focus:ring-1 focus:ring-terracotta"
                 >
                   <option value="ALL">All Statuses</option>
-                  <option value="NEW">New</option>
+                  <option value="NEW">New / Received</option>
                   <option value="CONTACTED">Contacted</option>
-                  <option value="QUALIFIED">Qualified</option>
+                  <option value="QUALIFIED">Qualified / In Review</option>
                   <option value="SITE_VISIT_SCHEDULED">Site Visit Scheduled</option>
                   <option value="SITE_VISIT_COMPLETED">Site Visit Completed</option>
                   <option value="NEGOTIATION">Negotiation</option>
@@ -481,14 +520,41 @@ export default function AdminEnquiriesPage() {
                     <AdminBadge variant={item.status} label={item.status.replace(/_/g, ' ')} />
                   </div>
 
-                  <div className="bg-neutral-50 p-2.5 rounded-lg border border-neutral-100 text-xs">
+                  <div className="bg-neutral-50 p-2.5 rounded-lg border border-neutral-100 text-xs space-y-1">
                     <div className="flex items-center gap-1.5 font-semibold text-neutral-800 font-display">
                       {getContextIcon(item.contextType)}
                       <span className="truncate">{item.projectName || item.listingTitle || 'General Enquiry'}</span>
                     </div>
                     {item.configuration && (
-                      <p className="text-[11px] text-neutral-500 mt-0.5">{item.configuration}</p>
+                      <p className="text-[11px] text-neutral-500">{item.configuration}</p>
                     )}
+                    {(() => {
+                      const visitState = classifySiteVisitState(item);
+                      const reqSummary = computeRequirementsCompleteness(item);
+                      return (
+                        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                          {visitState.state === 'VISIT_SCHEDULED' && (
+                            <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full font-display">
+                              Visit Scheduled
+                            </span>
+                          )}
+                          {visitState.state === 'INTEREST_EXPRESSED' && (
+                            <span className="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full font-display">
+                              Visit Interest
+                            </span>
+                          )}
+                          {reqSummary.hasAnyRequirements ? (
+                            <span className="text-[10px] font-semibold text-neutral-700 bg-white border border-neutral-200 px-1.5 py-0.5 rounded font-display">
+                              Reqs {reqSummary.providedCount}/{reqSummary.totalOptionalFields}
+                            </span>
+                          ) : reqSummary.captureStage === 'STEP1_CAPTURED' ? (
+                            <span className="text-[10px] font-semibold text-amber-700 bg-amber-50/70 border border-amber-200/80 px-1.5 py-0.5 rounded font-display">
+                              Reqs Incomplete
+                            </span>
+                          ) : null}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   <div className="flex items-center justify-between text-xs pt-1 border-t border-neutral-100">

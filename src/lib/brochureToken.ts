@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { isProductionDeployment } from './config';
 
 export interface BrochureTokenPayload {
   projectId: string;
@@ -8,13 +9,37 @@ export interface BrochureTokenPayload {
   exp: number;
 }
 
+const globalForBrochureSecret = globalThis as unknown as {
+  __ghEphemeralBrochureSecret?: string;
+};
+
 function getSigningSecret(): string {
-  return (
-    process.env.BROCHURE_TOKEN_SECRET ||
-    process.env.CUSTOMER_SESSION_SECRET ||
-    process.env.ADMIN_JWT_SECRET ||
-    'gh-v2-brochure-hmac-secret-key-2026'
-  );
+  const configured =
+    process.env.BROCHURE_TOKEN_SECRET?.trim() ||
+    process.env.CUSTOMER_AUTH_SECRET?.trim() ||
+    process.env.GH_STAFF_SESSION_SECRET?.trim() ||
+    process.env.CUSTOMER_SESSION_SECRET?.trim() ||
+    process.env.ADMIN_JWT_SECRET?.trim() ||
+    '';
+
+  if (configured.length >= 32) {
+    return configured;
+  }
+
+  if (isProductionDeployment()) {
+    throw Object.assign(
+      new Error(
+        'Brochure download signing secret is not configured. Configure BROCHURE_TOKEN_SECRET (at least 32 characters).'
+      ),
+      { statusCode: 503, code: 'BROCHURE_SECRET_UNCONFIGURED' }
+    );
+  }
+
+  // Non-production local development / test fallback: ephemeral per-process CSPRNG secret (never hardcoded)
+  if (!globalForBrochureSecret.__ghEphemeralBrochureSecret) {
+    globalForBrochureSecret.__ghEphemeralBrochureSecret = crypto.randomBytes(32).toString('hex');
+  }
+  return globalForBrochureSecret.__ghEphemeralBrochureSecret;
 }
 
 /**
@@ -67,9 +92,16 @@ export function verifyBrochureDownloadToken(
     return { valid: false, error: 'Malformed brochure download token.' };
   }
 
+  let secret: string;
+  try {
+    secret = getSigningSecret();
+  } catch {
+    return { valid: false, error: 'Brochure verification is temporarily unavailable.' };
+  }
+
   const [payloadB64, providedSig] = parts;
   const expectedSig = crypto
-    .createHmac('sha256', getSigningSecret())
+    .createHmac('sha256', secret)
     .update(payloadB64)
     .digest('base64url');
 

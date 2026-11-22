@@ -6,6 +6,7 @@ import { rentalService } from '@/src/domain/projects/services/rentalService';
 import { propertyDiscoveryService } from '@/src/domain/projects/services/propertyDiscoveryService';
 import { RecentlyViewedTracker } from '@/src/components/customer/RecentlyViewedTracker';
 import { PropertyDetailLayout } from '@/src/components/properties/detail/PropertyDetailLayout';
+import { safeJsonLd } from '@/src/lib/safeJsonLd';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -32,14 +33,18 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const locationContext = listing.project?.name
     ? ` at ${listing.project.name}`
+    : listing.customProjectDisplay
+    ? ` at ${listing.customProjectDisplay}`
     : listing.location?.name
     ? ` in ${listing.location.name}`
+    : listing.customLocalityDisplay
+    ? ` in ${listing.customLocalityDisplay}`
     : '';
 
-  const title = `${listing.configuration} For Rent${locationContext} · ${listing.formattedMonthlyRent} | Great Homes`;
+  const title = `${listing.title} For Rent · ${listing.formattedMonthlyRent} | Great Homes`;
   const description = listing.description
     ? listing.description.slice(0, 155)
-    : `Explore this verified ${listing.configuration} rental ${listing.propertyTypeDisplay.toLowerCase()}${locationContext}. Monthly rent: ${listing.formattedMonthlyRent}.`;
+    : `Explore this ${listing.isVerified ? 'verified ' : ''}${listing.propertyType === 'PLOT' ? 'residential plot' : `${listing.configuration || listing.propertyTypeDisplay} rental ${listing.propertyTypeDisplay.toLowerCase()}`}${locationContext}. Monthly rent: ${listing.formattedMonthlyRent}.`;
 
   const canonicalUrl = `https://www.greathomes.co.in/rent/${listing.slug}`;
 
@@ -128,27 +133,43 @@ export default async function RentalListingDetailPage({ params }: PageProps) {
     },
   ];
 
+  const areaNumeric =
+    listing.propertyType === 'PLOT'
+      ? listing.plotArea
+      : listing.carpetArea || listing.builtUpArea || listing.superBuiltUpArea || listing.plotArea;
+
+  const schemaType =
+    listing.propertyType === 'PLOT'
+      ? 'Place'
+      : listing.propertyType === 'INDEPENDENT_HOUSE'
+      ? 'SingleFamilyResidence'
+      : 'Apartment';
+
   const structuredData = [
     {
       '@context': 'https://schema.org',
-      '@type': 'Apartment',
+      '@type': schemaType,
       name: listing.title,
       description:
         listing.description ||
-        `${listing.configuration} rental ${listing.propertyTypeDisplay.toLowerCase()} in ${listing.locationDisplay}`,
+        `${listing.title} in ${listing.locationDisplay}`,
       url: canonicalUrl,
-      numberOfRooms: listing.bedroomCount,
-      numberOfBedrooms: listing.bedroomCount,
-      floorSize: listing.carpetArea
+      ...(listing.bedroomCount && listing.bedroomCount > 0
+        ? {
+            numberOfRooms: listing.bedroomCount,
+            numberOfBedrooms: listing.bedroomCount,
+          }
+        : {}),
+      floorSize: areaNumeric
         ? {
             '@type': 'QuantitativeValue',
-            value: listing.carpetArea,
+            value: areaNumeric,
             unitCode: 'FTK',
           }
         : undefined,
       address: {
         '@type': 'PostalAddress',
-        addressLocality: listing.location?.name || 'Kolkata',
+        addressLocality: listing.location?.name || listing.customLocalityDisplay || 'Kolkata',
         addressRegion: 'West Bengal',
         addressCountry: 'IN',
       },
@@ -171,7 +192,7 @@ export default async function RentalListingDetailPage({ params }: PageProps) {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(structuredData) }}
       />
       <RecentlyViewedTracker resourceType="RENTAL_LISTING" resourceId={listing.id} />
       <PropertyDetailLayout listing={listing} discovery={discovery} />

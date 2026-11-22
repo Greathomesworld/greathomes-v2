@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { User, Bookmark, History, Sliders, LogOut, ChevronDown } from 'lucide-react';
+import { User, Bookmark, History, Sliders, LogOut, ChevronDown, Building2 } from 'lucide-react';
 import { useCustomerAuth } from './CustomerAuthContext';
 
 export function CustomerNavControl() {
@@ -91,6 +91,26 @@ export function CustomerNavControl() {
           </div>
 
           <div className="py-1">
+            <Link
+              href="/post-property"
+              onClick={() => setIsOpen(false)}
+              role="menuitem"
+              className="flex items-center gap-3 px-4 py-2.5 text-xs sm:text-sm font-medium text-slate-800 hover:text-[#E85D3F] hover:bg-slate-50 transition-colors font-body"
+            >
+              <Building2 className="w-4 h-4 text-[#E85D3F]" />
+              <span>Post Property</span>
+            </Link>
+
+            <Link
+              href="/my-properties"
+              onClick={() => setIsOpen(false)}
+              role="menuitem"
+              className="flex items-center gap-3 px-4 py-2.5 text-xs sm:text-sm font-medium text-slate-800 hover:text-[#E85D3F] hover:bg-slate-50 transition-colors font-body"
+            >
+              <Building2 className="w-4 h-4 text-slate-500" />
+              <span>My Property Submissions</span>
+            </Link>
+
             <Link
               href="/account/saved"
               onClick={() => setIsOpen(false)}

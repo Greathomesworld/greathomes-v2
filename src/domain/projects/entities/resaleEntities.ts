@@ -28,7 +28,12 @@ export type FacingDirection =
   | 'SOUTH_WEST'
   | 'UNKNOWN';
 
-export type FloorCategory = 'LOWER_FLOOR' | 'MID_FLOOR' | 'HIGH_FLOOR';
+export type FloorCategory =
+  | 'GROUND_FLOOR'
+  | 'LOWER_FLOOR'
+  | 'MID_FLOOR'
+  | 'HIGHER_FLOOR'
+  | 'HIGH_FLOOR';
 
 export type PossessionStatus = 'READY' | 'UNDER_CONSTRUCTION' | 'OCCUPIED' | 'AVAILABLE_FROM_DATE';
 
@@ -61,18 +66,21 @@ export interface ResaleListing {
   longitude?: number | null;
   geometry?: string | null;
   propertyType: PropertyType;
-  configuration: string; // e.g. "3 BHK"
-  bedroomCount: number;
+  configuration?: string | null; // e.g. "3 BHK", nullable for PLOT
+  bedroomCount?: number | null;
   carpetArea?: number | null;
   builtUpArea?: number | null;
   superBuiltUpArea?: number | null;
+  plotArea?: number | null;
   askingPrice: number; // TOTAL ASKING PRICE ONLY
-  furnishing: FurnishingStatus;
+  furnishing?: FurnishingStatus | null;
   facing: FacingDirection;
-  floorCategory: FloorCategory;
+  floorCategory?: FloorCategory | null;
   possession: PossessionStatus;
   possessionDate?: Date | null;
   description?: string | null;
+  customLocalityDisplay?: string | null;
+  customProjectDisplay?: string | null;
 
   // Listing Party Model (Private operational fields)
   listingPartyType: ListingPartyType;

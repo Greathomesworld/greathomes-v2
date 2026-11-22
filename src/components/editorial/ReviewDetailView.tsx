@@ -4,6 +4,8 @@ import React from 'react';
 import Link from 'next/link';
 import { PublicEditorialArticleDTO } from '@/src/domain/editorial/entities';
 import { ShieldCheck, Calendar, Clock, ChevronRight, Building2, MapPin, CheckCircle, AlertTriangle } from 'lucide-react';
+import { safeJsonLd } from '@/src/lib/safeJsonLd';
+import { SafeEditorialBody } from './SafeEditorialBody';
 
 interface ReviewDetailViewProps {
   review: PublicEditorialArticleDTO;
@@ -37,7 +39,7 @@ export function ReviewDetailView({ review }: ReviewDetailViewProps) {
     <div className="min-h-screen bg-[#FAFAF8] text-[#111111]">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }}
       />
       {/* Header */}
       <header className="border-b border-stone-200 bg-white py-8 md:py-12">
@@ -68,7 +70,7 @@ export function ReviewDetailView({ review }: ReviewDetailViewProps) {
             {review.publishedAt && (
               <div className="flex items-center gap-1">
                 <Calendar className="h-3.5 w-3.5 text-stone-400" />
-                <span>Reviewed {new Date(review.publishedAt).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</span>
+                <span>Reviewed {new Date(review.publishedAt).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })}</span>
               </div>
             )}
             <div className="flex items-center gap-1">
@@ -106,7 +108,7 @@ export function ReviewDetailView({ review }: ReviewDetailViewProps) {
 
         {/* Content Body */}
         <article className="prose prose-stone max-w-none bg-white p-8 sm:p-12 rounded-xl border border-stone-200 shadow-xs font-body text-base leading-relaxed text-[#111111]">
-          <div dangerouslySetInnerHTML={{ __html: review.body.replace(/\n\n/g, '<br/><br/>').replace(/## (.*?)\n/g, '<h2 class="font-editorial text-2xl font-bold text-[#111111] mt-8 mb-4">$1</h2>').replace(/### (.*?)\n/g, '<h3 class="font-editorial text-xl font-bold text-[#111111] mt-6 mb-3">$1</h3>') }} />
+          <SafeEditorialBody body={review.body} />
         </article>
 
         {/* Notice box */}

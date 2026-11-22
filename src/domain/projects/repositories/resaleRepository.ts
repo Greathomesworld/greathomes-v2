@@ -3,16 +3,15 @@ import {
   ResaleListingMedia,
   ResaleListingAmenity,
 } from '../entities/resaleEntities';
-import { Project } from '../entities';
-import { Location } from '../../locations/entities';
 import { Amenity } from '../entities';
 import { amenityRepository } from '../../../infrastructure/repositories/memory/projectRepositoryMemory';
+import { getDb } from '../../../db/client';
 import {
-  PublicResaleListingDto,
-  AdminResaleListingDto,
-  PublicResaleListingMediaDto,
-  PublicResaleListingAmenityDto,
-} from '../dto/resaleDto';
+  PersistenceUnavailableError,
+  isStrictTestEnvironment,
+  resolveGuardedPersistenceBackend,
+} from '../../../lib/persistenceGuard';
+import { ResaleListingRepositoryPostgres } from '../../../infrastructure/repositories/postgres/resaleRepositoryPostgres';
 
 export type ResaleSortOption = 'newest' | 'price_asc' | 'price_desc' | 'area_desc';
 
@@ -52,7 +51,9 @@ function isEligibleResaleEntity(l: ResaleListing): boolean {
   if (typeof l.askingPrice !== 'number' || !Number.isFinite(l.askingPrice) || l.askingPrice <= 0) return false;
   const hasConfig = typeof l.configuration === 'string' && l.configuration.trim().length > 0;
   const hasBedrooms = typeof l.bedroomCount === 'number' && Number.isFinite(l.bedroomCount) && l.bedroomCount > 0;
-  return hasConfig || hasBedrooms;
+  const isPlotWithArea =
+    l.propertyType === 'PLOT' && typeof l.plotArea === 'number' && Number.isFinite(l.plotArea) && l.plotArea > 0;
+  return hasConfig || hasBedrooms || isPlotWithArea;
 }
 
 export interface ResaleListingRepository {
@@ -80,13 +81,52 @@ export interface ResaleListingRepository {
   removeAmenity(resaleListingId: string, amenityId: string): Promise<void>;
 }
 
+const globalForResale = globalThis as unknown as {
+  __gh_mem_resale_listings?: ResaleListing[];
+  __gh_mem_resale_media?: ResaleListingMedia[];
+  __gh_mem_resale_amenities?: ResaleListingAmenity[];
+};
+
 export class ResaleListingRepositoryMemory implements ResaleListingRepository {
-  private listings: ResaleListing[] = [];
-  private mediaList: ResaleListingMedia[] = [];
-  private listingAmenities: ResaleListingAmenity[] = [];
+  private get listings(): ResaleListing[] {
+    if (!globalForResale.__gh_mem_resale_listings) {
+      globalForResale.__gh_mem_resale_listings = [];
+    }
+    return globalForResale.__gh_mem_resale_listings;
+  }
+  private set listings(val: ResaleListing[]) {
+    globalForResale.__gh_mem_resale_listings = val;
+  }
+
+  private get mediaList(): ResaleListingMedia[] {
+    if (!globalForResale.__gh_mem_resale_media) {
+      globalForResale.__gh_mem_resale_media = [];
+    }
+    return globalForResale.__gh_mem_resale_media;
+  }
+  private set mediaList(val: ResaleListingMedia[]) {
+    globalForResale.__gh_mem_resale_media = val;
+  }
+
+  private get listingAmenities(): ResaleListingAmenity[] {
+    if (!globalForResale.__gh_mem_resale_amenities) {
+      globalForResale.__gh_mem_resale_amenities = [];
+    }
+    return globalForResale.__gh_mem_resale_amenities;
+  }
+  private set listingAmenities(val: ResaleListingAmenity[]) {
+    globalForResale.__gh_mem_resale_amenities = val;
+  }
+
   private amenitiesStore: Amenity[] = [];
 
   constructor(amenitiesStore: Amenity[] = []) {
+    const provider = (process.env.PERSISTENCE_PROVIDER || '').trim().toLowerCase();
+    if (!isStrictTestEnvironment() || provider === 'postgres') {
+      throw new PersistenceUnavailableError(
+        'ResaleListingRepositoryMemory is strictly restricted to isolated test execution (NODE_ENV=test).'
+      );
+    }
     this.amenitiesStore = amenitiesStore;
   }
 
@@ -169,8 +209,8 @@ export class ResaleListingRepositoryMemory implements ResaleListingRepository {
         } else if (sortBy === 'price_desc') {
           if (a.askingPrice !== b.askingPrice) return b.askingPrice - a.askingPrice;
         } else if (sortBy === 'area_desc') {
-          const areaA = a.carpetArea ?? -1;
-          const areaB = b.carpetArea ?? -1;
+          const areaA = a.carpetArea ?? a.plotArea ?? -1;
+          const areaB = b.carpetArea ?? b.plotArea ?? -1;
           if (areaA !== areaB) return areaB - areaA;
         }
         const timeDiff = b.createdAt.getTime() - a.createdAt.getTime();
@@ -240,9 +280,9 @@ export class ResaleListingRepositoryMemory implements ResaleListingRepository {
     };
   }
 
-  async create(data: Omit<ResaleListing, 'id' | 'createdAt' | 'updatedAt'>): Promise<ResaleListing> {
+  async create(data: Omit<ResaleListing, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): Promise<ResaleListing> {
     const now = new Date();
-    const id = `resale_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const id = data.id || `resale_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const listing: ResaleListing = {
       ...data,
       id,
@@ -344,13 +384,147 @@ export class ResaleListingRepositoryMemory implements ResaleListingRepository {
   }
 }
 
-import { ResaleListingRepositoryPostgres } from '../../../infrastructure/repositories/postgres/resaleRepositoryPostgres';
-
-const usePostgres = process.env.PERSISTENCE_PROVIDER === 'postgres';
-if (usePostgres && !process.env.DATABASE_URL) {
-  throw new Error('FATAL: PERSISTENCE_PROVIDER=postgres requires DATABASE_URL.');
+export interface GuardedResaleRepositoryOptions {
+  allowTestMemoryPersistence?: boolean;
+  dbResolver?: () => ReturnType<typeof getDb>;
+  amenitiesStore?: Amenity[];
 }
 
-export const resaleListingRepository: ResaleListingRepository = usePostgres
-  ? new ResaleListingRepositoryPostgres()
-  : new ResaleListingRepositoryMemory();
+export class GuardedResaleListingRepository implements ResaleListingRepository {
+  private allowTestMemoryPersistence: boolean;
+  private readonly dbResolver: () => ReturnType<typeof getDb>;
+  private readonly amenitiesStore: Amenity[];
+  private pgRepo: ResaleListingRepositoryPostgres | null = null;
+  private memRepo: ResaleListingRepositoryMemory | null = null;
+
+  constructor(options?: GuardedResaleRepositoryOptions) {
+    this.allowTestMemoryPersistence = Boolean(options?.allowTestMemoryPersistence);
+    this.dbResolver = options?.dbResolver ?? (() => getDb());
+    this.amenitiesStore = options?.amenitiesStore ?? [];
+  }
+
+  static createForTesting(
+    options?: Omit<GuardedResaleRepositoryOptions, 'allowTestMemoryPersistence'>
+  ): GuardedResaleListingRepository {
+    if (!isStrictTestEnvironment()) {
+      throw new PersistenceUnavailableError(
+        'In-memory resale test repository construction is strictly restricted to NODE_ENV=test.'
+      );
+    }
+    return new GuardedResaleListingRepository({
+      ...options,
+      allowTestMemoryPersistence: true,
+    });
+  }
+
+  enableTestMemoryPersistence(enabled: boolean = true): void {
+    if (enabled && !isStrictTestEnvironment()) {
+      throw new PersistenceUnavailableError(
+        'In-memory resale persistence is permitted only in an explicit test environment (NODE_ENV=test).'
+      );
+    }
+    this.allowTestMemoryPersistence = enabled;
+    if (!enabled) {
+      this.memRepo = null;
+    }
+  }
+
+  clearMemoryForTesting(): void {
+    if (!isStrictTestEnvironment() || !this.allowTestMemoryPersistence) {
+      throw new PersistenceUnavailableError(
+        'Clearing in-memory resale state requires NODE_ENV=test and explicit test memory activation.'
+      );
+    }
+    globalForResale.__gh_mem_resale_listings = [];
+    globalForResale.__gh_mem_resale_media = [];
+    globalForResale.__gh_mem_resale_amenities = [];
+  }
+
+  private resolveDelegate(): ResaleListingRepository {
+    const backend = resolveGuardedPersistenceBackend({
+      domain: 'Resale listing',
+      allowTestMemoryPersistence: this.allowTestMemoryPersistence,
+      dbResolver: this.dbResolver,
+    });
+
+    if (backend.mode === 'postgres') {
+      if (!this.pgRepo) {
+        this.pgRepo = new ResaleListingRepositoryPostgres(this.dbResolver);
+      }
+      return this.pgRepo;
+    }
+
+    if (!this.memRepo) {
+      this.memRepo = new ResaleListingRepositoryMemory(this.amenitiesStore);
+    }
+    return this.memRepo;
+  }
+
+  findById(id: string): Promise<ResaleListing | null> {
+    return this.resolveDelegate().findById(id);
+  }
+  findBySlug(slug: string): Promise<ResaleListing | null> {
+    return this.resolveDelegate().findBySlug(slug);
+  }
+  findBySlugOrId(identifier: string): Promise<ResaleListing | null> {
+    return this.resolveDelegate().findBySlugOrId(identifier);
+  }
+  findByProjectId(projectId: string): Promise<ResaleListing[]> {
+    return this.resolveDelegate().findByProjectId(projectId);
+  }
+  findPublishedByProjectId(projectId: string): Promise<ResaleListing[]> {
+    return this.resolveDelegate().findPublishedByProjectId(projectId);
+  }
+  findAll(filter?: ResaleFilterOptions): Promise<ResaleListing[]> {
+    return this.resolveDelegate().findAll(filter);
+  }
+  countAndFacetsForProject(
+    projectId: string,
+    filter?: ResaleFilterOptions
+  ): Promise<ProjectResaleInventoryFacets> {
+    return this.resolveDelegate().countAndFacetsForProject(projectId, filter);
+  }
+  create(
+    data: Omit<ResaleListing, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
+  ): Promise<ResaleListing> {
+    return this.resolveDelegate().create(data);
+  }
+  update(id: string, data: Partial<ResaleListing>): Promise<ResaleListing> {
+    return this.resolveDelegate().update(id, data);
+  }
+  delete(id: string): Promise<boolean> {
+    return this.resolveDelegate().delete(id);
+  }
+  findMediaByListingId(listingId: string): Promise<ResaleListingMedia[]> {
+    return this.resolveDelegate().findMediaByListingId(listingId);
+  }
+  findMediaByListingIds(listingIds: string[]): Promise<ResaleListingMedia[]> {
+    return this.resolveDelegate().findMediaByListingIds(listingIds);
+  }
+  addMedia(
+    data: Omit<ResaleListingMedia, 'id' | 'createdAt' | 'updatedAt'>
+  ): Promise<ResaleListingMedia> {
+    return this.resolveDelegate().addMedia(data);
+  }
+  removeMedia(mediaId: string): Promise<boolean> {
+    return this.resolveDelegate().removeMedia(mediaId);
+  }
+  updateMedia(
+    mediaId: string,
+    data: Partial<ResaleListingMedia>
+  ): Promise<ResaleListingMedia | null> {
+    return this.resolveDelegate().updateMedia(mediaId, data);
+  }
+  findAmenitiesByListingId(listingId: string): Promise<Amenity[]> {
+    return this.resolveDelegate().findAmenitiesByListingId(listingId);
+  }
+  associateAmenity(resaleListingId: string, amenityId: string): Promise<void> {
+    return this.resolveDelegate().associateAmenity(resaleListingId, amenityId);
+  }
+  removeAmenity(resaleListingId: string, amenityId: string): Promise<void> {
+    return this.resolveDelegate().removeAmenity(resaleListingId, amenityId);
+  }
+}
+
+export const resaleListingRepository = new GuardedResaleListingRepository();
+

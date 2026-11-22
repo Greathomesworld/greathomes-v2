@@ -15,6 +15,7 @@ import {
 } from '../viewModels/projectSectionEligibility';
 
 async function runTests() {
+  (process.env as any).NODE_ENV = 'test';
   console.log('Running Project Inventory Pagination, Facets, Eligibility & DTO Sanitization Tests...');
 
   const mockProjectService = {

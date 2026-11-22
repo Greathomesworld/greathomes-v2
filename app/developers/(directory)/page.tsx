@@ -9,6 +9,7 @@ import {
   DevelopersDirectoryClient,
   DeveloperLocationFilterItem,
 } from '@/src/components/developers/DevelopersDirectoryClient';
+import { safeJsonLd } from '@/src/lib/safeJsonLd';
 
 export const metadata: Metadata = {
   title: 'Real Estate Developers in Kolkata — Verified Builder Directory | Great Homes',
@@ -91,7 +92,7 @@ export default async function DevelopersDirectoryPage() {
       {/* Structured Data */}
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }}
       />
 
       {/* Breadcrumb Navigation */}

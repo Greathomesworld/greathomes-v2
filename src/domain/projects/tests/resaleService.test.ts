@@ -14,6 +14,7 @@ import { ResaleListingRepositoryMemory } from '../repositories/resaleRepository'
 import { ResaleListingService } from '../services/resaleService';
 
 async function runResaleTests() {
+  (process.env as any).NODE_ENV = 'test';
   console.log('Running Resale Intelligence Tests...');
 
   const projectRepo = new ProjectRepositoryMemory();

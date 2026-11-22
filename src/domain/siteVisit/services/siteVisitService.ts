@@ -1,6 +1,4 @@
-import { getDb } from '@/src/db/client';
-import { siteVisits, enquiries, projects, resaleListings, rentalListings } from '@/src/db/schema';
-import { eq } from 'drizzle-orm';
+import { createHash } from 'node:crypto';
 import {
   SiteVisitEntity,
   SiteVisitStatus,
@@ -9,83 +7,75 @@ import {
   isValidSiteVisitTransition,
 } from '../entities/siteVisitEntity';
 import { CustomerSiteVisitDTO, AdminSiteVisitDTO } from '../dto/siteVisitDto';
-import { siteVisitRepositoryPostgres } from '@/src/infrastructure/repositories/postgres/siteVisitRepositoryPostgres';
-import { enquiryRepository } from '@/src/domain/enquiry/repositories/enquiryRepository';
+import {
+  siteVisitRepository,
+  SiteVisitRepository,
+} from '@/src/infrastructure/repositories/postgres/siteVisitRepositoryPostgres';
+import { enquiryRepository, EnquiryRepository } from '@/src/domain/enquiry/repositories/enquiryRepository';
 import { projectRepository } from '@/src/infrastructure/repositories/projectProvider';
 import { auditService } from '../../audit/auditService';
 
-function getActiveDb() {
-  if (process.env.PERSISTENCE_PROVIDER === 'memory') return null;
-  return getDb();
+const SITE_VISIT_IDEMPOTENCY_BUCKET_MS = 30_000;
+
+export function deriveSiteVisitIdempotencyKey(params: {
+  enquiryId: string;
+  customerId?: string | null;
+  visitType: SiteVisitType;
+  preferredDate: string;
+  preferredTimeWindow: string;
+  clientKey?: string | null;
+  nowMs?: number;
+}): string {
+  const actorScope = params.customerId
+    ? `customer:${params.customerId.trim()}`
+    : `enquiry:${params.enquiryId.trim()}`;
+  const trimmedClientKey = params.clientKey?.trim();
+  const entropyScope =
+    trimmedClientKey && trimmedClientKey.length >= 4 && trimmedClientKey.length <= 128
+      ? `client:${trimmedClientKey}`
+      : `bucket:${Math.floor((params.nowMs ?? Date.now()) / SITE_VISIT_IDEMPOTENCY_BUCKET_MS)}`;
+
+  const payload = [
+    actorScope,
+    params.enquiryId.trim(),
+    params.visitType,
+    params.preferredDate.trim(),
+    params.preferredTimeWindow.trim().toUpperCase(),
+    entropyScope,
+  ].join('|');
+
+  const digest = createHash('sha256').update(payload).digest('hex');
+  return `sv_idem_${digest}`;
 }
 
 export class SiteVisitService {
-  private repository = siteVisitRepositoryPostgres;
+  constructor(
+    private readonly repository: SiteVisitRepository = siteVisitRepository,
+    private readonly enquiriesRepo: EnquiryRepository = enquiryRepository
+  ) {}
 
   /**
    * Helper to map SiteVisitEntity to CustomerSiteVisitDTO.
    * Excludes staff notes, internal priority, and staff details.
    */
   async mapToCustomerDto(visit: SiteVisitEntity): Promise<CustomerSiteVisitDTO> {
-    const db = getActiveDb();
     let propertyName: string | null = null;
     let propertySlug: string | null = null;
     let referenceNumber = `GH-ENQ-${visit.enquiryId.slice(-6).toUpperCase()}`;
 
-    if (db) {
-      // Try resolving enquiry details if available
-      const [enq] = await db
-        .select({
-          id: enquiries.id,
-          projectName: enquiries.projectName,
-          projectSlug: enquiries.projectSlug,
-          listingTitle: enquiries.listingTitle,
-          listingSlug: enquiries.listingSlug,
-          metadata: enquiries.metadata,
-        })
-        .from(enquiries)
-        .where(eq(enquiries.id, visit.enquiryId))
-        .limit(1);
-
-      if (enq) {
-        propertyName = enq.projectName || enq.listingTitle || null;
-        propertySlug = enq.projectSlug || enq.listingSlug || null;
-        if (enq.metadata) {
-          try {
-            const parsed = JSON.parse(enq.metadata);
-            if (parsed.referenceNumber) referenceNumber = parsed.referenceNumber;
-          } catch (e) {
-            // ignore JSON parse error
-          }
-        }
+    const enq = await this.enquiriesRepo.findById(visit.enquiryId);
+    if (enq) {
+      propertyName = enq.projectName || enq.listingTitle || null;
+      propertySlug = enq.projectSlug || enq.listingSlug || null;
+      if (enq.metadata?.referenceNumber) {
+        referenceNumber = enq.metadata.referenceNumber;
       }
-
-      if (!propertyName && visit.projectId) {
-        const [p] = await db
-          .select({ name: projects.name, slug: projects.slug })
-          .from(projects)
-          .where(eq(projects.id, visit.projectId))
-          .limit(1);
-        if (p) {
-          propertyName = p.name;
-          propertySlug = p.slug;
-        }
-      }
-    } else {
-      const enq = await enquiryRepository.findById(visit.enquiryId);
-      if (enq) {
-        propertyName = enq.projectName || enq.listingTitle || null;
-        propertySlug = enq.projectSlug || enq.listingSlug || null;
-        if (enq.metadata?.referenceNumber) {
-          referenceNumber = enq.metadata.referenceNumber;
-        }
-      }
-      if (!propertyName && visit.projectId) {
-        const p = await projectRepository.findById(visit.projectId);
-        if (p) {
-          propertyName = p.name;
-          propertySlug = p.slug;
-        }
+    }
+    if (!propertyName && visit.projectId) {
+      const p = await projectRepository.findById(visit.projectId);
+      if (p) {
+        propertyName = p.name;
+        propertySlug = p.slug;
       }
     }
 
@@ -119,34 +109,15 @@ export class SiteVisitService {
    */
   async mapToAdminDto(visit: SiteVisitEntity): Promise<AdminSiteVisitDTO> {
     const customerDto = await this.mapToCustomerDto(visit);
-    const db = getActiveDb();
     let buyerName: string | null = null;
     let buyerPhone: string | null = null;
     let buyerEmail: string | null = null;
 
-    if (db) {
-      const [enq] = await db
-        .select({
-          buyerName: enquiries.buyerName,
-          buyerPhone: enquiries.buyerPhone,
-          buyerEmail: enquiries.buyerEmail,
-        })
-        .from(enquiries)
-        .where(eq(enquiries.id, visit.enquiryId))
-        .limit(1);
-
-      if (enq) {
-        buyerName = enq.buyerName;
-        buyerPhone = enq.buyerPhone;
-        buyerEmail = enq.buyerEmail;
-      }
-    } else {
-      const enq = await enquiryRepository.findById(visit.enquiryId);
-      if (enq) {
-        buyerName = enq.buyerName;
-        buyerPhone = enq.buyerPhone;
-        buyerEmail = enq.buyerEmail || null;
-      }
+    const enq = await this.enquiriesRepo.findById(visit.enquiryId);
+    if (enq) {
+      buyerName = enq.buyerName;
+      buyerPhone = enq.buyerPhone;
+      buyerEmail = enq.buyerEmail || null;
     }
 
     return {
@@ -159,6 +130,76 @@ export class SiteVisitService {
       assignedTo: visit.assignedTo,
       assignedToName: visit.assignedToName,
     };
+  }
+
+  /**
+   * Create a new Site Visit request for an existing enquiry with atomic parent enquiry update
+   * and durable server-derived idempotency. Returns both the entity and whether it was newly created.
+   */
+  async createSiteVisitWithMeta(
+    enquiryId: string,
+    params: {
+      customerId?: string | null;
+      projectId?: string | null;
+      configurationId?: string | null;
+      listingId?: string | null;
+      visitType: SiteVisitType;
+      preferredDate: string;
+      preferredTimeWindow: string;
+      buyerNote?: string | null;
+      idempotencyKey?: string | null;
+    },
+    req?: any
+  ): Promise<{ siteVisit: SiteVisitEntity; created: boolean }> {
+    const headerKey =
+      typeof req?.headers?.get === 'function' ? req.headers.get('x-idempotency-key') : null;
+    const idempotencyKey = deriveSiteVisitIdempotencyKey({
+      enquiryId,
+      customerId: params.customerId || null,
+      visitType: params.visitType || 'IN_PERSON',
+      preferredDate: params.preferredDate,
+      preferredTimeWindow: params.preferredTimeWindow,
+      clientKey: params.idempotencyKey || headerKey || null,
+    });
+
+    const result = await this.repository.createStandaloneTransactional(
+      {
+        idempotencyKey,
+        enquiryId,
+        customerId: params.customerId || null,
+        projectId: params.projectId || null,
+        configurationId: params.configurationId || null,
+        listingId: params.listingId || null,
+        visitType: params.visitType || 'IN_PERSON',
+        preferredDate: params.preferredDate,
+        preferredTimeWindow: params.preferredTimeWindow,
+        buyerNote: params.buyerNote || null,
+      },
+      async (targetEnquiryId, visitId) => {
+        const updated = await this.enquiriesRepo.update(targetEnquiryId, {
+          siteVisitId: visitId,
+          status: 'SITE_VISIT_SCHEDULED',
+          requestSiteVisit: true,
+        });
+        return Boolean(updated);
+      }
+    );
+
+    if (result.created && req) {
+      await auditService.record(req, null, {
+        action: 'CREATE_SITE_VISIT',
+        resourceType: 'SITE_VISIT',
+        resourceId: result.siteVisit.id,
+        success: true,
+        metadata: {
+          enquiryId,
+          preferredDate: result.siteVisit.preferredDate,
+          visitType: result.siteVisit.visitType,
+        },
+      });
+    }
+
+    return result;
   }
 
   /**
@@ -175,62 +216,12 @@ export class SiteVisitService {
       preferredDate: string;
       preferredTimeWindow: string;
       buyerNote?: string | null;
+      idempotencyKey?: string | null;
     },
     req?: any
   ): Promise<SiteVisitEntity> {
-    const id = `sv_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-
-    const visit = await this.repository.create({
-      id,
-      enquiryId,
-      customerId: params.customerId || null,
-      projectId: params.projectId || null,
-      configurationId: params.configurationId || null,
-      listingId: params.listingId || null,
-      visitType: params.visitType || 'IN_PERSON',
-      preferredDate: params.preferredDate,
-      preferredTimeWindow: params.preferredTimeWindow,
-      status: 'REQUESTED',
-      buyerNote: params.buyerNote || null,
-      staffNote: null,
-      assignedTo: null,
-      assignedToName: null,
-      rescheduleReason: null,
-      cancelReason: null,
-      confirmedAt: null,
-      completedAt: null,
-      cancelledAt: null,
-    });
-
-    // Update enquiry siteVisitId and status
-    const db = getActiveDb();
-    if (db) {
-      await db
-        .update(enquiries)
-        .set({
-          siteVisitId: visit.id,
-          status: 'SITE_VISIT_SCHEDULED',
-          updatedAt: new Date(),
-        } as any)
-        .where(eq(enquiries.id, enquiryId));
-    } else {
-      await enquiryRepository.update(enquiryId, {
-        siteVisitId: visit.id,
-        status: 'SITE_VISIT_SCHEDULED',
-      });
-    }
-
-    if (req) {
-      await auditService.record(req, null, {
-        action: 'CREATE_SITE_VISIT',
-        resourceType: 'SITE_VISIT',
-        resourceId: visit.id,
-        success: true,
-        metadata: { enquiryId, preferredDate: visit.preferredDate, visitType: visit.visitType },
-      });
-    }
-
-    return visit;
+    const { siteVisit } = await this.createSiteVisitWithMeta(enquiryId, params, req);
+    return siteVisit;
   }
 
   /**
@@ -373,18 +364,10 @@ export class SiteVisitService {
       updates.confirmedAt = new Date();
     } else if (nextStatus === 'COMPLETED') {
       updates.completedAt = new Date();
-      // Also update linked enquiry status to SITE_VISIT_COMPLETED
-      const db = getActiveDb();
-      if (db) {
-        await db
-          .update(enquiries)
-          .set({ status: 'SITE_VISIT_COMPLETED', updatedAt: new Date() } as any)
-          .where(eq(enquiries.id, visit.enquiryId));
-      } else {
-        await enquiryRepository.update(visit.enquiryId, {
-          status: 'SITE_VISIT_COMPLETED',
-        });
-      }
+      // Also update linked enquiry status to SITE_VISIT_COMPLETED via guarded repository
+      await this.enquiriesRepo.update(visit.enquiryId, {
+        status: 'SITE_VISIT_COMPLETED',
+      });
     } else if (nextStatus === 'CANCELLED') {
       updates.cancelledAt = new Date();
     }
@@ -433,3 +416,4 @@ export class SiteVisitService {
 }
 
 export const siteVisitService = new SiteVisitService();
+

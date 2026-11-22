@@ -78,12 +78,7 @@ export function ProjectNearbyPlaces({
   const [selectedCategory, setSelectedCategory] = useState<FilterCategory>('ALL');
 
   // Responsive viewport detection (< 640px mobile vs >= 640px tablet/desktop)
-  const [isMobileViewport, setIsMobileViewport] = useState<boolean>(() => {
-    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
-      return window.matchMedia(MOBILE_VIEWPORT_QUERY).matches;
-    }
-    return defaultMobileView;
-  });
+  const [isMobileViewport, setIsMobileViewport] = useState<boolean>(defaultMobileView);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {

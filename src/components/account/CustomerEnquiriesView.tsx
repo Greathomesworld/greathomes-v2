@@ -129,6 +129,7 @@ export default function CustomerEnquiriesView() {
                         day: 'numeric',
                         month: 'short',
                         year: 'numeric',
+                        timeZone: 'Asia/Kolkata',
                       })}
                     </span>
                   </div>

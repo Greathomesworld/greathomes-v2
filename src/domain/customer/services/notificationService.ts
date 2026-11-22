@@ -42,6 +42,41 @@ export class NotificationService {
   }
 
   async createNotification(data: Omit<Notification, 'id' | 'createdAt' | 'isRead'> & { id?: string; isRead?: boolean }): Promise<Notification> {
+    // 0. Check idempotency if dedupKey is provided to avoid duplicate delivery attempt logs
+    if (data.dedupKey) {
+      const db = getDb();
+      if (db) {
+        const { notifications } = await import('../../../db/schema.ts');
+        const [existing] = await db
+          .select()
+          .from(notifications)
+          .where(
+            and(
+              eq(notifications.customerId, data.customerId),
+              eq(notifications.dedupKey, data.dedupKey)
+            )
+          )
+          .limit(1);
+        if (existing) {
+          return {
+            id: existing.id,
+            customerId: existing.customerId,
+            type: existing.type as Notification['type'],
+            title: existing.title,
+            message: existing.message,
+            resourceType: existing.resourceType as Notification['resourceType'],
+            resourceId: existing.resourceId,
+            projectId: existing.projectId || null,
+            locationId: existing.locationId || null,
+            isRead: existing.isRead,
+            dedupKey: existing.dedupKey || null,
+            createdAt: existing.createdAt,
+            metadata: (existing.metadata as Record<string, any>) || null,
+          };
+        }
+      }
+    }
+
     // 1. Create In-App Notification
     const notif = await notificationRepository.create(data);
 

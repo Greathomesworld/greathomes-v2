@@ -53,6 +53,11 @@ export function Footer() {
                   All Projects
                 </Link>
               </li>
+              <li>
+                <Link href="/post-property" className="hover:text-white transition-colors">
+                  Post Property
+                </Link>
+              </li>
             </ul>
           </div>
 

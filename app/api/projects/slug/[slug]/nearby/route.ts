@@ -5,7 +5,12 @@ import { nearbyPlaceService } from '@/src/domain/places/services/nearbyPlaceServ
 import { buildProjectLocationViewModel } from '@/src/domain/projects/viewModels/projectLocationViewModel';
 import { PlaceCategory } from '@/src/domain/places/entities';
 import { extractRequestContext, withCorrelationHeaders } from '@/src/lib/requestContext';
-import { checkRateLimit, createRateLimitResponse } from '@/src/lib/rateLimit';
+import {
+  checkRateLimit,
+  createRateLimitResponse,
+  createRateLimitUnavailableResponse,
+  isRateLimitUnavailableError,
+} from '@/src/lib/rateLimit';
 
 export async function GET(
   req: NextRequest,
@@ -13,9 +18,16 @@ export async function GET(
 ) {
   const ctx = extractRequestContext(req);
   const clientIp = ctx.ipAddress || 'anonymous';
-  const rateCheck = checkRateLimit(`project_slug_nearby:${clientIp}`, 60, 60_000);
-  if (!rateCheck.allowed) {
-    return createRateLimitResponse(ctx.requestId, rateCheck);
+  try {
+    const rateCheck = await checkRateLimit(`project_slug_nearby:${clientIp}`, 60, 60_000);
+    if (!rateCheck.allowed) {
+      return createRateLimitResponse(ctx.requestId, rateCheck);
+    }
+  } catch (err) {
+    if (isRateLimitUnavailableError(err)) {
+      return createRateLimitUnavailableResponse(ctx.requestId);
+    }
+    throw err;
   }
 
   await ensureSeedData();

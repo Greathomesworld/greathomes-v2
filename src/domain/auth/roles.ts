@@ -1,8 +1,21 @@
-// Canonical 5 enterprise roles
-export type CanonicalStaffRole = 'SUPER_ADMIN' | 'ADMIN' | 'SALES_MANAGER' | 'SALES_EXECUTIVE' | 'TELECALLER';
-export const CANONICAL_STAFF_ROLES: CanonicalStaffRole[] = ['SUPER_ADMIN', 'ADMIN', 'SALES_MANAGER', 'SALES_EXECUTIVE', 'TELECALLER'];
+// Canonical enterprise roles
+export type CanonicalStaffRole =
+  | 'SUPER_ADMIN'
+  | 'ADMIN'
+  | 'VERIFICATION_EXECUTIVE'
+  | 'SALES_MANAGER'
+  | 'SALES_EXECUTIVE'
+  | 'TELECALLER';
+export const CANONICAL_STAFF_ROLES: CanonicalStaffRole[] = [
+  'SUPER_ADMIN',
+  'ADMIN',
+  'VERIFICATION_EXECUTIVE',
+  'SALES_MANAGER',
+  'SALES_EXECUTIVE',
+  'TELECALLER',
+];
 
-// Comprehensive StaffRole supporting both canonical 5 roles and existing legacy accounts for backward compatibility
+// Comprehensive StaffRole supporting canonical roles and existing legacy accounts for backward compatibility
 export type StaffRole =
   | CanonicalStaffRole
   | 'CONTENT_MANAGER'
@@ -13,6 +26,7 @@ export type StaffRole =
 export const ALLOWED_STAFF_ROLES: StaffRole[] = [
   'SUPER_ADMIN',
   'ADMIN',
+  'VERIFICATION_EXECUTIVE',
   'SALES_MANAGER',
   'SALES_EXECUTIVE',
   'TELECALLER',

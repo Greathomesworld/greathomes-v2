@@ -54,6 +54,7 @@ export class CustomerService {
       email: customer.email || null,
       phone: customer.phone || null,
       name: customer.name,
+      accountType: customer.accountType || null,
       avatarUrl: customer.avatarUrl || null,
       status: customer.status,
       createdAt: customer.createdAt.toISOString(),
@@ -262,7 +263,28 @@ export class CustomerService {
       error.statusCode = 404;
       throw error;
     }
-    return this.mapCustomerToDto(customer);
+    const dto = this.mapCustomerToDto(customer);
+    if (dto.accountType === 'LISTING_PARTNER') {
+      try {
+        const { getDb } = await import('../../../db/client.ts');
+        const { customerPartnerProfiles } = await import('../../../db/schema.ts');
+        const { eq } = await import('drizzle-orm');
+        const db = getDb();
+        if (db) {
+          const [partnerRow] = await db
+            .select({ status: customerPartnerProfiles.status })
+            .from(customerPartnerProfiles)
+            .where(eq(customerPartnerProfiles.customerId, customerId))
+            .limit(1);
+          dto.partnerStatus = (partnerRow?.status as CustomerDto['partnerStatus']) || null;
+        }
+      } catch {
+        // Non-blocking fallback
+      }
+    } else {
+      dto.partnerStatus = null;
+    }
+    return dto;
   }
 
   async updateProfile(
@@ -285,7 +307,14 @@ export class CustomerService {
       updates.email = dto.email ? dto.email.trim().toLowerCase() : null;
     }
     if (dto.phone !== undefined) {
-      updates.phone = dto.phone ? dto.phone.trim() : null;
+      const normalizedNew = dto.phone ? dto.phone.trim() : null;
+      const normalizedCurrent = customer.phone ? customer.phone.trim() : null;
+      if (normalizedNew !== normalizedCurrent) {
+        const error: any = new Error('Changing your mobile number requires OTP verification. Please use the phone verification workflow.');
+        error.statusCode = 400;
+        error.code = 'PHONE_CHANGE_REQUIRES_VERIFICATION';
+        throw error;
+      }
     }
     if (dto.avatarUrl !== undefined) {
       updates.avatarUrl = dto.avatarUrl ? dto.avatarUrl.trim() : null;

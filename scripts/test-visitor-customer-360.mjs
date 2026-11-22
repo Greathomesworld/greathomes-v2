@@ -1,8 +1,17 @@
 import assert from 'node:assert/strict';
 
+process.env.NODE_ENV = 'test';
 process.env.PERSISTENCE_PROVIDER = 'memory';
+process.env.ENABLE_SEEDING = 'true';
 process.env.CUSTOMER_AUTH_SECRET = 'test-only-customer-secret-that-is-at-least-32-characters';
 process.env.GH_STAFF_SESSION_SECRET = 'test-only-staff-session-secret-that-is-at-least-32-chars';
+
+const { resaleListingRepository } = await import('../src/domain/projects/repositories/resaleRepository.ts');
+const { rentalListingRepository } = await import('../src/domain/projects/repositories/rentalRepository.ts');
+const { enableTestMemoryRateLimit } = await import('../src/lib/rateLimit.ts');
+resaleListingRepository.enableTestMemoryPersistence(true);
+rentalListingRepository.enableTestMemoryPersistence(true);
+enableTestMemoryRateLimit(true);
 
 const { ensureSeedData } = await import('../src/infrastructure/seed.ts');
 const { customerIntelligenceService } = await import(
@@ -18,8 +27,11 @@ const {
 } = await import('../src/domain/customer/repositories/index.ts');
 const { enquiryService } = await import('../src/domain/enquiry/services/enquiryService.ts');
 const { enquiryRepository } = await import('../src/domain/enquiry/repositories/enquiryRepository.ts');
+const { siteVisitRepository: svRepoInit } = await import('../src/infrastructure/repositories/postgres/siteVisitRepositoryPostgres.ts');
 const { hasCapability } = await import('../src/domain/auth/capabilityModel.ts');
 const { auditService } = await import('../src/domain/audit/auditService.ts');
+enquiryRepository.enableTestMemoryPersistence(true);
+svRepoInit.enableTestMemoryPersistence(true);
 
 let passed = 0;
 let failed = 0;
@@ -801,47 +813,14 @@ check(
   'All 5 Customer & Visitor 360 endpoints synchronously persist CUSTOMER_INTELLIGENCE_VIEWED audit records'
 );
 
-// 13. Schema Initialization Failure Recovery & Production Fallback Prevention
-const {
-  ensureSchemaUpdates,
-  resetSchemaInitializationStateForTesting,
-  isPostgresRequired,
-  getDb,
-} = await import('../src/db/client.ts');
-
-let shouldFailSchemaRun = true;
-const failingMockDb = {
-  execute: async () => {
-    if (shouldFailSchemaRun) {
-      throw new Error('Simulated transient PostgreSQL DDL lock timeout');
-    }
-    return [];
-  },
-};
-
-resetSchemaInitializationStateForTesting();
-let caughtTransientFailure = false;
-try {
-  await ensureSchemaUpdates(failingMockDb);
-} catch {
-  caughtTransientFailure = true;
-}
-
-// Subsequent call must retry and succeed instead of latching a broken schemaUpdated=true state
-shouldFailSchemaRun = false;
-let retrySucceeded = false;
-try {
-  await ensureSchemaUpdates(failingMockDb);
-  retrySucceeded = true;
-} catch {
-  retrySucceeded = false;
-}
-resetSchemaInitializationStateForTesting();
+// 13. Runtime DDL Absence & Production Fallback Prevention
+const clientModule = await import('../src/db/client.ts');
+const { isPostgresRequired, getDb } = clientModule;
 
 check(
-  caughtTransientFailure === true && retrySucceeded === true,
+  !('ensureSchemaUpdates' in clientModule) && !('resetSchemaInitializationStateForTesting' in clientModule),
   'DB_INIT.1',
-  'ensureSchemaUpdates() propagates DDL errors instead of latching schemaUpdated=true, and retries cleanly on subsequent requests'
+  'Runtime DDL helpers are completely removed from src/db/client.ts (migrations run via scripts/run-migrations.ts only)'
 );
 
 // Verify production mode rejects missing DATABASE_URL instead of silently falling back to memory mode
@@ -1300,15 +1279,15 @@ check(
     migrationSql.includes('UPDATE enquiries') &&
     migrationSql.includes('SET visitor_id = NULL') &&
     migrationSql.includes('SET session_id = NULL') &&
-    clientTs.includes('DROP INDEX IF EXISTS idx_visitor_events_client_event;') &&
-    clientTs.includes('ROW_NUMBER() OVER') &&
+    !clientTs.includes('ensureSchemaUpdates') &&
     !schemaTs.includes('idx_visitor_events_client_event') &&
     journalTags.includes('0000_adorable_unus') &&
     journalTags.includes('0001_project_coordinates') &&
     journalTags.includes('0002_customer_auth_otp') &&
-    journalTags.includes('0003_visitor_customer_360'),
+    journalTags.includes('0003_visitor_customer_360') &&
+    journalTags.includes('0012_post_property_phase1_full_parity'),
   'MIGRATION.1',
-  'Migration 0003, ensureSchemaUpdates(), schema.ts, and _journal.json are reconciled with orphan cleanup, duplicate event cleanup, and index alignment'
+  'Migration 0003, 0012, schema.ts, and _journal.json are reconciled without runtime ensureSchemaUpdates()'
 );
 
 // 16j. Fail-closed audit logging & Error Sanitization on Customer 360 endpoints

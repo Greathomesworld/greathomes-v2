@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyInternalStaff } from '@/src/domain/auth/authorizationBoundary';
+import { verifyStaffCapability } from '@/src/domain/auth/capabilities';
 import { locationService } from '@/src/domain/locations/services/locationService';
-import { locationRepository } from '@/src/infrastructure/repositories/locationProvider';
 import { ensureSeedData } from '@/src/infrastructure/seed';
 
 export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const auth = await verifyInternalStaff(req);
+  const auth = await verifyStaffCapability(req, 'location.archive');
   if (!auth.authorized) {
     return NextResponse.json(
-      { error: auth.error || 'Unauthorized' },
-      { status: auth.statusCode || 401 }
+      { error: auth.error || 'Forbidden' },
+      { status: auth.statusCode || auth.status || 401 }
     );
   }
 

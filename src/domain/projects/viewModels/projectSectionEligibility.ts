@@ -40,6 +40,9 @@ export function getEligibleResaleListings(
     if (!hasConfig && typeof l.bedroomCount === 'number' && l.bedroomCount > 0) {
       hasConfig = true;
     }
+    if (!hasConfig && l.propertyType === 'PLOT' && typeof l.plotArea === 'number' && l.plotArea > 0) {
+      hasConfig = true;
+    }
     if (!hasConfig) continue;
 
     // Check asking price (handles top-level askingPrice or nested pricing.askingPrice)
@@ -94,6 +97,9 @@ export function getEligibleRentalListings(
       );
     }
     if (!hasConfig && typeof l.bedroomCount === 'number' && l.bedroomCount > 0) {
+      hasConfig = true;
+    }
+    if (!hasConfig && l.propertyType === 'PLOT' && typeof l.plotArea === 'number' && l.plotArea > 0) {
       hasConfig = true;
     }
     if (!hasConfig) continue;

@@ -35,31 +35,55 @@ export function PropertyQuickHighlights({ listing }: PropertyQuickHighlightsProp
     configuration: listing.configuration,
     propertyType: listing.propertyType,
     priceDisplay,
-    locationName: listing.location?.name || listing.project?.locationName || 'Kolkata',
+    locationName:
+      listing.location?.name ||
+      listing.project?.locationName ||
+      listing.customLocalityDisplay ||
+      'Kolkata',
     sourcePage: listing.canonicalUrl,
   };
 
+  const isPlot = listing.propertyType === 'PLOT';
+  const hasBeds =
+    typeof listing.bedroomCount === 'number' &&
+    Number.isFinite(listing.bedroomCount) &&
+    listing.bedroomCount > 0;
+
   const desktopItems = [
-    {
-      label: 'Configuration',
-      value: listing.configuration,
-      icon: BedDouble,
-    },
+    isPlot
+      ? {
+          label: 'Property Type',
+          value: listing.propertyTypeDisplay,
+          icon: Layers,
+        }
+      : {
+          label: 'Configuration',
+          value: listing.configuration || listing.propertyTypeDisplay,
+          icon: BedDouble,
+        },
     {
       label: listing.primaryAreaLabel,
       value: listing.primaryAreaDisplay || 'On Request',
       icon: Maximize2,
     },
-    {
-      label: 'Floor',
-      value: listing.floorCategoryDisplay,
-      icon: Layers,
-    },
-    {
-      label: 'Furnishing',
-      value: listing.furnishingDisplay,
-      icon: Armchair,
-    },
+    ...(listing.floorCategoryDisplay
+      ? [
+          {
+            label: 'Floor',
+            value: listing.floorCategoryDisplay,
+            icon: Layers,
+          },
+        ]
+      : []),
+    ...(listing.furnishingDisplay
+      ? [
+          {
+            label: 'Furnishing',
+            value: listing.furnishingDisplay,
+            icon: Armchair,
+          },
+        ]
+      : []),
     {
       label: 'Facing',
       value: listing.facingDisplay,
@@ -72,10 +96,37 @@ export function PropertyQuickHighlights({ listing }: PropertyQuickHighlightsProp
     },
   ];
 
+  const desktopGridColsClass =
+    desktopItems.length <= 4
+      ? 'md:grid-cols-4'
+      : desktopItems.length === 5
+      ? 'md:grid-cols-5'
+      : 'md:grid-cols-6';
+
+  const mobileStripItems = [
+    {
+      icon: isPlot ? Maximize2 : BedDouble,
+      text: isPlot
+        ? listing.primaryAreaDisplay || 'Plot'
+        : hasBeds
+        ? `${listing.bedroomCount} BHK`
+        : listing.configuration || listing.propertyTypeDisplay,
+    },
+    ...(listing.floorCategoryDisplay
+      ? [{ icon: Layers, text: listing.floorCategoryDisplay }]
+      : []),
+    ...(listing.furnishingDisplay
+      ? [{ icon: Armchair, text: listing.furnishingDisplay }]
+      : []),
+    { icon: KeyRound, text: listing.possessionDisplay },
+  ];
+
   return (
     <div>
-      {/* DESKTOP 6-ITEM KEY HIGHLIGHTS BAR (Matches Desktop Reference) */}
-      <div className="hidden md:grid md:grid-cols-6 bg-white rounded-2xl border border-[#E6E2DC] py-3.5 px-2 shadow-2xs divide-x divide-[#E6E2DC]">
+      {/* DESKTOP KEY HIGHLIGHTS BAR */}
+      <div
+        className={`hidden md:grid ${desktopGridColsClass} bg-white rounded-2xl border border-[#E6E2DC] py-3.5 px-2 shadow-2xs divide-x divide-[#E6E2DC]`}
+      >
         {desktopItems.map(item => {
           const Icon = item.icon;
           return (
@@ -96,29 +147,22 @@ export function PropertyQuickHighlights({ listing }: PropertyQuickHighlightsProp
         })}
       </div>
 
-      {/* MOBILE COMPACT STRIP + 4-CARD HIGHLIGHT BOX + NEED ASSISTANCE CARD (Matches Mobile Reference) */}
+      {/* MOBILE COMPACT STRIP + 4-CARD HIGHLIGHT BOX + NEED ASSISTANCE CARD */}
       <div className="md:hidden space-y-3.5">
-        {/* Compact 4-item inline spec row */}
+        {/* Compact inline spec row */}
         <div className="flex items-center justify-between gap-2 py-2.5 px-3 bg-white rounded-xl border border-[#E6E2DC] text-[11px] font-display font-semibold text-[#111111]/80 overflow-x-auto">
-          <div className="flex items-center gap-1.5 shrink-0">
-            <BedDouble className="w-3.5 h-3.5 text-[#111111]/55" />
-            <span>{listing.bedroomCount} BHK</span>
-          </div>
-          <span className="text-[#E6E2DC]">|</span>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <Layers className="w-3.5 h-3.5 text-[#111111]/55" />
-            <span>{listing.floorCategoryDisplay}</span>
-          </div>
-          <span className="text-[#E6E2DC]">|</span>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <Armchair className="w-3.5 h-3.5 text-[#111111]/55" />
-            <span>{listing.furnishingDisplay}</span>
-          </div>
-          <span className="text-[#E6E2DC]">|</span>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <KeyRound className="w-3.5 h-3.5 text-[#111111]/55" />
-            <span>{listing.possessionDisplay}</span>
-          </div>
+          {mobileStripItems.map((entry, idx) => {
+            const Icon = entry.icon;
+            return (
+              <React.Fragment key={`${entry.text}-${idx}`}>
+                {idx > 0 && <span className="text-[#E6E2DC]">|</span>}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Icon className="w-3.5 h-3.5 text-[#111111]/55" />
+                  <span>{entry.text}</span>
+                </div>
+              </React.Fragment>
+            );
+          })}
         </div>
 
         {/* 4-Column Icon Highlight Grid */}
@@ -136,10 +180,10 @@ export function PropertyQuickHighlights({ listing }: PropertyQuickHighlightsProp
           <div className="px-2 flex flex-col items-center text-center space-y-1">
             <Layers className="w-4 h-4 text-[#111111]/70" />
             <span className="text-[11px] font-display font-bold text-[#111111] leading-tight">
-              {listing.floorCategoryDisplay}
+              {listing.floorCategoryDisplay || listing.propertyTypeDisplay}
             </span>
             <span className="text-[10px] font-body text-[#111111]/55 leading-tight">
-              Floor Level
+              {listing.floorCategoryDisplay ? 'Floor Level' : 'Property Type'}
             </span>
           </div>
 

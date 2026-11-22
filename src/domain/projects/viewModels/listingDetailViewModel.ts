@@ -63,28 +63,32 @@ export interface ResaleListingDetailViewModel {
   title: string;
   propertyType: string;
   propertyTypeDisplay: string;
-  configuration: string;
-  bedroomCount: number;
+  configuration: string | null;
+  bedroomCount: number | null;
   carpetArea: number | null;
   carpetAreaDisplay: string | null;
   builtUpArea: number | null;
   builtUpAreaDisplay: string | null;
   superBuiltUpArea: number | null;
   superBuiltUpAreaDisplay: string | null;
-  primaryAreaLabel: 'Carpet Area' | 'Built-up Area' | 'Super Built-up Area';
+  plotArea: number | null;
+  plotAreaDisplay: string | null;
+  primaryAreaLabel: 'Plot Area' | 'Carpet Area' | 'Built-up Area' | 'Super Built-up Area';
   primaryAreaDisplay: string | null;
   askingPrice: number;
   formattedAskingPrice: string;
-  furnishing: string;
-  furnishingDisplay: string;
+  furnishing: string | null;
+  furnishingDisplay: string | null;
   facing: string;
   facingDisplay: string;
-  floorCategory: string;
-  floorCategoryDisplay: string;
+  floorCategory: string | null;
+  floorCategoryDisplay: string | null;
   possession: string;
   possessionDisplay: string;
   possessionDate: string | null;
   description: string | null;
+  customLocalityDisplay: string | null;
+  customProjectDisplay: string | null;
   listingPartyLabel: string;
   isVerified: boolean;
   verifiedAt: string | null;
@@ -112,15 +116,17 @@ export interface RentalListingDetailViewModel {
   title: string;
   propertyType: string;
   propertyTypeDisplay: string;
-  configuration: string;
-  bedroomCount: number;
+  configuration: string | null;
+  bedroomCount: number | null;
   carpetArea: number | null;
   carpetAreaDisplay: string | null;
   builtUpArea: number | null;
   builtUpAreaDisplay: string | null;
   superBuiltUpArea: number | null;
   superBuiltUpAreaDisplay: string | null;
-  primaryAreaLabel: 'Carpet Area' | 'Built-up Area' | 'Super Built-up Area';
+  plotArea: number | null;
+  plotAreaDisplay: string | null;
+  primaryAreaLabel: 'Plot Area' | 'Carpet Area' | 'Built-up Area' | 'Super Built-up Area';
   primaryAreaDisplay: string | null;
   monthlyRent: number;
   formattedMonthlyRent: string;
@@ -128,18 +134,20 @@ export interface RentalListingDetailViewModel {
   formattedMaintenance: string | null;
   securityDeposit: number | null;
   formattedSecurityDeposit: string | null;
-  furnishing: string;
-  furnishingDisplay: string;
+  furnishing: string | null;
+  furnishingDisplay: string | null;
   facing: string;
   facingDisplay: string;
-  floorCategory: string;
-  floorCategoryDisplay: string;
+  floorCategory: string | null;
+  floorCategoryDisplay: string | null;
   possession: string;
   possessionDisplay: string;
   availabilityDate: string | null;
   leaseDuration: string | null;
   noticePeriod: string | null;
   description: string | null;
+  customLocalityDisplay: string | null;
+  customProjectDisplay: string | null;
   listingPartyLabel: string;
   isVerified: boolean;
   verifiedAt: string | null;
@@ -182,13 +190,21 @@ function formatProjectStatus(status?: string | null): string | null {
 }
 
 function resolvePrimaryArea(dto: {
+  propertyType?: string | null;
   carpetArea?: number | null;
   builtUpArea?: number | null;
   superBuiltUpArea?: number | null;
+  plotArea?: number | null;
 }): {
-  primaryAreaLabel: 'Carpet Area' | 'Built-up Area' | 'Super Built-up Area';
+  primaryAreaLabel: 'Plot Area' | 'Carpet Area' | 'Built-up Area' | 'Super Built-up Area';
   primaryAreaDisplay: string | null;
 } {
+  if (dto.propertyType === 'PLOT' && dto.plotArea && dto.plotArea > 0) {
+    return {
+      primaryAreaLabel: 'Plot Area',
+      primaryAreaDisplay: formatArea(dto.plotArea),
+    };
+  }
   if (dto.carpetArea && dto.carpetArea > 0) {
     return {
       primaryAreaLabel: 'Carpet Area',
@@ -207,10 +223,53 @@ function resolvePrimaryArea(dto: {
       primaryAreaDisplay: formatArea(dto.superBuiltUpArea),
     };
   }
+  if (dto.plotArea && dto.plotArea > 0) {
+    return {
+      primaryAreaLabel: 'Plot Area',
+      primaryAreaDisplay: formatArea(dto.plotArea),
+    };
+  }
   return {
-    primaryAreaLabel: 'Carpet Area',
+    primaryAreaLabel: dto.propertyType === 'PLOT' ? 'Plot Area' : 'Carpet Area',
     primaryAreaDisplay: null,
   };
+}
+
+function buildListingDetailTitle(dto: {
+  propertyType: string;
+  bedroomCount?: number | null;
+  configuration?: string | null;
+  plotArea?: number | null;
+  project?: { name: string } | null;
+  customProjectDisplay?: string | null;
+  customLocalityDisplay?: string | null;
+}, resolvedLoc: { name: string } | null): string {
+  const isPlot = dto.propertyType === 'PLOT';
+  const propTypeDisplay = formatPropertyType(dto.propertyType);
+  const hasBeds = typeof dto.bedroomCount === 'number' && Number.isFinite(dto.bedroomCount) && dto.bedroomCount > 0;
+  const plotAreaFormatted = dto.plotArea && dto.plotArea > 0 ? formatArea(dto.plotArea) : null;
+
+  let subject = propTypeDisplay;
+  if (isPlot) {
+    subject = plotAreaFormatted ? `Residential Plot (${plotAreaFormatted})` : 'Residential Plot';
+  } else if (hasBeds) {
+    subject = `${dto.bedroomCount} BHK ${propTypeDisplay}`;
+  } else if (dto.configuration && dto.configuration.trim().length > 0) {
+    const cfg = dto.configuration.trim();
+    subject = cfg.toLowerCase().includes(propTypeDisplay.toLowerCase()) ? cfg : `${cfg} ${propTypeDisplay}`;
+  }
+
+  const placeSuffix = dto.project
+    ? ` at ${dto.project.name}`
+    : dto.customProjectDisplay?.trim()
+    ? ` at ${dto.customProjectDisplay.trim()}`
+    : resolvedLoc
+    ? ` in ${resolvedLoc.name}`
+    : dto.customLocalityDisplay?.trim()
+    ? ` in ${dto.customLocalityDisplay.trim()}`
+    : '';
+
+  return `${subject}${placeSuffix}`;
 }
 
 export function toResaleListingDetailViewModel(
@@ -218,12 +277,7 @@ export function toResaleListingDetailViewModel(
 ): ResaleListingDetailViewModel {
   const slug = dto.slug || dto.id;
   const resolvedLoc = dto.location ?? dto.project?.location ?? null;
-  const projectDisplay = dto.project
-    ? ` at ${dto.project.name}`
-    : resolvedLoc
-    ? ` in ${resolvedLoc.name}`
-    : '';
-  const title = `${dto.bedroomCount} BHK ${formatPropertyType(dto.propertyType)}${projectDisplay}`;
+  const title = buildListingDetailTitle(dto, resolvedLoc);
 
   const location: PropertyDetailLocationViewModel | null = resolvedLoc
     ? {
@@ -234,8 +288,15 @@ export function toResaleListingDetailViewModel(
       }
     : null;
 
-  const locationDisplay = location ? `${location.name}, Kolkata` : 'Kolkata';
+  const customLocalityDisplay = dto.customLocalityDisplay ?? null;
+  const customProjectDisplay = dto.customProjectDisplay ?? null;
+  const locationDisplay = location
+    ? `${location.name}, Kolkata`
+    : customLocalityDisplay
+    ? `${customLocalityDisplay}, Kolkata`
+    : 'Kolkata';
   const { primaryAreaLabel, primaryAreaDisplay } = resolvePrimaryArea(dto);
+  const isPlot = dto.propertyType === 'PLOT';
 
   return {
     mode: 'RESALE',
@@ -245,28 +306,32 @@ export function toResaleListingDetailViewModel(
     title,
     propertyType: dto.propertyType,
     propertyTypeDisplay: formatPropertyType(dto.propertyType),
-    configuration: dto.configuration,
-    bedroomCount: dto.bedroomCount,
+    configuration: dto.configuration ?? null,
+    bedroomCount: dto.bedroomCount ?? null,
     carpetArea: dto.carpetArea ?? null,
     carpetAreaDisplay: formatArea(dto.carpetArea),
     builtUpArea: dto.builtUpArea ?? null,
     builtUpAreaDisplay: formatArea(dto.builtUpArea),
     superBuiltUpArea: dto.superBuiltUpArea ?? null,
     superBuiltUpAreaDisplay: formatArea(dto.superBuiltUpArea),
+    plotArea: dto.plotArea ?? null,
+    plotAreaDisplay: formatArea(dto.plotArea),
     primaryAreaLabel,
     primaryAreaDisplay,
     askingPrice: dto.askingPrice,
     formattedAskingPrice: formatIndianPrice(dto.askingPrice),
-    furnishing: dto.furnishing,
-    furnishingDisplay: formatFurnishing(dto.furnishing),
+    furnishing: dto.furnishing ?? null,
+    furnishingDisplay: isPlot ? null : dto.furnishing ? formatFurnishing(dto.furnishing) : null,
     facing: dto.facing,
     facingDisplay: formatFacing(dto.facing),
-    floorCategory: dto.floorCategory,
-    floorCategoryDisplay: formatFloorCategory(dto.floorCategory),
+    floorCategory: dto.floorCategory ?? null,
+    floorCategoryDisplay: isPlot ? null : formatFloorCategory(dto.floorCategory),
     possession: dto.possession,
     possessionDisplay: formatPossession(dto.possession),
     possessionDate: dto.possessionDate ?? null,
     description: dto.description ?? null,
+    customLocalityDisplay,
+    customProjectDisplay,
     listingPartyLabel: dto.listingParty?.label || 'Verified Listing',
     isVerified: dto.isVerified,
     verifiedAt: dto.verifiedAt ?? null,
@@ -320,12 +385,7 @@ export function toRentalListingDetailViewModel(
 ): RentalListingDetailViewModel {
   const slug = dto.slug || dto.id;
   const resolvedLoc = dto.location ?? dto.project?.location ?? null;
-  const projectDisplay = dto.project
-    ? ` at ${dto.project.name}`
-    : resolvedLoc
-    ? ` in ${resolvedLoc.name}`
-    : '';
-  const title = `${dto.bedroomCount} BHK ${formatPropertyType(dto.propertyType)}${projectDisplay}`;
+  const title = buildListingDetailTitle(dto, resolvedLoc);
 
   const location: PropertyDetailLocationViewModel | null = resolvedLoc
     ? {
@@ -336,8 +396,15 @@ export function toRentalListingDetailViewModel(
       }
     : null;
 
-  const locationDisplay = location ? `${location.name}, Kolkata` : 'Kolkata';
+  const customLocalityDisplay = dto.customLocalityDisplay ?? null;
+  const customProjectDisplay = dto.customProjectDisplay ?? null;
+  const locationDisplay = location
+    ? `${location.name}, Kolkata`
+    : customLocalityDisplay
+    ? `${customLocalityDisplay}, Kolkata`
+    : 'Kolkata';
   const { primaryAreaLabel, primaryAreaDisplay } = resolvePrimaryArea(dto);
+  const isPlot = dto.propertyType === 'PLOT';
 
   return {
     mode: 'RENTAL',
@@ -347,14 +414,16 @@ export function toRentalListingDetailViewModel(
     title,
     propertyType: dto.propertyType,
     propertyTypeDisplay: formatPropertyType(dto.propertyType),
-    configuration: dto.configuration,
-    bedroomCount: dto.bedroomCount,
+    configuration: dto.configuration ?? null,
+    bedroomCount: dto.bedroomCount ?? null,
     carpetArea: dto.carpetArea ?? null,
     carpetAreaDisplay: formatArea(dto.carpetArea),
     builtUpArea: dto.builtUpArea ?? null,
     builtUpAreaDisplay: formatArea(dto.builtUpArea),
     superBuiltUpArea: dto.superBuiltUpArea ?? null,
     superBuiltUpAreaDisplay: formatArea(dto.superBuiltUpArea),
+    plotArea: dto.plotArea ?? null,
+    plotAreaDisplay: formatArea(dto.plotArea),
     primaryAreaLabel,
     primaryAreaDisplay,
     monthlyRent: dto.monthlyRent,
@@ -369,18 +438,20 @@ export function toRentalListingDetailViewModel(
       dto.securityDeposit && dto.securityDeposit > 0
         ? formatIndianPrice(dto.securityDeposit)
         : null,
-    furnishing: dto.furnishing,
-    furnishingDisplay: formatFurnishing(dto.furnishing),
+    furnishing: dto.furnishing ?? null,
+    furnishingDisplay: isPlot ? null : dto.furnishing ? formatFurnishing(dto.furnishing) : null,
     facing: dto.facing,
     facingDisplay: formatFacing(dto.facing),
-    floorCategory: dto.floorCategory,
-    floorCategoryDisplay: formatFloorCategory(dto.floorCategory),
+    floorCategory: dto.floorCategory ?? null,
+    floorCategoryDisplay: isPlot ? null : formatFloorCategory(dto.floorCategory),
     possession: dto.possession,
     possessionDisplay: formatPossession(dto.possession),
     availabilityDate: dto.availabilityDate ?? null,
     leaseDuration: dto.leaseDuration ?? null,
     noticePeriod: dto.noticePeriod ?? null,
     description: dto.description ?? null,
+    customLocalityDisplay,
+    customProjectDisplay,
     listingPartyLabel: dto.listingParty?.label || 'Verified Listing',
     isVerified: dto.isVerified,
     verifiedAt: dto.verifiedAt ?? null,

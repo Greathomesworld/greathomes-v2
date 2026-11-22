@@ -3,11 +3,12 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bookmark, History, Sliders, User, LogIn, Loader2 } from 'lucide-react';
+import { Bookmark, History, Sliders, User, LogIn, Loader2, Building2 } from 'lucide-react';
 import { useCustomerAuth } from '@/src/components/customer/CustomerAuthContext';
 
 const NAV_TABS = [
   { href: '/account/saved', label: 'Saved Homes', icon: Bookmark },
+  { href: '/my-properties', label: 'My Property Submissions', icon: Building2 },
   { href: '/account/recently-viewed', label: 'Recently Viewed', icon: History },
   { href: '/account/preferences', label: 'Preferences & Alerts', icon: Sliders },
   { href: '/account/profile', label: 'Profile', icon: User },

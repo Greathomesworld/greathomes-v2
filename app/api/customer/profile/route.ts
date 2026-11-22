@@ -44,6 +44,7 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json();
     const updated = await customerService.updateProfile(auth.customerId, {
       name: body.name,
+      email: body.email !== undefined ? body.email : undefined,
       phone: body.phone,
       avatarUrl: body.avatarUrl,
     });

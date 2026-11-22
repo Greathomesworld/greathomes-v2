@@ -48,7 +48,11 @@ export default async function RentPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  await ensureSeedData();
+  try {
+    await ensureSeedData();
+  } catch (seedError) {
+    console.warn('RentPage ensureSeedData warning:', seedError);
+  }
 
   const params = await searchParams;
   const qParam = typeof params.q === 'string' ? params.q : typeof params.query === 'string' ? params.query : undefined;

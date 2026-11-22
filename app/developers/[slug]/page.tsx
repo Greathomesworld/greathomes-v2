@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic';
 
 import { developerService } from '@/src/domain/developers/services/developerService';
 import { PublicDeveloperDto, PublicProjectDto } from '@/src/domain/developers/dto/developerDto';
+import { safeJsonLd } from '@/src/lib/safeJsonLd';
 import { buildDeveloperJsonLd } from '@/src/domain/seo/auditEngine';
 import { ensureSeedData } from '@/src/infrastructure/seed';
 import { RecentlyViewedTracker } from '@/src/components/customer/RecentlyViewedTracker';
@@ -354,7 +355,7 @@ export default async function DeveloperDetailPage(props: DeveloperPageProps) {
     <div className="min-h-screen bg-neutral-50/50 text-neutral-900">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(structuredData) }}
       />
       <RecentlyViewedTracker
         resourceType="DEVELOPER"

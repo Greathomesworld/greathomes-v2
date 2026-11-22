@@ -18,14 +18,30 @@ export interface CreateEnquiryRequestDto {
   requestSiteVisit?: boolean;
   message?: string;
 
-  // Buyer Requirements (Phase 17)
+  // Buyer Requirements (Phase 17 + Lead-First Flow)
+  budgetRange?:
+    | 'UNDER_30L'
+    | '30L_50L'
+    | '50L_75L'
+    | '75L_1CR'
+    | '1CR_1_5CR'
+    | '1_5CR_2CR'
+    | '2CR_PLUS'
+    | 'FLEXIBLE';
   budgetMin?: number;
   budgetMax?: number;
   preferredBhk?: string;
   propertyType?: string;
   preferredLocationId?: string;
-  purchaseTimeline?: 'IMMEDIATE' | 'WITHIN_3_MONTHS' | '3_TO_6_MONTHS' | '6_TO_12_MONTHS' | 'MORE_THAN_12_MONTHS' | 'NOT_DECIDED';
-  purpose?: 'SELF_USE' | 'FAMILY_USE' | 'OTHER';
+  purchaseTimeline?:
+    | 'IMMEDIATE'
+    | 'WITHIN_3_MONTHS'
+    | '3_TO_6_MONTHS'
+    | '6_TO_12_MONTHS'
+    | 'MORE_THAN_12_MONTHS'
+    | 'NOT_DECIDED'
+    | 'JUST_EXPLORING';
+  purpose?: 'SELF_USE' | 'FAMILY_USE' | 'INVESTMENT' | 'RENTAL_INCOME' | 'OTHER';
 
   // Site Visit Request (Phase 17)
   preferredDate?: string;
@@ -41,7 +57,10 @@ export interface CreateEnquiryRequestDto {
   // Source attribution & consent
   source?: string;
   sourcePage?: string;
+  ctaSource?: string;
+  flowMode?: 'STANDARD' | 'LEAD_FIRST_PROJECT';
   marketingConsent?: boolean;
+  idempotencyKey?: string;
 }
 
 export interface PublicEnquiryContextDto {
@@ -61,6 +80,8 @@ export interface PublicEnquiryContextDto {
   requestSiteVisit?: boolean;
   preferredContact?: PreferredContactMethod;
   sourcePage?: string;
+  ctaSource?: string;
+  flowMode?: 'STANDARD' | 'LEAD_FIRST_PROJECT';
   inquiryIntent?: 'STANDARD' | 'REQUEST_SPECS';
 }
 
@@ -69,8 +90,33 @@ export interface CreateEnquiryResponseDto {
   message: string;
   enquiryId?: string;
   referenceNumber?: string;
+  projectName?: string | null;
   siteVisitId?: string;
   siteVisitStatus?: string;
+  deduplicated?: boolean;
+  continuationToken?: string;
+  continuationExpiresAt?: string;
+}
+
+export interface UpdateEnquiryRequirementsRequestDto {
+  preferredBhk?: string | null;
+  propertyType?: string | null;
+  budgetRange?: string | null;
+  purchaseTimeline?: string | null;
+  purchasePurpose?: string | null;
+  siteVisitInterest?: boolean;
+  additionalRequirements?: string | null;
+  skipped?: boolean;
+}
+
+export interface UpdateEnquiryRequirementsResponseDto {
+  success: boolean;
+  message: string;
+  enquiryId: string;
+  referenceNumber: string;
+  requirementsStatus: 'INCOMPLETE' | 'SKIPPED' | 'PARTIAL' | 'COMPLETE';
+  providedCount: number;
+  totalOptionalFields: number;
 }
 
 export interface CustomerEnquiryDto {
@@ -116,6 +162,7 @@ export interface AdminEnquiryMetricsDto {
   contactedCount: number;
   qualifiedCount: number;
   siteVisitsCount: number;
+  siteVisitInterestCount?: number;
   convertedCount: number;
   lostCount: number;
   closedCount: number;

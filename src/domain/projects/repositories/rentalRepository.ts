@@ -5,6 +5,13 @@ import {
 } from '../entities/rentalEntities';
 import { Amenity } from '../entities';
 import { amenityRepository } from '../../../infrastructure/repositories/memory/projectRepositoryMemory';
+import { getDb } from '../../../db/client';
+import {
+  PersistenceUnavailableError,
+  isStrictTestEnvironment,
+  resolveGuardedPersistenceBackend,
+} from '../../../lib/persistenceGuard';
+import { RentalListingRepositoryPostgres } from '../../../infrastructure/repositories/postgres/rentalRepositoryPostgres';
 
 export type RentalSortOption = 'newest' | 'rent_asc' | 'rent_desc' | 'area_desc';
 
@@ -44,7 +51,9 @@ function isEligibleRentalEntity(l: RentalListing): boolean {
   if (typeof l.monthlyRent !== 'number' || !Number.isFinite(l.monthlyRent) || l.monthlyRent <= 0) return false;
   const hasConfig = typeof l.configuration === 'string' && l.configuration.trim().length > 0;
   const hasBedrooms = typeof l.bedroomCount === 'number' && Number.isFinite(l.bedroomCount) && l.bedroomCount > 0;
-  return hasConfig || hasBedrooms;
+  const isPlotWithArea =
+    l.propertyType === 'PLOT' && typeof l.plotArea === 'number' && Number.isFinite(l.plotArea) && l.plotArea > 0;
+  return hasConfig || hasBedrooms || isPlotWithArea;
 }
 
 export interface RentalListingRepository {
@@ -72,13 +81,52 @@ export interface RentalListingRepository {
   removeAmenity(rentalListingId: string, amenityId: string): Promise<void>;
 }
 
+const globalForRental = globalThis as unknown as {
+  __gh_mem_rental_listings?: RentalListing[];
+  __gh_mem_rental_media?: RentalListingMedia[];
+  __gh_mem_rental_amenities?: RentalListingAmenity[];
+};
+
 export class RentalListingRepositoryMemory implements RentalListingRepository {
-  private listings: RentalListing[] = [];
-  private mediaList: RentalListingMedia[] = [];
-  private listingAmenities: RentalListingAmenity[] = [];
+  private get listings(): RentalListing[] {
+    if (!globalForRental.__gh_mem_rental_listings) {
+      globalForRental.__gh_mem_rental_listings = [];
+    }
+    return globalForRental.__gh_mem_rental_listings;
+  }
+  private set listings(val: RentalListing[]) {
+    globalForRental.__gh_mem_rental_listings = val;
+  }
+
+  private get mediaList(): RentalListingMedia[] {
+    if (!globalForRental.__gh_mem_rental_media) {
+      globalForRental.__gh_mem_rental_media = [];
+    }
+    return globalForRental.__gh_mem_rental_media;
+  }
+  private set mediaList(val: RentalListingMedia[]) {
+    globalForRental.__gh_mem_rental_media = val;
+  }
+
+  private get listingAmenities(): RentalListingAmenity[] {
+    if (!globalForRental.__gh_mem_rental_amenities) {
+      globalForRental.__gh_mem_rental_amenities = [];
+    }
+    return globalForRental.__gh_mem_rental_amenities;
+  }
+  private set listingAmenities(val: RentalListingAmenity[]) {
+    globalForRental.__gh_mem_rental_amenities = val;
+  }
+
   private amenitiesStore: Amenity[] = [];
 
   constructor(amenitiesStore: Amenity[] = []) {
+    const provider = (process.env.PERSISTENCE_PROVIDER || '').trim().toLowerCase();
+    if (!isStrictTestEnvironment() || provider === 'postgres') {
+      throw new PersistenceUnavailableError(
+        'RentalListingRepositoryMemory is strictly restricted to isolated test execution (NODE_ENV=test).'
+      );
+    }
     this.amenitiesStore = amenitiesStore;
   }
 
@@ -159,8 +207,8 @@ export class RentalListingRepositoryMemory implements RentalListingRepository {
         } else if (sortBy === 'rent_desc') {
           if (a.monthlyRent !== b.monthlyRent) return b.monthlyRent - a.monthlyRent;
         } else if (sortBy === 'area_desc') {
-          const areaA = a.carpetArea ?? -1;
-          const areaB = b.carpetArea ?? -1;
+          const areaA = a.carpetArea ?? a.plotArea ?? -1;
+          const areaB = b.carpetArea ?? b.plotArea ?? -1;
           if (areaA !== areaB) return areaB - areaA;
         }
         const timeDiff = b.createdAt.getTime() - a.createdAt.getTime();
@@ -230,9 +278,9 @@ export class RentalListingRepositoryMemory implements RentalListingRepository {
     };
   }
 
-  async create(data: Omit<RentalListing, 'id' | 'createdAt' | 'updatedAt'>): Promise<RentalListing> {
+  async create(data: Omit<RentalListing, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): Promise<RentalListing> {
     const now = new Date();
-    const id = `rent_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const id = data.id || `rent_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const listing: RentalListing = {
       ...data,
       id,
@@ -334,13 +382,147 @@ export class RentalListingRepositoryMemory implements RentalListingRepository {
   }
 }
 
-import { RentalListingRepositoryPostgres } from '../../../infrastructure/repositories/postgres/rentalRepositoryPostgres';
-
-const usePostgres = process.env.PERSISTENCE_PROVIDER === 'postgres';
-if (usePostgres && !process.env.DATABASE_URL) {
-  throw new Error('FATAL: PERSISTENCE_PROVIDER=postgres requires DATABASE_URL.');
+export interface GuardedRentalRepositoryOptions {
+  allowTestMemoryPersistence?: boolean;
+  dbResolver?: () => ReturnType<typeof getDb>;
+  amenitiesStore?: Amenity[];
 }
 
-export const rentalListingRepository: RentalListingRepository = usePostgres
-  ? new RentalListingRepositoryPostgres()
-  : new RentalListingRepositoryMemory();
+export class GuardedRentalListingRepository implements RentalListingRepository {
+  private allowTestMemoryPersistence: boolean;
+  private readonly dbResolver: () => ReturnType<typeof getDb>;
+  private readonly amenitiesStore: Amenity[];
+  private pgRepo: RentalListingRepositoryPostgres | null = null;
+  private memRepo: RentalListingRepositoryMemory | null = null;
+
+  constructor(options?: GuardedRentalRepositoryOptions) {
+    this.allowTestMemoryPersistence = Boolean(options?.allowTestMemoryPersistence);
+    this.dbResolver = options?.dbResolver ?? (() => getDb());
+    this.amenitiesStore = options?.amenitiesStore ?? [];
+  }
+
+  static createForTesting(
+    options?: Omit<GuardedRentalRepositoryOptions, 'allowTestMemoryPersistence'>
+  ): GuardedRentalListingRepository {
+    if (!isStrictTestEnvironment()) {
+      throw new PersistenceUnavailableError(
+        'In-memory rental test repository construction is strictly restricted to NODE_ENV=test.'
+      );
+    }
+    return new GuardedRentalListingRepository({
+      ...options,
+      allowTestMemoryPersistence: true,
+    });
+  }
+
+  enableTestMemoryPersistence(enabled: boolean = true): void {
+    if (enabled && !isStrictTestEnvironment()) {
+      throw new PersistenceUnavailableError(
+        'In-memory rental persistence is permitted only in an explicit test environment (NODE_ENV=test).'
+      );
+    }
+    this.allowTestMemoryPersistence = enabled;
+    if (!enabled) {
+      this.memRepo = null;
+    }
+  }
+
+  clearMemoryForTesting(): void {
+    if (!isStrictTestEnvironment() || !this.allowTestMemoryPersistence) {
+      throw new PersistenceUnavailableError(
+        'Clearing in-memory rental state requires NODE_ENV=test and explicit test memory activation.'
+      );
+    }
+    globalForRental.__gh_mem_rental_listings = [];
+    globalForRental.__gh_mem_rental_media = [];
+    globalForRental.__gh_mem_rental_amenities = [];
+  }
+
+  private resolveDelegate(): RentalListingRepository {
+    const backend = resolveGuardedPersistenceBackend({
+      domain: 'Rental listing',
+      allowTestMemoryPersistence: this.allowTestMemoryPersistence,
+      dbResolver: this.dbResolver,
+    });
+
+    if (backend.mode === 'postgres') {
+      if (!this.pgRepo) {
+        this.pgRepo = new RentalListingRepositoryPostgres(this.dbResolver);
+      }
+      return this.pgRepo;
+    }
+
+    if (!this.memRepo) {
+      this.memRepo = new RentalListingRepositoryMemory(this.amenitiesStore);
+    }
+    return this.memRepo;
+  }
+
+  findById(id: string): Promise<RentalListing | null> {
+    return this.resolveDelegate().findById(id);
+  }
+  findBySlug(slug: string): Promise<RentalListing | null> {
+    return this.resolveDelegate().findBySlug(slug);
+  }
+  findBySlugOrId(identifier: string): Promise<RentalListing | null> {
+    return this.resolveDelegate().findBySlugOrId(identifier);
+  }
+  findByProjectId(projectId: string): Promise<RentalListing[]> {
+    return this.resolveDelegate().findByProjectId(projectId);
+  }
+  findPublishedByProjectId(projectId: string): Promise<RentalListing[]> {
+    return this.resolveDelegate().findPublishedByProjectId(projectId);
+  }
+  findAll(filter?: RentalListingFilter): Promise<RentalListing[]> {
+    return this.resolveDelegate().findAll(filter);
+  }
+  countAndFacetsForProject(
+    projectId: string,
+    filter?: RentalListingFilter
+  ): Promise<ProjectRentalInventoryFacets> {
+    return this.resolveDelegate().countAndFacetsForProject(projectId, filter);
+  }
+  create(
+    data: Omit<RentalListing, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
+  ): Promise<RentalListing> {
+    return this.resolveDelegate().create(data);
+  }
+  update(id: string, data: Partial<RentalListing>): Promise<RentalListing> {
+    return this.resolveDelegate().update(id, data);
+  }
+  delete(id: string): Promise<boolean> {
+    return this.resolveDelegate().delete(id);
+  }
+  findMediaByListingId(listingId: string): Promise<RentalListingMedia[]> {
+    return this.resolveDelegate().findMediaByListingId(listingId);
+  }
+  findMediaByListingIds(listingIds: string[]): Promise<RentalListingMedia[]> {
+    return this.resolveDelegate().findMediaByListingIds(listingIds);
+  }
+  addMedia(
+    data: Omit<RentalListingMedia, 'id' | 'createdAt' | 'updatedAt'>
+  ): Promise<RentalListingMedia> {
+    return this.resolveDelegate().addMedia(data);
+  }
+  removeMedia(mediaId: string): Promise<boolean> {
+    return this.resolveDelegate().removeMedia(mediaId);
+  }
+  updateMedia(
+    mediaId: string,
+    data: Partial<RentalListingMedia>
+  ): Promise<RentalListingMedia | null> {
+    return this.resolveDelegate().updateMedia(mediaId, data);
+  }
+  findAmenitiesByListingId(listingId: string): Promise<Amenity[]> {
+    return this.resolveDelegate().findAmenitiesByListingId(listingId);
+  }
+  associateAmenity(rentalListingId: string, amenityId: string): Promise<void> {
+    return this.resolveDelegate().associateAmenity(rentalListingId, amenityId);
+  }
+  removeAmenity(rentalListingId: string, amenityId: string): Promise<void> {
+    return this.resolveDelegate().removeAmenity(rentalListingId, amenityId);
+  }
+}
+
+export const rentalListingRepository = new GuardedRentalListingRepository();
+

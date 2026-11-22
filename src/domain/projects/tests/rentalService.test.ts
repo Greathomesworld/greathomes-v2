@@ -14,6 +14,7 @@ import { LocationRepositoryMemory } from '../../../infrastructure/repositories/m
 import { RentalListingRepositoryMemory } from '../repositories/rentalRepository';
 
 async function runRentalTests() {
+  (process.env as any).NODE_ENV = 'test';
   console.log('Running Rental Intelligence Tests...');
 
   const projectRepo = new ProjectRepositoryMemory();

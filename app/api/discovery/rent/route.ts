@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { propertyDiscoveryService } from '@/src/domain/projects/services/propertyDiscoveryService';
+import { isPersistenceUnavailableError } from '@/src/lib/persistenceGuard';
 
 export async function GET(req: NextRequest) {
   try {
@@ -21,6 +22,12 @@ export async function GET(req: NextRequest) {
     const results = await propertyDiscoveryService.discoverRent(filters, page, pageSize);
     return NextResponse.json({ success: true, ...results });
   } catch (err: any) {
+    if (isPersistenceUnavailableError(err)) {
+      return NextResponse.json(
+        { success: false, code: 'PERSISTENCE_UNAVAILABLE', error: err.message },
+        { status: 503 }
+      );
+    }
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }

@@ -81,6 +81,7 @@ export function MobileStickyCta({
     if (project?.slug) {
       openEnquiry({
         contextType: 'PROJECT',
+        projectId: project.id,
         projectSlug: project.slug,
         projectName: project.name,
         locationName: project.location?.name,
@@ -90,6 +91,12 @@ export function MobileStickyCta({
         subtitle: requestVisit
           ? 'Schedule a guided property inspection visit'
           : 'Get verified project brochures, floor plans, and pricing intelligence',
+        ...(!requestVisit
+          ? {
+              flowMode: 'LEAD_FIRST_PROJECT' as const,
+              ctaSource: 'GET_PRICE_AVAILABILITY',
+            }
+          : {}),
       });
       return;
     }

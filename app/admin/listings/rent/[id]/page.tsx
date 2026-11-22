@@ -9,6 +9,10 @@ import { AdminConfirmDialog } from '@/src/components/admin/AdminConfirmDialog';
 import { AdminLoadingState } from '@/src/components/admin/AdminLoadingState';
 import { AdminErrorState } from '@/src/components/admin/AdminErrorState';
 import { getAdminHeaders } from '@/src/lib/adminAuth';
+import {
+  safeFetchJson,
+  getSafeApiErrorTitle,
+} from '@/src/lib/safeApiFetch';
 import { formatIndianPrice } from '@/src/components/discovery/formatters';
 import {
   Building2,
@@ -68,6 +72,7 @@ export default function RentalDetailPage() {
 
   // Action states
   const [actionLoading, setActionLoading] = useState(false);
+  const [actionError, setActionError] = useState<{ title: string; message: string } | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [transitionConfirm, setTransitionConfirm] = useState<{ open: boolean; targetStatus: string } | null>(null);
 
@@ -91,16 +96,16 @@ export default function RentalDetailPage() {
       setLoading(true);
       setError(null);
 
-      const res = await fetch(`/api/rent/${id}`, {
+      const res = await safeFetchJson<{ data?: any }>(`/api/rent/${id}`, {
         headers: getAdminHeaders(),
       });
 
-      if (!res.ok) {
-        throw new Error(`Failed to load rental listing: ${res.statusText}`);
+      if (!res.ok || !res.data?.data) {
+        setError(res.error || 'Failed to load rental listing');
+        return;
       }
 
-      const json = await res.json();
-      setListing(json.data);
+      setListing(res.data.data);
     } catch (err: any) {
       setError(err.message || 'Error loading rental listing');
     } finally {
@@ -118,16 +123,14 @@ export default function RentalDetailPage() {
     const loadLookups = async () => {
       try {
         const [amenRes, projRes] = await Promise.all([
-          fetch('/api/admin/amenities', { headers: getAdminHeaders() }),
-          fetch('/api/projects?limit=100', { headers: getAdminHeaders() }),
+          safeFetchJson<{ data?: any[] }>('/api/admin/amenities', { headers: getAdminHeaders() }),
+          safeFetchJson<{ data?: any[] }>('/api/projects?limit=100', { headers: getAdminHeaders() }),
         ]);
-        if (amenRes.ok) {
-          const aJson = await amenRes.json();
-          setAllAmenities(aJson.data || []);
+        if (amenRes.ok && amenRes.data) {
+          setAllAmenities(amenRes.data.data || []);
         }
-        if (projRes.ok) {
-          const pJson = await projRes.json();
-          setAllProjects(pJson.data || []);
+        if (projRes.ok && projRes.data) {
+          setAllProjects(projRes.data.data || []);
         }
       } catch (e) {
         console.error('Error loading lookups', e);
@@ -139,7 +142,8 @@ export default function RentalDetailPage() {
   const handleLifecycleTransition = async (status: string) => {
     try {
       setActionLoading(true);
-      const res = await fetch(`/api/rent/${id}/status`, {
+      setActionError(null);
+      const res = await safeFetchJson(`/api/rent/${id}/status`, {
         method: 'POST',
         headers: getAdminHeaders(),
         body: JSON.stringify({
@@ -149,14 +153,18 @@ export default function RentalDetailPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Transition failed');
+        setActionError({
+          title: getSafeApiErrorTitle(res.errorCategory),
+          message: res.error || 'Transition failed',
+        });
+        setTransitionConfirm(null);
+        return;
       }
 
       setTransitionConfirm(null);
       await fetchListing();
     } catch (err: any) {
-      alert(err.message);
+      setActionError({ title: 'Network Error', message: err.message || 'Transition failed' });
     } finally {
       setActionLoading(false);
     }
@@ -165,8 +173,9 @@ export default function RentalDetailPage() {
   const handleVerificationToggle = async () => {
     try {
       setActionLoading(true);
+      setActionError(null);
       const targetStatus = listing.verificationStatus === 'VERIFIED' ? 'UNVERIFIED' : 'VERIFIED';
-      const res = await fetch(`/api/rent/${id}/status`, {
+      const res = await safeFetchJson(`/api/rent/${id}/status`, {
         method: 'POST',
         headers: getAdminHeaders(),
         body: JSON.stringify({
@@ -177,13 +186,16 @@ export default function RentalDetailPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Verification update failed');
+        setActionError({
+          title: getSafeApiErrorTitle(res.errorCategory),
+          message: res.error || 'Verification update failed',
+        });
+        return;
       }
 
       await fetchListing();
     } catch (err: any) {
-      alert(err.message);
+      setActionError({ title: 'Network Error', message: err.message || 'Verification update failed' });
     } finally {
       setActionLoading(false);
     }
@@ -193,19 +205,23 @@ export default function RentalDetailPage() {
     if (!selectedProjectId) return;
     try {
       setActionLoading(true);
-      const res = await fetch(`/api/rent/${id}`, {
+      setActionError(null);
+      const res = await safeFetchJson(`/api/rent/${id}`, {
         method: 'PATCH',
         headers: getAdminHeaders(),
         body: JSON.stringify({ projectId: selectedProjectId }),
       });
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to link project');
+        setActionError({
+          title: getSafeApiErrorTitle(res.errorCategory),
+          message: res.error || 'Failed to link project',
+        });
+        return;
       }
       setShowLinkProject(false);
       await fetchListing();
     } catch (err: any) {
-      alert(err.message);
+      setActionError({ title: 'Network Error', message: err.message || 'Failed to link project' });
     } finally {
       setActionLoading(false);
     }
@@ -215,18 +231,22 @@ export default function RentalDetailPage() {
     if (!confirm('Decouple this listing from the catalog project?')) return;
     try {
       setActionLoading(true);
-      const res = await fetch(`/api/rent/${id}`, {
+      setActionError(null);
+      const res = await safeFetchJson(`/api/rent/${id}`, {
         method: 'PATCH',
         headers: getAdminHeaders(),
         body: JSON.stringify({ projectId: null }),
       });
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to unlink project');
+        setActionError({
+          title: getSafeApiErrorTitle(res.errorCategory),
+          message: res.error || 'Failed to unlink project',
+        });
+        return;
       }
       await fetchListing();
     } catch (err: any) {
-      alert(err.message);
+      setActionError({ title: 'Network Error', message: err.message || 'Failed to unlink project' });
     } finally {
       setActionLoading(false);
     }
@@ -237,7 +257,8 @@ export default function RentalDetailPage() {
     if (!mediaUrl.trim()) return;
     try {
       setActionLoading(true);
-      const res = await fetch(`/api/rent/${id}/media`, {
+      setActionError(null);
+      const res = await safeFetchJson(`/api/rent/${id}/media`, {
         method: 'POST',
         headers: getAdminHeaders(),
         body: JSON.stringify({
@@ -248,14 +269,20 @@ export default function RentalDetailPage() {
           isFeatured: mediaFeatured,
         }),
       });
-      if (!res.ok) throw new Error('Failed to add media');
+      if (!res.ok) {
+        setActionError({
+          title: getSafeApiErrorTitle(res.errorCategory),
+          message: res.error || 'Failed to add media',
+        });
+        return;
+      }
       setShowAddMedia(false);
       setMediaUrl('');
       setMediaCaption('');
       setMediaFeatured(false);
       await fetchListing();
     } catch (err: any) {
-      alert(err.message);
+      setActionError({ title: 'Network Error', message: err.message || 'Failed to add media' });
     } finally {
       setActionLoading(false);
     }
@@ -263,14 +290,21 @@ export default function RentalDetailPage() {
 
   const handleRemoveMedia = async (mediaId: string) => {
     try {
-      const res = await fetch(`/api/rent/${id}/media/${mediaId}`, {
+      setActionError(null);
+      const res = await safeFetchJson(`/api/rent/${id}/media/${mediaId}`, {
         method: 'DELETE',
         headers: getAdminHeaders(),
       });
-      if (!res.ok) throw new Error('Failed to remove media');
+      if (!res.ok) {
+        setActionError({
+          title: getSafeApiErrorTitle(res.errorCategory),
+          message: res.error || 'Failed to remove media',
+        });
+        return;
+      }
       await fetchListing();
     } catch (err: any) {
-      setError(err.message);
+      setActionError({ title: 'Network Error', message: err.message || 'Failed to remove media' });
     }
   };
 
@@ -290,15 +324,22 @@ export default function RentalDetailPage() {
 
     try {
       setActionLoading(true);
-      const res = await fetch(`/api/rent/${id}/media`, {
+      setActionError(null);
+      const res = await safeFetchJson(`/api/rent/${id}/media`, {
         method: 'PATCH',
         headers: getAdminHeaders(),
         body: JSON.stringify({ items }),
       });
-      if (!res.ok) throw new Error('Failed to reorder media');
+      if (!res.ok) {
+        setActionError({
+          title: getSafeApiErrorTitle(res.errorCategory),
+          message: res.error || 'Failed to reorder media',
+        });
+        return;
+      }
       await fetchListing();
     } catch (err: any) {
-      setError(err.message);
+      setActionError({ title: 'Network Error', message: err.message || 'Failed to reorder media' });
     } finally {
       setActionLoading(false);
     }
@@ -307,15 +348,22 @@ export default function RentalDetailPage() {
   const handleSetFeaturedMedia = async (mediaId: string) => {
     try {
       setActionLoading(true);
-      const res = await fetch(`/api/rent/${id}/media/${mediaId}`, {
+      setActionError(null);
+      const res = await safeFetchJson(`/api/rent/${id}/media/${mediaId}`, {
         method: 'PATCH',
         headers: getAdminHeaders(),
         body: JSON.stringify({ isFeatured: true }),
       });
-      if (!res.ok) throw new Error('Failed to update featured photo');
+      if (!res.ok) {
+        setActionError({
+          title: getSafeApiErrorTitle(res.errorCategory),
+          message: res.error || 'Failed to update featured photo',
+        });
+        return;
+      }
       await fetchListing();
     } catch (err: any) {
-      setError(err.message);
+      setActionError({ title: 'Network Error', message: err.message || 'Failed to update featured photo' });
     } finally {
       setActionLoading(false);
     }
@@ -325,17 +373,24 @@ export default function RentalDetailPage() {
     if (!selectedAmenityId) return;
     try {
       setActionLoading(true);
-      const res = await fetch(`/api/rent/${id}/amenities`, {
+      setActionError(null);
+      const res = await safeFetchJson(`/api/rent/${id}/amenities`, {
         method: 'POST',
         headers: getAdminHeaders(),
         body: JSON.stringify({ amenityId: selectedAmenityId }),
       });
-      if (!res.ok) throw new Error('Failed to associate amenity');
+      if (!res.ok) {
+        setActionError({
+          title: getSafeApiErrorTitle(res.errorCategory),
+          message: res.error || 'Failed to associate amenity',
+        });
+        return;
+      }
       setShowAddAmenity(false);
       setSelectedAmenityId('');
       await fetchListing();
     } catch (err: any) {
-      alert(err.message);
+      setActionError({ title: 'Network Error', message: err.message || 'Failed to associate amenity' });
     } finally {
       setActionLoading(false);
     }
@@ -343,28 +398,45 @@ export default function RentalDetailPage() {
 
   const handleRemoveAmenity = async (amenityId: string) => {
     try {
-      const res = await fetch(`/api/rent/${id}/amenities?amenityId=${amenityId}`, {
+      setActionError(null);
+      const res = await safeFetchJson(`/api/rent/${id}/amenities?amenityId=${amenityId}`, {
         method: 'DELETE',
         headers: getAdminHeaders(),
       });
-      if (!res.ok) throw new Error('Failed to disassociate amenity');
+      if (!res.ok) {
+        setActionError({
+          title: getSafeApiErrorTitle(res.errorCategory),
+          message: res.error || 'Failed to disassociate amenity',
+        });
+        return;
+      }
       await fetchListing();
     } catch (err: any) {
-      alert(err.message);
+      setActionError({ title: 'Network Error', message: err.message || 'Failed to disassociate amenity' });
     }
   };
 
   const handleDeleteListing = async () => {
     try {
       setActionLoading(true);
-      const res = await fetch(`/api/rent/${id}`, {
+      setActionError(null);
+      const res = await safeFetchJson(`/api/rent/${id}`, {
         method: 'DELETE',
         headers: getAdminHeaders(),
       });
-      if (!res.ok) throw new Error('Failed to delete listing');
+      if (!res.ok) {
+        setActionError({
+          title: getSafeApiErrorTitle(res.errorCategory),
+          message: res.error || 'Failed to delete listing',
+        });
+        setDeleteConfirmOpen(false);
+        setActionLoading(false);
+        return;
+      }
       router.push('/admin/listings/rent');
     } catch (err: any) {
-      alert(err.message);
+      setActionError({ title: 'Network Error', message: err.message || 'Failed to delete listing' });
+      setDeleteConfirmOpen(false);
       setActionLoading(false);
     }
   };
@@ -411,6 +483,22 @@ export default function RentalDetailPage() {
       />
 
       <div className="max-w-6xl mx-auto px-6 space-y-6">
+        {actionError && (
+          <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm font-body flex items-start justify-between gap-4">
+            <div>
+              <strong className="font-semibold font-display">{actionError.title}: </strong>
+              {actionError.message}
+            </div>
+            <button
+              type="button"
+              onClick={() => setActionError(null)}
+              className="text-xs font-semibold font-display text-rose-700 hover:text-rose-900 shrink-0 cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         {/* TOP STATUS & ACTION BAR */}
         <div className="bg-white border border-neutral-200/80 rounded-xl p-5 shadow-2xs flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-3">

@@ -15,14 +15,27 @@ export async function hashStaffPassword(password: string): Promise<string> {
   return `scrypt$16384$8$1$${salt.toString('hex')}$${hash.toString('hex')}`;
 }
 
+const DUMMY_SCRYPT_SALT = Buffer.from('00112233445566778899aabbccddeeff', 'hex');
+
 export async function verifyStaffPassword(password: string, encoded: string | null | undefined): Promise<boolean> {
-  if (typeof password !== 'string' || password.length > 256 || !encoded) return false;
+  if (typeof password !== 'string' || password.length === 0 || password.length > 256) return false;
+  if (!encoded) {
+    // Constant-time dummy derivation prevents email-enumeration timing side-channels
+    try { await derive(password, DUMMY_SCRYPT_SALT); } catch { /* ignore */ }
+    return false;
+  }
   const parts = encoded.split('$');
-  if (parts.length !== 6 || parts[0] !== 'scrypt' || parts[1] !== '16384' || parts[2] !== '8' || parts[3] !== '1') return false;
+  if (parts.length !== 6 || parts[0] !== 'scrypt' || parts[1] !== '16384' || parts[2] !== '8' || parts[3] !== '1') {
+    try { await derive(password, DUMMY_SCRYPT_SALT); } catch { /* ignore */ }
+    return false;
+  }
   try {
     const salt = Buffer.from(parts[4], 'hex');
     const expected = Buffer.from(parts[5], 'hex');
-    if (salt.length !== 16 || expected.length !== 64) return false;
+    if (salt.length !== 16 || expected.length !== 64) {
+      await derive(password, DUMMY_SCRYPT_SALT);
+      return false;
+    }
     return timingSafeEqual(await derive(password, salt), expected);
   } catch { return false; }
 }

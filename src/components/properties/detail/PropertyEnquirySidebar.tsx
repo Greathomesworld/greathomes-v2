@@ -55,7 +55,11 @@ export function PropertyEnquirySidebar({ listing }: PropertyEnquirySidebarProps)
     configuration: listing.configuration,
     propertyType: listing.propertyType,
     priceDisplay: primaryPrice,
-    locationName: listing.location?.name || listing.project?.locationName || 'Kolkata',
+    locationName:
+      listing.location?.name ||
+      listing.project?.locationName ||
+      listing.customLocalityDisplay ||
+      'Kolkata',
     sourcePage: listing.canonicalUrl,
   };
 

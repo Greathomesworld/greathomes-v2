@@ -3,6 +3,7 @@ import { resaleListingService } from '@/src/domain/projects/services/resaleServi
 import { verifyStaffCapability } from '@/src/domain/auth/capabilities';
 import { ensureSeedData } from '@/src/infrastructure/seed';
 import { revalidateResalePaths } from '@/src/lib/revalidateListingPaths';
+import { isPersistenceUnavailableError } from '@/src/lib/persistenceGuard';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -68,6 +69,12 @@ export async function POST(req: NextRequest, context: RouteContext) {
       return NextResponse.json({ success: false, error: 'Invalid action. Must be "transition" or "verify".' }, { status: 400 });
     }
   } catch (error: any) {
+    if (isPersistenceUnavailableError(error)) {
+      return NextResponse.json(
+        { success: false, code: 'PERSISTENCE_UNAVAILABLE', error: error.message },
+        { status: 503 }
+      );
+    }
     const status = error.name === 'NotFoundError' ? 404 : error.name === 'InvalidLifecycleTransitionError' ? 400 : 400;
     return NextResponse.json({ success: false, error: error.message }, { status });
   }

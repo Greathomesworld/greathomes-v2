@@ -97,8 +97,15 @@ export async function PATCH(
       reqContext.requestId
     );
   } catch (err: any) {
+    if (err instanceof SyntaxError || err?.name === 'ValidationError') {
+      return withCorrelationHeaders(
+        NextResponse.json({ success: false, error: 'Invalid media metadata payload.' }, { status: 400 }),
+        reqContext.requestId
+      );
+    }
+    console.error('[PATCH /api/admin/media/[id]] Unexpected error:', err?.message || 'Unknown error');
     return withCorrelationHeaders(
-      NextResponse.json({ success: false, error: err.message }, { status: 400 }),
+      NextResponse.json({ success: false, error: 'Failed to update media asset.' }, { status: 500 }),
       reqContext.requestId
     );
   }

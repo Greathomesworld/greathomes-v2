@@ -23,6 +23,7 @@ import {
   X,
   ShieldCheck,
   Users,
+  UserCheck,
   BookOpen,
 } from 'lucide-react';
 
@@ -138,6 +139,19 @@ export function AdminSidebar({ onCloseMobile }: AdminSidebarProps) {
     {
       groupLabel: 'Operations',
       items: [
+        {
+          title: 'Property Submissions',
+          href: '/admin/property-submissions',
+          icon: <ShieldCheck className="h-4 w-4" />,
+          capability: 'submission.read',
+          phaseBadge: 'Hub',
+        },
+        {
+          title: 'Partner Applications',
+          href: '/admin/partners',
+          icon: <UserCheck className="h-4 w-4" />,
+          capability: 'partner.read',
+        },
         {
           title: 'Visitor & Customer 360',
           href: '/admin/intelligence/customers',

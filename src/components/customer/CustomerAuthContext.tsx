@@ -10,8 +10,28 @@ export interface CustomerOtpVerificationResult {
   customer?: CustomerDto;
 }
 
+export interface CompleteProfileOptions {
+  accountType?: 'OWNER' | 'LISTING_PARTNER';
+  agencyName?: string;
+  businessAddress?: string;
+  locality?: string;
+  city?: string;
+  agencyContactPhone?: string;
+  declarationAccepted?: boolean;
+}
+
+export interface CustomerPartnerEligibilitySnapshot {
+  accountType: string | null;
+  isPartner: boolean;
+  status: string | null;
+  eligible: boolean;
+  message: string | null;
+  profile: Record<string, any> | null;
+}
+
 interface CustomerAuthContextType {
   customer: CustomerDto | null;
+  partnerEligibility: CustomerPartnerEligibilitySnapshot | null;
   loading: boolean;
   isAuthModalOpen: boolean;
   authModalMode: 'login' | 'register';
@@ -19,7 +39,12 @@ interface CustomerAuthContextType {
   closeAuthModal: () => void;
   sendOtp: (phone: string) => Promise<{ challengeId: string; expiresInSeconds: number; resendAfterSeconds: number }>;
   verifyOtp: (challengeId: string, otp: string) => Promise<CustomerOtpVerificationResult>;
-  completeProfile: (challengeId: string, name: string, email?: string) => Promise<CustomerDto>;
+  completeProfile: (
+    challengeId: string,
+    name: string,
+    email?: string,
+    options?: CompleteProfileOptions
+  ) => Promise<CustomerDto>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -41,6 +66,8 @@ async function readApiResponse(res: Response, fallback: string) {
 
 export function CustomerAuthProvider({ children }: { children: React.ReactNode }) {
   const [customer, setCustomer] = useState<CustomerDto | null>(null);
+  const [partnerEligibility, setPartnerEligibility] =
+    useState<CustomerPartnerEligibilitySnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
@@ -52,12 +79,15 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
         const data = await res.json();
         if (data.authenticated && data.customer) {
           setCustomer(data.customer);
+          setPartnerEligibility(data.partnerEligibility ?? null);
           return;
         }
       }
       setCustomer(null);
+      setPartnerEligibility(null);
     } catch {
       setCustomer(null);
+      setPartnerEligibility(null);
     } finally {
       setLoading(false);
     }
@@ -109,11 +139,21 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
     };
   };
 
-  const completeProfile = async (challengeId: string, name: string, email?: string): Promise<CustomerDto> => {
+  const completeProfile = async (
+    challengeId: string,
+    name: string,
+    email?: string,
+    options?: CompleteProfileOptions
+  ): Promise<CustomerDto> => {
     const res = await fetch('/api/customer/auth/profile/complete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ challengeId, name, email: email?.trim() || undefined }),
+      body: JSON.stringify({
+        challengeId,
+        name,
+        email: email?.trim() || undefined,
+        ...(options || {}),
+      }),
     });
     const data = await readApiResponse(res, 'We could not complete your profile. Please try again.');
     setCustomer(data.customer);
@@ -126,6 +166,7 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
       await fetch('/api/customer/auth/logout', { method: 'POST' });
     } finally {
       setCustomer(null);
+      setPartnerEligibility(null);
     }
   };
 
@@ -133,6 +174,7 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
     <CustomerAuthContext.Provider
       value={{
         customer,
+        partnerEligibility,
         loading,
         isAuthModalOpen,
         authModalMode,

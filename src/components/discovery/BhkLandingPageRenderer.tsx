@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { ChevronRight, Building2, MapPin, CheckCircle2, ShieldCheck, ArrowRight, HelpCircle } from 'lucide-react';
 import { BhkLandingData } from '@/src/domain/projects/services/bhkLandingService';
 import { formatIndianPrice } from '@/src/components/discovery/formatters';
+import { safeJsonLd } from '@/src/lib/safeJsonLd';
 
 interface BhkLandingPageRendererProps {
   data: BhkLandingData;
@@ -33,7 +34,7 @@ export function BhkLandingPageRenderer({ data, jsonLd }: BhkLandingPageRendererP
       {/* Schema.org Structured Data */}
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }}
       />
 
       {/* Breadcrumb Navigation */}

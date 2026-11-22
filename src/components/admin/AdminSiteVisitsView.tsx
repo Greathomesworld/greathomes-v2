@@ -262,7 +262,7 @@ export default function AdminSiteVisitsView() {
                           {visit.referenceNumber}
                         </span>
                         <span className="text-[10px] text-[#111111]/40 block">
-                          {new Date(visit.createdAt).toLocaleDateString()}
+                          {new Date(visit.createdAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}
                         </span>
                       </td>
 

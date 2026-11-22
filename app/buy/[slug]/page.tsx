@@ -8,6 +8,7 @@ import { bhkLandingService } from '@/src/domain/projects/services/bhkLandingServ
 import { BhkLandingPageRenderer } from '@/src/components/discovery/BhkLandingPageRenderer';
 import { RecentlyViewedTracker } from '@/src/components/customer/RecentlyViewedTracker';
 import { PropertyDetailLayout } from '@/src/components/properties/detail/PropertyDetailLayout';
+import { safeJsonLd } from '@/src/lib/safeJsonLd';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -50,14 +51,18 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const locationContext = listing.project?.name
     ? ` at ${listing.project.name}`
+    : listing.customProjectDisplay
+    ? ` at ${listing.customProjectDisplay}`
     : listing.location?.name
     ? ` in ${listing.location.name}`
+    : listing.customLocalityDisplay
+    ? ` in ${listing.customLocalityDisplay}`
     : '';
 
-  const title = `${listing.configuration} Resale${locationContext} · ${listing.formattedAskingPrice} | Great Homes`;
+  const title = `${listing.title} · ${listing.formattedAskingPrice} | Great Homes`;
   const description = listing.description
     ? listing.description.slice(0, 155)
-    : `Explore this verified ${listing.configuration} resale ${listing.propertyTypeDisplay.toLowerCase()}${locationContext}. Asking price: ${listing.formattedAskingPrice}.`;
+    : `Explore this ${listing.isVerified ? 'verified ' : ''}${listing.propertyType === 'PLOT' ? 'residential plot' : `${listing.configuration || listing.propertyTypeDisplay} resale ${listing.propertyTypeDisplay.toLowerCase()}`}${locationContext}. Asking price: ${listing.formattedAskingPrice}.`;
 
   const canonicalUrl = `${BASE_URL}/buy/${listing.slug}`;
 
@@ -160,27 +165,43 @@ export default async function ResaleListingDetailPage({ params }: PageProps) {
     },
   ];
 
+  const areaNumeric =
+    listing.propertyType === 'PLOT'
+      ? listing.plotArea
+      : listing.carpetArea || listing.builtUpArea || listing.superBuiltUpArea || listing.plotArea;
+
+  const schemaType =
+    listing.propertyType === 'PLOT'
+      ? 'Place'
+      : listing.propertyType === 'INDEPENDENT_HOUSE'
+      ? 'SingleFamilyResidence'
+      : 'Apartment';
+
   const structuredData = [
     {
       '@context': 'https://schema.org',
-      '@type': 'Apartment',
+      '@type': schemaType,
       name: listing.title,
       description:
         listing.description ||
-        `${listing.configuration} resale ${listing.propertyTypeDisplay.toLowerCase()} in ${listing.locationDisplay}`,
+        `${listing.title} in ${listing.locationDisplay}`,
       url: canonicalUrl,
-      numberOfRooms: listing.bedroomCount,
-      numberOfBedrooms: listing.bedroomCount,
-      floorSize: listing.carpetArea
+      ...(listing.bedroomCount && listing.bedroomCount > 0
+        ? {
+            numberOfRooms: listing.bedroomCount,
+            numberOfBedrooms: listing.bedroomCount,
+          }
+        : {}),
+      floorSize: areaNumeric
         ? {
             '@type': 'QuantitativeValue',
-            value: listing.carpetArea,
+            value: areaNumeric,
             unitCode: 'FTK',
           }
         : undefined,
       address: {
         '@type': 'PostalAddress',
-        addressLocality: listing.location?.name || 'Kolkata',
+        addressLocality: listing.location?.name || listing.customLocalityDisplay || 'Kolkata',
         addressRegion: 'West Bengal',
         addressCountry: 'IN',
       },
@@ -202,7 +223,7 @@ export default async function ResaleListingDetailPage({ params }: PageProps) {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(structuredData) }}
       />
       <RecentlyViewedTracker resourceType="RESALE_LISTING" resourceId={listing.id} />
       <PropertyDetailLayout listing={listing} discovery={discovery} />

@@ -23,6 +23,7 @@ import { useEnquiry } from './EnquiryContext';
 import { PreferredContactMethod } from '@/src/domain/enquiry/entities/enquiryEntity';
 import { useCustomerAuth } from '../customer/CustomerAuthContext';
 import { useVisitorTelemetry } from '../telemetry/VisitorTelemetryProvider';
+import { LeadFirstProjectEnquiryFlow } from './LeadFirstProjectEnquiryFlow';
 
 export function GreatHomesEnquiryDialog() {
   const { isOpen, contextData, closeEnquiry } = useEnquiry();
@@ -50,11 +51,8 @@ export function GreatHomesEnquiryDialog() {
 
   // Step 3: Site Visit Request
   const [requestSiteVisit, setRequestSiteVisit] = useState(true);
-  const [preferredDate, setPreferredDate] = useState<string>(() => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    return tomorrow.toISOString().split('T')[0];
-  });
+  const [preferredDate, setPreferredDate] = useState<string>('');
+  const [minDateStr, setMinDateStr] = useState<string>('');
   const [preferredTimeWindow, setPreferredTimeWindow] = useState<string>('12:00–15:00');
   const [visitType, setVisitType] = useState<'IN_PERSON' | 'VIRTUAL'>('IN_PERSON');
   const [buyerNote, setBuyerNote] = useState('');
@@ -70,6 +68,9 @@ export function GreatHomesEnquiryDialog() {
 
   // Reset form when opened, prefilling from verified customer session when available
   useEffect(() => {
+    if (isOpen && contextData?.flowMode === 'LEAD_FIRST_PROJECT') {
+      return;
+    }
     if (isOpen) {
       setStep(1);
       setIsSuccess(false);
@@ -91,6 +92,11 @@ export function GreatHomesEnquiryDialog() {
           : ''
       );
       setBuyerNote('');
+      const today = new Date();
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      setMinDateStr(today.toISOString().split('T')[0]);
+      setPreferredDate(tomorrow.toISOString().split('T')[0]);
       setRequestSiteVisit(isSpecsRequest ? false : (contextData?.requestSiteVisit ?? true));
       setPreferredContact(contextData?.preferredContact || 'PHONE');
       setWhatsappOptIn(false);
@@ -132,7 +138,7 @@ export function GreatHomesEnquiryDialog() {
 
   // Keyboard navigation
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || contextData?.flowMode === 'LEAD_FIRST_PROJECT') return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -253,6 +259,16 @@ export function GreatHomesEnquiryDialog() {
   };
 
   if (!isOpen || !contextData) return null;
+
+  if (contextData.flowMode === 'LEAD_FIRST_PROJECT') {
+    return (
+      <LeadFirstProjectEnquiryFlow
+        key={`${contextData.projectId || contextData.projectSlug || 'project'}:${contextData.ctaSource || 'gpa'}`}
+        contextData={contextData}
+        onClose={closeEnquiry}
+      />
+    );
+  }
 
   const isSpecsIntent = contextData.inquiryIntent === 'REQUEST_SPECS';
 
@@ -684,7 +700,7 @@ export function GreatHomesEnquiryDialog() {
                           type="date"
                           required={requestSiteVisit}
                           value={preferredDate}
-                          min={new Date().toISOString().split('T')[0]}
+                          min={minDateStr || undefined}
                           onChange={(e) => setPreferredDate(e.target.value)}
                           className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[var(--color-border)] text-xs font-body text-[#111111]"
                         />

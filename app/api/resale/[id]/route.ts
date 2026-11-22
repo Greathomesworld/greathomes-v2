@@ -3,6 +3,8 @@ import { resaleListingService } from '@/src/domain/projects/services/resaleServi
 import { verifyStaffCapability } from '@/src/domain/auth/capabilities';
 import { ensureSeedData } from '@/src/infrastructure/seed';
 import { revalidateResalePaths } from '@/src/lib/revalidateListingPaths';
+import { isPersistenceUnavailableError } from '@/src/lib/persistenceGuard';
+import { auditService } from '@/src/domain/audit/auditService';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -32,7 +34,14 @@ export async function GET(req: NextRequest, context: RouteContext) {
     }
     return NextResponse.json({ success: true, data: publicListing });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    if (isPersistenceUnavailableError(error)) {
+      return NextResponse.json(
+        { success: false, code: 'PERSISTENCE_UNAVAILABLE', error: 'Resale listing service is temporarily unavailable.' },
+        { status: 503 }
+      );
+    }
+    console.error('[Resale Detail GET] Unexpected error:', error?.message || 'Unknown error');
+    return NextResponse.json({ success: false, error: 'Failed to load resale listing' }, { status: 500 });
   }
 }
 
@@ -61,10 +70,30 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       locationSlug: updated.location?.slug ?? updated.project?.location?.slug,
       previousLocationSlug: existing?.location?.slug ?? existing?.project?.location?.slug,
     });
+    const staffActor = authUpdate.authorized ? authUpdate.staff : authManage.staff;
+    await auditService.record(req, staffActor ? { id: staffActor.id, role: staffActor.role } : null, {
+      action: 'UPDATE_RESALE_LISTING',
+      resourceType: 'RESALE_LISTING',
+      resourceId: updated.id,
+      success: true,
+      metadata: { updatedFields: Object.keys(body || {}) },
+    });
     return NextResponse.json({ success: true, data: updated });
   } catch (error: any) {
-    const status = error.name === 'NotFoundError' ? 404 : error.name === 'ValidationError' ? 400 : 500;
-    return NextResponse.json({ success: false, error: error.message }, { status });
+    if (isPersistenceUnavailableError(error)) {
+      return NextResponse.json(
+        { success: false, code: 'PERSISTENCE_UNAVAILABLE', error: 'Resale listing service is temporarily unavailable.' },
+        { status: 503 }
+      );
+    }
+    if (error?.name === 'NotFoundError') {
+      return NextResponse.json({ success: false, error: error.message }, { status: 404 });
+    }
+    if (error?.name === 'ValidationError') {
+      return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+    }
+    console.error('[Resale Detail PATCH] Unexpected error:', error?.message || 'Unknown error');
+    return NextResponse.json({ success: false, error: 'Failed to update resale listing' }, { status: 500 });
   }
 }
 
@@ -92,8 +121,22 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
       projectSlug: existing?.project?.slug,
       locationSlug: existing?.location?.slug ?? existing?.project?.location?.slug,
     });
+    const staffActor = authArchive.authorized ? authArchive.staff : authManage.staff;
+    await auditService.record(req, staffActor ? { id: staffActor.id, role: staffActor.role } : null, {
+      action: 'DELETE_RESALE_LISTING',
+      resourceType: 'RESALE_LISTING',
+      resourceId: id,
+      success: true,
+    });
     return NextResponse.json({ success: true, message: 'Resale listing deleted successfully' });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    if (isPersistenceUnavailableError(error)) {
+      return NextResponse.json(
+        { success: false, code: 'PERSISTENCE_UNAVAILABLE', error: 'Resale listing service is temporarily unavailable.' },
+        { status: 503 }
+      );
+    }
+    console.error('[Resale Detail DELETE] Unexpected error:', error?.message || 'Unknown error');
+    return NextResponse.json({ success: false, error: 'Failed to delete resale listing' }, { status: 500 });
   }
 }

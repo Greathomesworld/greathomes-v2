@@ -125,6 +125,7 @@ export class InMemoryCustomerRepository implements CustomerRepository {
       email: data.email ? data.email.toLowerCase().trim() : null,
       phone: data.phone || null,
       name: data.name,
+      accountType: data.accountType || null,
       passwordHash: data.passwordHash || null,
       avatarUrl: data.avatarUrl || null,
       status: data.status || 'ACTIVE',
@@ -653,6 +654,13 @@ export class InMemoryNotificationRepository implements NotificationRepository {
   }
 
   async create(data: Omit<Notification, 'id' | 'createdAt' | 'isRead'> & { id?: string; isRead?: boolean }): Promise<Notification> {
+    if (data.dedupKey) {
+      for (const n of this.notifications.values()) {
+        if (n.customerId === data.customerId && n.dedupKey === data.dedupKey) {
+          return { ...n };
+        }
+      }
+    }
     const id = data.id || `notif_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
     const created: Notification = {
       id,
@@ -666,6 +674,7 @@ export class InMemoryNotificationRepository implements NotificationRepository {
       locationId: data.locationId || null,
       savedItemId: data.savedItemId || null,
       watchId: data.watchId || null,
+      dedupKey: data.dedupKey || null,
       metadata: data.metadata || null,
       isRead: data.isRead !== undefined ? data.isRead : false,
       readAt: null,

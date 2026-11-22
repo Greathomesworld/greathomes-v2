@@ -4,14 +4,13 @@ import './../src/index.css';
 import { Header } from './../src/components/layout/Header';
 import { Footer } from './../src/components/layout/Footer';
 import { EnquiryProvider } from './../src/components/enquiry/EnquiryContext';
-import { GreatHomesEnquiryDialog } from './../src/components/enquiry/GreatHomesEnquiryDialog';
 import { CustomerAuthProvider } from './../src/components/customer/CustomerAuthContext';
-import { CustomerAuthModal } from './../src/components/customer/CustomerAuthModal';
 import { MobileBottomNav } from './../src/components/layout/MobileBottomNav';
 import { ComparisonTray } from './../src/components/comparison/ComparisonTray';
 import { VisitorTelemetryProvider } from './../src/components/telemetry/VisitorTelemetryProvider';
 import { SearchProvider } from './../src/context/SearchContext';
-import { ImmersiveSearchModal } from './../src/components/search/ImmersiveSearchModal';
+import { GlobalModalsHost } from './../src/components/layout/GlobalModalsHost';
+import { safeJsonLd } from './../src/lib/safeJsonLd';
 
 const fjallaOne = Fjalla_One({
   weight: '400',
@@ -118,7 +117,7 @@ export default function RootLayout({
       <body className="flex min-h-screen flex-col bg-background text-foreground font-body antialiased" suppressHydrationWarning>
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+          dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }}
         />
         <VisitorTelemetryProvider>
           <EnquiryProvider>
@@ -129,9 +128,7 @@ export default function RootLayout({
                 <Footer />
                 <MobileBottomNav />
                 <ComparisonTray />
-                <GreatHomesEnquiryDialog />
-                <CustomerAuthModal />
-                <ImmersiveSearchModal />
+                <GlobalModalsHost />
               </SearchProvider>
             </CustomerAuthProvider>
           </EnquiryProvider>

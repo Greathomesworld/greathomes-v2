@@ -6,6 +6,11 @@ import Link from 'next/link';
 import { AdminPageHeader } from '@/src/components/admin/AdminPageHeader';
 import { getAdminHeaders } from '@/src/lib/adminAuth';
 import {
+  safeFetchJson,
+  getSafeApiErrorTitle,
+  type SafeApiErrorCategory,
+} from '@/src/lib/safeApiFetch';
+import {
   Building2,
   Home,
   IndianRupee,
@@ -28,6 +33,7 @@ export default function NewResaleListingPage() {
   const [locations, setLocations] = useState<CanonicalLocationOption[]>([]);
   const [availableAmenities, setAvailableAmenities] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [errorCategory, setErrorCategory] = useState<SafeApiErrorCategory | null>(null);
 
   // Form State
   const [isLinkedProject, setIsLinkedProject] = useState(true);
@@ -74,21 +80,21 @@ export default function NewResaleListingPage() {
     const fetchDependencies = async () => {
       try {
         const [projRes, locRes, amenRes] = await Promise.all([
-          fetch('/api/projects?limit=100', { headers: getAdminHeaders() }),
-          fetch('/api/locations', { headers: getAdminHeaders() }),
-          fetch('/api/admin/amenities', { headers: getAdminHeaders() }),
+          safeFetchJson<any>('/api/projects?limit=100', { headers: getAdminHeaders() }),
+          safeFetchJson<any>('/api/locations', { headers: getAdminHeaders() }),
+          safeFetchJson<any>('/api/admin/amenities', { headers: getAdminHeaders() }),
         ]);
 
-        if (projRes.ok) {
-          const pJson = await projRes.json();
-          setProjects(pJson.data || []);
-          if (pJson.data?.length > 0) {
-            setProjectId(pJson.data[0].id);
+        if (projRes.ok && projRes.data) {
+          const projList = projRes.data.data || [];
+          setProjects(projList);
+          if (projList.length > 0) {
+            setProjectId(projList[0].id);
           }
         }
 
-        if (locRes.ok) {
-          const lJson = await locRes.json();
+        if (locRes.ok && locRes.data) {
+          const lJson = locRes.data;
           const locList = Array.isArray(lJson) ? lJson : lJson.data || [];
           setLocations(locList);
           if (locList.length > 0) {
@@ -96,9 +102,8 @@ export default function NewResaleListingPage() {
           }
         }
 
-        if (amenRes.ok) {
-          const aJson = await amenRes.json();
-          setAvailableAmenities(aJson.data || []);
+        if (amenRes.ok && amenRes.data) {
+          setAvailableAmenities(amenRes.data.data || []);
         }
       } catch (err) {
         console.error('Error fetching dependencies:', err);
@@ -131,24 +136,29 @@ export default function NewResaleListingPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setErrorCategory(null);
 
     if (!configuration.trim()) {
+      setErrorCategory('validation');
       setError('Property configuration is required (e.g., "3 BHK Executive").');
       return;
     }
 
     const priceNum = parseFloat(askingPrice);
     if (isNaN(priceNum) || priceNum <= 0) {
+      setErrorCategory('validation');
       setError('Valid total asking price is required.');
       return;
     }
 
     if (!isLinkedProject && !locationId) {
+      setErrorCategory('validation');
       setError('Canonical location is required for standalone listings.');
       return;
     }
 
     if (!isLinkedProject && ((latitude !== null && longitude === null) || (latitude === null && longitude !== null))) {
+      setErrorCategory('validation');
       setError('Both latitude and longitude must be provided together.');
       return;
     }
@@ -172,7 +182,7 @@ export default function NewResaleListingPage() {
         facing,
         floorCategory,
         possession,
-        possessionDate: possessionDate ? new Date(possessionDate) : null,
+        possessionDate: possessionDate || null,
         description: description.trim() || null,
         listingPartyType,
         ownerName: listingPartyType === 'OWNER' ? ownerName || null : null,
@@ -188,24 +198,24 @@ export default function NewResaleListingPage() {
         crmId: crmId || null,
       };
 
-      const res = await fetch('/api/resale', {
+      const res = await safeFetchJson<{ data?: { id?: string } }>('/api/resale', {
         method: 'POST',
         headers: getAdminHeaders(),
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to create resale listing');
+      if (!res.ok || !res.data?.data?.id) {
+        setErrorCategory(res.errorCategory ?? 'server');
+        setError(res.error || 'Failed to create resale listing');
+        return;
       }
 
-      const json = await res.json();
-      const createdListing = json.data;
+      const createdListing = res.data.data;
 
       // Associate Amenities
       if (createdListing?.id && selectedAmenities.length > 0) {
         for (const amenId of selectedAmenities) {
-          await fetch(`/api/resale/${createdListing.id}/amenities`, {
+          await safeFetchJson(`/api/resale/${createdListing.id}/amenities`, {
             method: 'POST',
             headers: getAdminHeaders(),
             body: JSON.stringify({ amenityId: amenId }),
@@ -217,7 +227,7 @@ export default function NewResaleListingPage() {
       if (createdListing?.id && mediaList.length > 0) {
         for (const m of mediaList) {
           if (m.url && m.url.trim()) {
-            await fetch(`/api/resale/${createdListing.id}/media`, {
+            await safeFetchJson(`/api/resale/${createdListing.id}/media`, {
               method: 'POST',
               headers: getAdminHeaders(),
               body: JSON.stringify({
@@ -234,6 +244,7 @@ export default function NewResaleListingPage() {
 
       router.push(`/admin/listings/resale/${createdListing.id}`);
     } catch (err: any) {
+      setErrorCategory('network');
       setError(err.message || 'An unexpected error occurred.');
     } finally {
       setLoading(false);
@@ -262,7 +273,7 @@ export default function NewResaleListingPage() {
       <div className="max-w-4xl mx-auto px-6">
         {error && (
           <div className="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm font-body">
-            <strong className="font-semibold font-display">Validation Error: </strong>
+            <strong className="font-semibold font-display">{getSafeApiErrorTitle(errorCategory)}: </strong>
             {error}
           </div>
         )}

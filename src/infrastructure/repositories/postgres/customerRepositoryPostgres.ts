@@ -30,33 +30,106 @@ import {
   NotificationRepository,
 } from '../../../domain/customer/repositories/customerRepository.ts';
 
+const legacyCustomerSelection = {
+  id: customers.id,
+  email: customers.email,
+  phone: customers.phone,
+  name: customers.name,
+  passwordHash: customers.passwordHash,
+  avatarUrl: customers.avatarUrl,
+  status: customers.status,
+  emailVerifiedAt: customers.emailVerifiedAt,
+  phoneVerifiedAt: customers.phoneVerifiedAt,
+  lastLoginAt: customers.lastLoginAt,
+  createdAt: customers.createdAt,
+  updatedAt: customers.updatedAt,
+};
+
+function isMissingAccountTypeColumnError(err: any): boolean {
+  const msg = String(err?.message || err || '');
+  const causeMsg = String(err?.cause?.message || '');
+  return (
+    (err?.code === '42703' || err?.cause?.code === '42703' || /column .* does not exist/i.test(msg) || /column .* does not exist/i.test(causeMsg)) &&
+    (/account_type/i.test(msg) || /account_type/i.test(causeMsg))
+  );
+}
+
+function isMissingDedupKeyColumnError(err: any): boolean {
+  const msg = String(err?.message || err || '');
+  const causeMsg = String(err?.cause?.message || '');
+  return (
+    (err?.code === '42703' || err?.cause?.code === '42703' || /column .* does not exist/i.test(msg) || /column .* does not exist/i.test(causeMsg)) &&
+    (/dedup_key/i.test(msg) || /dedup_key/i.test(causeMsg))
+  );
+}
+
 export class CustomerRepositoryPostgres implements CustomerRepository {
+  private accountTypeColumnAvailable = true;
+
+  private selectColumns(db: any) {
+    return this.accountTypeColumnAvailable ? db.select() : db.select(legacyCustomerSelection);
+  }
+
+  private async mapCustomerWithFallback(db: any, row: any): Promise<Customer> {
+    if (!this.accountTypeColumnAvailable && (row.accountType === undefined || row.accountType === null)) {
+      const { resolveLegacyCustomerAccountType } = await import('../../../domain/customer/partnerService.ts');
+      const resolved = await resolveLegacyCustomerAccountType(db, String(row.id));
+      return this.mapCustomer({ ...row, accountType: resolved });
+    }
+    return this.mapCustomer(row);
+  }
+
   async findById(id: string): Promise<Customer | null> {
     const db = await getDbReady();
     if (!db) return null;
 
-    const [row] = await db
-      .select()
-      .from(customers)
-      .where(eq(customers.id, id))
-      .limit(1);
+    try {
+      const [row] = await this.selectColumns(db)
+        .from(customers)
+        .where(eq(customers.id, id))
+        .limit(1);
 
-    if (!row) return null;
-    return this.mapCustomer(row);
+      if (!row) return null;
+      return await this.mapCustomerWithFallback(db, row);
+    } catch (err) {
+      if (this.accountTypeColumnAvailable && isMissingAccountTypeColumnError(err)) {
+        this.accountTypeColumnAvailable = false;
+        const [row] = await db
+          .select(legacyCustomerSelection)
+          .from(customers)
+          .where(eq(customers.id, id))
+          .limit(1);
+        return row ? await this.mapCustomerWithFallback(db, row) : null;
+      }
+      throw err;
+    }
   }
 
   async findByEmail(email: string): Promise<Customer | null> {
     const db = await getDbReady();
     if (!db) return null;
 
-    const [row] = await db
-      .select()
-      .from(customers)
-      .where(eq(sql`LOWER(${customers.email})`, email.toLowerCase().trim()))
-      .limit(1);
+    const normalized = email.toLowerCase().trim();
+    try {
+      const [row] = await this.selectColumns(db)
+        .from(customers)
+        .where(eq(sql`LOWER(${customers.email})`, normalized))
+        .limit(1);
 
-    if (!row) return null;
-    return this.mapCustomer(row);
+      if (!row) return null;
+      return await this.mapCustomerWithFallback(db, row);
+    } catch (err) {
+      if (this.accountTypeColumnAvailable && isMissingAccountTypeColumnError(err)) {
+        this.accountTypeColumnAvailable = false;
+        const [row] = await db
+          .select(legacyCustomerSelection)
+          .from(customers)
+          .where(eq(sql`LOWER(${customers.email})`, normalized))
+          .limit(1);
+        return row ? await this.mapCustomerWithFallback(db, row) : null;
+      }
+      throw err;
+    }
   }
 
   async findByPhone(phone: string): Promise<Customer | null> {
@@ -67,14 +140,27 @@ export class CustomerRepositoryPostgres implements CustomerRepository {
     const right10 = digits.length >= 10 ? digits.slice(-10) : digits;
     if (!right10) return null;
 
-    const [row] = await db
-      .select()
-      .from(customers)
-      .where(sql`right(regexp_replace(coalesce(${customers.phone}, ''), '\\D', '', 'g'), 10) = ${right10}`)
-      .limit(1);
+    const whereCond = sql`right(regexp_replace(coalesce(${customers.phone}, ''), '\\D', '', 'g'), 10) = ${right10}`;
+    try {
+      const [row] = await this.selectColumns(db)
+        .from(customers)
+        .where(whereCond)
+        .limit(1);
 
-    if (!row) return null;
-    return this.mapCustomer(row);
+      if (!row) return null;
+      return await this.mapCustomerWithFallback(db, row);
+    } catch (err) {
+      if (this.accountTypeColumnAvailable && isMissingAccountTypeColumnError(err)) {
+        this.accountTypeColumnAvailable = false;
+        const [row] = await db
+          .select(legacyCustomerSelection)
+          .from(customers)
+          .where(whereCond)
+          .limit(1);
+        return row ? await this.mapCustomerWithFallback(db, row) : null;
+      }
+      throw err;
+    }
   }
 
   async list(filter?: CustomerListFilter): Promise<{ items: Customer[]; total: number }> {
@@ -105,14 +191,30 @@ export class CustomerRepositoryPostgres implements CustomerRepository {
 
     const limit = Math.max(1, filter?.limit || 50);
     const offset = Math.max(0, filter?.offset || 0);
+    const orderExpr = desc(sql`coalesce(${customers.lastLoginAt}, ${customers.createdAt})`);
 
-    const rows = await db
-      .select()
-      .from(customers)
-      .where(whereClause)
-      .orderBy(desc(sql`coalesce(${customers.lastLoginAt}, ${customers.createdAt})`))
-      .limit(limit)
-      .offset(offset);
+    let rows: any[];
+    try {
+      rows = await this.selectColumns(db)
+        .from(customers)
+        .where(whereClause)
+        .orderBy(orderExpr)
+        .limit(limit)
+        .offset(offset);
+    } catch (err) {
+      if (this.accountTypeColumnAvailable && isMissingAccountTypeColumnError(err)) {
+        this.accountTypeColumnAvailable = false;
+        rows = await db
+          .select(legacyCustomerSelection)
+          .from(customers)
+          .where(whereClause)
+          .orderBy(orderExpr)
+          .limit(limit)
+          .offset(offset);
+      } else {
+        throw err;
+      }
+    }
 
     return {
       items: rows.map((r) => this.mapCustomer(r)),
@@ -127,25 +229,85 @@ export class CustomerRepositoryPostgres implements CustomerRepository {
     const id = data.id || `cust_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
     const now = new Date();
 
-    const [inserted] = await db
-      .insert(customers)
-      .values({
-        id,
-        email: data.email ? data.email.toLowerCase().trim() : null,
-        phone: data.phone || null,
-        name: data.name,
-        passwordHash: data.passwordHash || null,
-        avatarUrl: data.avatarUrl || null,
-        status: data.status || 'ACTIVE',
-        emailVerifiedAt: data.emailVerifiedAt || null,
-        phoneVerifiedAt: data.phoneVerifiedAt || null,
-        lastLoginAt: data.lastLoginAt || null,
-        createdAt: now,
-        updatedAt: now,
-      } as any)
-      .returning();
+    const baseValues: any = {
+      id,
+      email: data.email ? data.email.toLowerCase().trim() : null,
+      phone: data.phone || null,
+      name: data.name,
+      passwordHash: data.passwordHash || null,
+      avatarUrl: data.avatarUrl || null,
+      status: data.status || 'ACTIVE',
+      emailVerifiedAt: data.emailVerifiedAt || null,
+      phoneVerifiedAt: data.phoneVerifiedAt || null,
+      lastLoginAt: data.lastLoginAt || null,
+      createdAt: now,
+      updatedAt: now,
+    };
 
-    return this.mapCustomer(inserted);
+    if (this.accountTypeColumnAvailable) {
+      try {
+        const [inserted] = await db
+          .insert(customers)
+          .values({
+            ...baseValues,
+            accountType: data.accountType || null,
+          })
+          .returning();
+        return this.mapCustomer(inserted);
+      } catch (err) {
+        if (isMissingAccountTypeColumnError(err)) {
+          this.accountTypeColumnAvailable = false;
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    const insertRes: any = await db.execute(sql`
+      INSERT INTO customers (
+        id, email, phone, name, password_hash, avatar_url, status,
+        email_verified_at, phone_verified_at, last_login_at, created_at, updated_at
+      ) VALUES (
+        ${baseValues.id},
+        ${baseValues.email},
+        ${baseValues.phone},
+        ${baseValues.name},
+        ${baseValues.passwordHash},
+        ${baseValues.avatarUrl},
+        ${baseValues.status},
+        ${baseValues.emailVerifiedAt ? new Date(baseValues.emailVerifiedAt) : null},
+        ${baseValues.phoneVerifiedAt ? new Date(baseValues.phoneVerifiedAt) : null},
+        ${baseValues.lastLoginAt ? new Date(baseValues.lastLoginAt) : null},
+        ${baseValues.createdAt},
+        ${baseValues.updatedAt}
+      )
+      RETURNING
+        id,
+        email,
+        phone,
+        name,
+        password_hash AS "passwordHash",
+        avatar_url AS "avatarUrl",
+        status,
+        email_verified_at AS "emailVerifiedAt",
+        phone_verified_at AS "phoneVerifiedAt",
+        last_login_at AS "lastLoginAt",
+        created_at AS "createdAt",
+        updated_at AS "updatedAt"
+    `);
+    const insertedRows = Array.isArray(insertRes?.rows) ? insertRes.rows : Array.isArray(insertRes) ? insertRes : [];
+    const inserted = insertedRows[0] || baseValues;
+
+    if (data.accountType === 'OWNER') {
+      try {
+        const { persistLegacyOwnerAccountType } = await import('../../../domain/customer/partnerService.ts');
+        await persistLegacyOwnerAccountType(db, id, 'Customer account created as OWNER');
+      } catch {
+        // non-blocking
+      }
+    }
+
+    return this.mapCustomer({ ...inserted, accountType: data.accountType || null });
   }
 
   async update(id: string, data: Partial<Customer>): Promise<Customer | null> {
@@ -158,6 +320,9 @@ export class CustomerRepositoryPostgres implements CustomerRepository {
     if (data.name !== undefined) updateData.name = data.name;
     if (data.email !== undefined) updateData.email = data.email ? data.email.toLowerCase().trim() : null;
     if (data.phone !== undefined) updateData.phone = data.phone;
+    if (data.accountType !== undefined && this.accountTypeColumnAvailable) {
+      updateData.accountType = data.accountType;
+    }
     if (data.avatarUrl !== undefined) updateData.avatarUrl = data.avatarUrl;
     if (data.passwordHash !== undefined) updateData.passwordHash = data.passwordHash;
     if (data.status !== undefined) updateData.status = data.status;
@@ -165,20 +330,54 @@ export class CustomerRepositoryPostgres implements CustomerRepository {
     if (data.phoneVerifiedAt !== undefined) updateData.phoneVerifiedAt = data.phoneVerifiedAt;
     if (data.lastLoginAt !== undefined) updateData.lastLoginAt = data.lastLoginAt;
 
+    if (this.accountTypeColumnAvailable) {
+      try {
+        const [updated] = await db
+          .update(customers)
+          .set(updateData)
+          .where(eq(customers.id, id))
+          .returning();
+        return updated ? this.mapCustomer(updated) : null;
+      } catch (err) {
+        if (isMissingAccountTypeColumnError(err)) {
+          this.accountTypeColumnAvailable = false;
+          delete updateData.accountType;
+        } else {
+          throw err;
+        }
+      }
+    }
+
     const [updated] = await db
       .update(customers)
       .set(updateData)
       .where(eq(customers.id, id))
-      .returning();
+      .returning(legacyCustomerSelection);
 
-    return updated ? this.mapCustomer(updated) : null;
+    if (!updated) return null;
+    const { persistLegacyOwnerAccountType, resolveLegacyCustomerAccountType } = await import('../../../domain/customer/partnerService.ts');
+    if (data.accountType === 'OWNER') {
+      try {
+        await persistLegacyOwnerAccountType(db, id, 'Customer account updated to OWNER');
+      } catch {
+        // non-blocking
+      }
+    }
+    const resolvedAccountType =
+      data.accountType !== undefined
+        ? data.accountType
+        : await resolveLegacyCustomerAccountType(db, id);
+    return this.mapCustomer({ ...updated, accountType: resolvedAccountType });
   }
 
   async delete(id: string): Promise<boolean> {
     const db = await getDbReady();
     if (!db) return false;
 
-    const res = await db.delete(customers).where(eq(customers.id, id)).returning();
+    const res = await db
+      .delete(customers)
+      .where(eq(customers.id, id))
+      .returning({ id: customers.id });
     return res.length > 0;
   }
 
@@ -188,6 +387,7 @@ export class CustomerRepositoryPostgres implements CustomerRepository {
       email: row.email,
       phone: row.phone,
       name: row.name,
+      accountType: (row.accountType as Customer['accountType']) ?? null,
       passwordHash: row.passwordHash,
       avatarUrl: row.avatarUrl,
       status: row.status,
@@ -798,12 +998,46 @@ export class LocationWatchRepositoryPostgres implements LocationWatchRepository 
   }
 }
 
+const legacyNotificationSelection = {
+  id: notifications.id,
+  customerId: notifications.customerId,
+  type: notifications.type,
+  title: notifications.title,
+  message: notifications.message,
+  resourceType: notifications.resourceType,
+  resourceId: notifications.resourceId,
+  projectId: notifications.projectId,
+  locationId: notifications.locationId,
+  savedItemId: notifications.savedItemId,
+  watchId: notifications.watchId,
+  metadata: notifications.metadata,
+  isRead: notifications.isRead,
+  readAt: notifications.readAt,
+  createdAt: notifications.createdAt,
+  expiresAt: notifications.expiresAt,
+};
+
 export class NotificationRepositoryPostgres implements NotificationRepository {
+  private dedupKeyColumnAvailable = true;
+
+  private selectColumns(db: any) {
+    return this.dedupKeyColumnAvailable ? db.select() : db.select(legacyNotificationSelection);
+  }
+
   async findById(id: string): Promise<Notification | null> {
     const db = await getDbReady();
     if (!db) return null;
-    const [row] = await db.select().from(notifications).where(eq(notifications.id, id)).limit(1);
-    return row ? this.mapNotification(row) : null;
+    try {
+      const [row] = await this.selectColumns(db).from(notifications).where(eq(notifications.id, id)).limit(1);
+      return row ? this.mapNotification(row) : null;
+    } catch (err) {
+      if (this.dedupKeyColumnAvailable && isMissingDedupKeyColumnError(err)) {
+        this.dedupKeyColumnAvailable = false;
+        const [row] = await db.select(legacyNotificationSelection).from(notifications).where(eq(notifications.id, id)).limit(1);
+        return row ? this.mapNotification(row) : null;
+      }
+      throw err;
+    }
   }
 
   async listByCustomer(customerId: string, options?: { limit?: number; offset?: number; isRead?: boolean }): Promise<Notification[]> {
@@ -820,11 +1054,28 @@ export class NotificationRepositoryPostgres implements NotificationRepository {
       );
     }
     
-    const rows = await db.select().from(notifications)
-      .where(whereClause)
-      .orderBy(desc(notifications.createdAt), desc(notifications.id))
-      .limit(limit)
-      .offset(offset);
+    let rows: any[];
+    try {
+      rows = await this.selectColumns(db)
+        .from(notifications)
+        .where(whereClause)
+        .orderBy(desc(notifications.createdAt), desc(notifications.id))
+        .limit(limit)
+        .offset(offset);
+    } catch (err) {
+      if (this.dedupKeyColumnAvailable && isMissingDedupKeyColumnError(err)) {
+        this.dedupKeyColumnAvailable = false;
+        rows = await db
+          .select(legacyNotificationSelection)
+          .from(notifications)
+          .where(whereClause)
+          .orderBy(desc(notifications.createdAt), desc(notifications.id))
+          .limit(limit)
+          .offset(offset);
+      } else {
+        throw err;
+      }
+    }
       
     return rows.map(r => this.mapNotification(r));
   }
@@ -844,9 +1095,29 @@ export class NotificationRepositoryPostgres implements NotificationRepository {
   async create(data: Omit<Notification, 'id' | 'createdAt' | 'isRead'> & { id?: string; isRead?: boolean }): Promise<Notification> {
     const db = await getDbReady();
     if (!db) throw new Error('Database unavailable');
+    const dedupKey = data.dedupKey || null;
+    if (dedupKey && this.dedupKeyColumnAvailable) {
+      try {
+        const [existing] = await db
+          .select()
+          .from(notifications)
+          .where(and(eq(notifications.customerId, data.customerId), eq(notifications.dedupKey, dedupKey)))
+          .limit(1);
+        if (existing) {
+          return this.mapNotification(existing);
+        }
+      } catch (err) {
+        if (isMissingDedupKeyColumnError(err)) {
+          this.dedupKeyColumnAvailable = false;
+        } else {
+          throw err;
+        }
+      }
+    }
+
     const id = data.id || `notif_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
     const now = new Date();
-    const [inserted] = await db.insert(notifications).values({
+    const baseValues: any = {
       id,
       customerId: data.customerId,
       type: data.type,
@@ -863,8 +1134,98 @@ export class NotificationRepositoryPostgres implements NotificationRepository {
       readAt: null,
       createdAt: now,
       expiresAt: data.expiresAt || null,
-    } as any).returning();
-    return this.mapNotification(inserted);
+    };
+
+    if (this.dedupKeyColumnAvailable) {
+      try {
+        const insertedRows = await db
+          .insert(notifications)
+          .values({ ...baseValues, dedupKey })
+          .onConflictDoNothing()
+          .returning();
+
+        if (insertedRows[0]) {
+          return this.mapNotification(insertedRows[0]);
+        }
+        if (dedupKey) {
+          const [existing] = await db
+            .select()
+            .from(notifications)
+            .where(and(eq(notifications.customerId, data.customerId), eq(notifications.dedupKey, dedupKey)))
+            .limit(1);
+          if (existing) {
+            return this.mapNotification(existing);
+          }
+        }
+      } catch (err) {
+        if (isMissingDedupKeyColumnError(err)) {
+          this.dedupKeyColumnAvailable = false;
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    const rawInsertRes: any = await db.execute(sql`
+      INSERT INTO notifications (
+        id,
+        customer_id,
+        type,
+        title,
+        message,
+        resource_type,
+        resource_id,
+        project_id,
+        location_id,
+        saved_item_id,
+        watch_id,
+        metadata,
+        is_read,
+        read_at,
+        created_at,
+        expires_at
+      ) VALUES (
+        ${baseValues.id},
+        ${baseValues.customerId},
+        ${baseValues.type},
+        ${baseValues.title},
+        ${baseValues.message},
+        ${baseValues.resourceType},
+        ${baseValues.resourceId},
+        ${baseValues.projectId},
+        ${baseValues.locationId},
+        ${baseValues.savedItemId},
+        ${baseValues.watchId},
+        ${baseValues.metadata ? JSON.stringify(baseValues.metadata) : null}::jsonb,
+        ${baseValues.isRead},
+        ${baseValues.readAt},
+        ${baseValues.createdAt},
+        ${baseValues.expiresAt}
+      )
+      RETURNING
+        id,
+        customer_id AS "customerId",
+        type,
+        title,
+        message,
+        resource_type AS "resourceType",
+        resource_id AS "resourceId",
+        project_id AS "projectId",
+        location_id AS "locationId",
+        saved_item_id AS "savedItemId",
+        watch_id AS "watchId",
+        metadata,
+        is_read AS "isRead",
+        read_at AS "readAt",
+        created_at AS "createdAt",
+        expires_at AS "expiresAt"
+    `);
+    const inserted = rawInsertRes?.rows?.[0];
+
+    if (inserted) {
+      return this.mapNotification({ ...inserted, dedupKey: null });
+    }
+    throw new Error('Failed to create notification');
   }
 
   async markAsRead(id: string, customerId: string): Promise<boolean> {
@@ -878,7 +1239,7 @@ export class NotificationRepositoryPostgres implements NotificationRepository {
         eq(notifications.id, id),
         eq(notifications.customerId, customerId)
       )
-    ).returning();
+    ).returning({ id: notifications.id });
     return res.length > 0;
   }
 
@@ -905,7 +1266,7 @@ export class NotificationRepositoryPostgres implements NotificationRepository {
         eq(notifications.id, id),
         eq(notifications.customerId, customerId)
       )
-    ).returning();
+    ).returning({ id: notifications.id });
     return res.length > 0;
   }
 
@@ -918,7 +1279,7 @@ export class NotificationRepositoryPostgres implements NotificationRepository {
         eq(notifications.customerId, customerId),
         sql`${notifications.createdAt} < ${cutOff}`
       )
-    ).returning();
+    ).returning({ id: notifications.id });
     return res.length;
   }
 
@@ -935,6 +1296,7 @@ export class NotificationRepositoryPostgres implements NotificationRepository {
       locationId: row.locationId,
       savedItemId: row.savedItemId,
       watchId: row.watchId,
+      dedupKey: row.dedupKey ?? null,
       metadata: row.metadata,
       isRead: row.isRead,
       readAt: row.readAt ? new Date(row.readAt) : null,

@@ -9,27 +9,63 @@ import { verifyStaffCapability } from '@/src/domain/auth/capabilities';
 import { ensureSeedData } from '@/src/infrastructure/seed';
 import { auditService } from '@/src/domain/audit/auditService';
 import { extractRequestContext, withCorrelationHeaders } from '@/src/lib/requestContext';
+import { getDb } from '@/src/db/client';
+import { getProjectOptionsForLocation } from '@/src/domain/postProperty/page1Data';
+
+function hasStaffAuthCandidate(request: NextRequest): boolean {
+  if (request.headers.get('authorization')) return true;
+  if (request.headers.get('x-staff-test-token')) return true;
+  const cookie = request.headers.get('cookie') || '';
+  return cookie.includes('gh_staff_session=');
+}
 
 export async function GET(request: NextRequest) {
   const { requestId } = extractRequestContext(request);
   try {
-    await ensureSeedData();
     const searchParams = request.nextUrl.searchParams;
-    const page = parseInt(searchParams.get('page') || '1', 10);
+    const fieldsParam = searchParams.get('fields');
+    const locationIdParam = searchParams.get('locationId') || undefined;
     const limit = parseInt(searchParams.get('limit') || '10', 10);
+
+    // Lightweight public dropdown option mode (skips full DTO hydration, configs, media, amenities, RERA)
+    if (fieldsParam === 'minimal') {
+      const clampedLimit = Math.min(100, Math.max(1, isNaN(limit) ? 50 : limit));
+      const data = await getProjectOptionsForLocation(locationIdParam, clampedLimit);
+      const response = NextResponse.json({
+        data,
+        pagination: {
+          total: data.length,
+          page: 1,
+          limit: clampedLimit,
+          totalPages: 1,
+        },
+      });
+      response.headers.set(
+        'Cache-Control',
+        'public, max-age=60, s-maxage=300, stale-while-revalidate=600'
+      );
+      return withCorrelationHeaders(response, requestId);
+    }
+
+    if (!getDb()) {
+      await ensureSeedData();
+    }
+    const page = parseInt(searchParams.get('page') || '1', 10);
     const featuredParam = searchParams.get('featured');
     const sortParam = searchParams.get('sort');
     const statusParam = searchParams.get('status') as any;
     const lifecycleStatusParam = searchParams.get('lifecycleStatus') as any;
     const developerIdParam = searchParams.get('developerId') || undefined;
-    const locationIdParam = searchParams.get('locationId') || undefined;
     const propertyTypeParam = searchParams.get('propertyType') as any;
     const rawSearch = searchParams.get('search') ?? searchParams.get('q');
     const search = rawSearch && rawSearch.trim().length > 0 ? rawSearch.trim() : undefined;
 
-    // Check if caller is authorized internal staff
-    const auth = await verifyInternalStaff(request);
-    const isInternalStaff = auth.authorized;
+    // Check if caller is authorized internal staff (fast-skip when no staff credentials exist)
+    let isInternalStaff = false;
+    if (hasStaffAuthCandidate(request)) {
+      const auth = await verifyInternalStaff(request);
+      isInternalStaff = auth.authorized;
+    }
 
     // Controlled sorting whitelist
     const allowedSorts = [

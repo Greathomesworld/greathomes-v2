@@ -9,7 +9,12 @@ import {
 } from '@/src/domain/projects/viewModels/projectLocationViewModel';
 import { PlaceCategory } from '@/src/domain/places/entities';
 import { extractRequestContext, withCorrelationHeaders } from '@/src/lib/requestContext';
-import { checkRateLimit, createRateLimitResponse } from '@/src/lib/rateLimit';
+import {
+  checkRateLimit,
+  createRateLimitResponse,
+  createRateLimitUnavailableResponse,
+  isRateLimitUnavailableError,
+} from '@/src/lib/rateLimit';
 
 export async function GET(req: NextRequest) {
   const ctx = extractRequestContext(req);
@@ -30,9 +35,16 @@ export async function GET(req: NextRequest) {
     ? `places_nearby_project:${clientIp}`
     : `places_nearby_coords:${clientIp}`;
   const rateLimitMax = projectId ? 60 : 30;
-  const rateCheck = checkRateLimit(rateLimitKey, rateLimitMax, 60_000);
-  if (!rateCheck.allowed) {
-    return createRateLimitResponse(ctx.requestId, rateCheck);
+  try {
+    const rateCheck = await checkRateLimit(rateLimitKey, rateLimitMax, 60_000);
+    if (!rateCheck.allowed) {
+      return createRateLimitResponse(ctx.requestId, rateCheck);
+    }
+  } catch (err) {
+    if (isRateLimitUnavailableError(err)) {
+      return createRateLimitUnavailableResponse(ctx.requestId);
+    }
+    throw err;
   }
 
   await ensureSeedData();

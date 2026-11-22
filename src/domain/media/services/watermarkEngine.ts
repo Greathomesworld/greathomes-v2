@@ -110,6 +110,11 @@ export function isNeverWatermarkCategory(
     return true;
   }
 
+  // Customer property submissions must ALWAYS be watermarked for eligible raster images
+  if (normEntity === 'SUBMISSION') {
+    return false;
+  }
+
   if ((NEVER_WATERMARK_CATEGORIES as readonly string[]).includes(normCat)) {
     return true;
   }
@@ -132,7 +137,12 @@ export function isMandatoryWatermarkCategory(
   const normCat = (category || 'OTHER').toUpperCase().trim();
   const normEntity = (entityType || 'PROJECT').toUpperCase().trim();
 
-  if (normEntity === 'RESALE' || normEntity === 'RENTAL' || normEntity === 'PROJECT') {
+  if (
+    normEntity === 'SUBMISSION' ||
+    normEntity === 'RESALE' ||
+    normEntity === 'RENTAL' ||
+    normEntity === 'PROJECT'
+  ) {
     return true;
   }
 
@@ -284,6 +294,9 @@ export function loadOfficialWatermarkSvg(): string {
   );
 }
 
+const MAX_WATERMARK_BUFFER_CACHE_ENTRIES = 64;
+const watermarkPngCache = new Map<string, Buffer>();
+
 export class WatermarkEngine {
   /**
    * Determines whether an image should be watermarked based on the canonical server-enforced media policy.
@@ -320,14 +333,25 @@ export class WatermarkEngine {
   /**
    * Loads the official Great Homes watermark SVG (`public/assets/aistudio/GH_wm_17aa72b0.svg`)
    * and rasterizes it cleanly at the exact target width/height with alpha transparency and opacity.
+   * Rasterized PNG buffers are cached in a bounded in-memory map keyed by target dimensions & opacity.
    */
   private async renderOfficialWatermarkBuffer(
     watermarkWidth: number,
     watermarkHeight: number,
     opacity: number
   ): Promise<Buffer> {
-    const rawSvg = loadOfficialWatermarkSvg();
     const clampedOpacity = Math.min(1.0, Math.max(0.1, opacity));
+    const cacheKey = `${watermarkWidth}x${watermarkHeight}@${clampedOpacity.toFixed(3)}`;
+
+    const cached = watermarkPngCache.get(cacheKey);
+    if (cached) {
+      // Refresh LRU position
+      watermarkPngCache.delete(cacheKey);
+      watermarkPngCache.set(cacheKey, cached);
+      return cached;
+    }
+
+    const rawSvg = loadOfficialWatermarkSvg();
 
     // Apply group opacity without altering proportions, colors, or artwork paths
     let svgToRender = rawSvg;
@@ -350,7 +374,61 @@ export class WatermarkEngine {
       .png()
       .toBuffer();
 
+    if (watermarkPngCache.size >= MAX_WATERMARK_BUFFER_CACHE_ENTRIES) {
+      const oldestKey = watermarkPngCache.keys().next().value;
+      if (oldestKey !== undefined) {
+        watermarkPngCache.delete(oldestKey);
+      }
+    }
+    watermarkPngCache.set(cacheKey, renderedPng);
+
     return renderedPng;
+  }
+
+  /**
+   * Computes exact watermark placement and returns a Sharp composite overlay descriptor
+   * backed by the bounded rasterized watermark cache for single-pass Sharp pipelines.
+   */
+  async getOfficialWatermarkComposite(
+    imgWidth: number,
+    imgHeight: number,
+    options?: WatermarkOptions
+  ): Promise<{
+    input: Buffer;
+    left: number;
+    top: number;
+    blend: 'over';
+  }> {
+    if (imgWidth < 16 || imgHeight < 16) {
+      throw new Error(
+        `Watermark processing rejected: image dimensions (${imgWidth}x${imgHeight}) are too small to watermark safely.`
+      );
+    }
+
+    const config: Required<WatermarkOptions> = {
+      ...DEFAULT_WATERMARK_CONFIG,
+      ...options,
+    };
+
+    const geom = computeWatermarkGeometry(
+      imgWidth,
+      imgHeight,
+      OFFICIAL_LOGO_ASPECT_RATIO,
+      config
+    );
+
+    const watermarkPngBuffer = await this.renderOfficialWatermarkBuffer(
+      geom.watermarkWidth,
+      geom.watermarkHeight,
+      config.opacity
+    );
+
+    return {
+      input: watermarkPngBuffer,
+      left: geom.x,
+      top: geom.y,
+      blend: 'over',
+    };
   }
 
   /**
@@ -367,45 +445,16 @@ export class WatermarkEngine {
       smartSubsample?: boolean;
     }
   ): Promise<Buffer> {
-    const config: Required<WatermarkOptions> = {
-      ...DEFAULT_WATERMARK_CONFIG,
-      ...options,
-    };
-
     const metadata = await sharp(imageBuffer).metadata();
     const imgWidth = metadata.width || 0;
     const imgHeight = metadata.height || 0;
 
-    if (imgWidth < 16 || imgHeight < 16) {
-      throw new Error(
-        `Watermark processing rejected: image dimensions (${imgWidth}x${imgHeight}) are too small to watermark safely.`
-      );
-    }
+    const overlay = await this.getOfficialWatermarkComposite(imgWidth, imgHeight, options);
 
-    const geom = computeWatermarkGeometry(
-      imgWidth,
-      imgHeight,
-      OFFICIAL_LOGO_ASPECT_RATIO,
-      config
-    );
-
-    const watermarkPngBuffer = await this.renderOfficialWatermarkBuffer(
-      geom.watermarkWidth,
-      geom.watermarkHeight,
-      config.opacity
-    );
-
-    let pipeline = sharp(imageBuffer).composite([
-      {
-        input: watermarkPngBuffer,
-        left: geom.x,
-        top: geom.y,
-        blend: 'over',
-      },
-    ]);
+    let pipeline = sharp(imageBuffer).composite([overlay]);
 
     const quality = options?.quality;
-    const effort = options?.effort ?? 6;
+    const effort = options?.effort ?? 4;
     const smartSubsample = options?.smartSubsample ?? true;
 
     if (outputFormat === 'webp') {

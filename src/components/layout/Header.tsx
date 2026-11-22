@@ -187,6 +187,18 @@ function HeaderContent() {
                 )}
               </Link>
 
+              <Link
+                href="/post-property"
+                className={`relative py-1 transition-colors whitespace-nowrap hover:text-[#E85D3F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E85D3F] rounded ${
+                  isLinkActive('/post-property') ? 'text-[#E85D3F] font-bold' : 'text-neutral-700'
+                }`}
+              >
+                <span>Post Property</span>
+                {isLinkActive('/post-property') && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#E85D3F] rounded-full animate-fade-in" />
+                )}
+              </Link>
+
               {/* Explore Mega-Dropdown */}
               <div className="relative" ref={exploreRef}>
                 <button
@@ -362,6 +374,15 @@ function HeaderContent() {
                 className="flex items-center justify-between py-2.5 px-3 rounded-lg text-sm font-semibold text-slate-800 hover:bg-slate-50 hover:text-[#E85D3F]"
               >
                 <span>Rentals</span>
+                <ArrowRight className="w-4 h-4 text-slate-400" />
+              </Link>
+
+              <Link
+                href="/post-property"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center justify-between py-2.5 px-3 rounded-lg text-sm font-semibold text-slate-800 hover:bg-slate-50 hover:text-[#E85D3F]"
+              >
+                <span>Post Property</span>
                 <ArrowRight className="w-4 h-4 text-slate-400" />
               </Link>
 

@@ -7,6 +7,7 @@ export default function (phase) {
   const nextConfig = {
     distDir: isDev ? '.next-dev' : '.next',
     reactStrictMode: true,
+    devIndicators: false,
     async headers() {
       return [
         {
@@ -101,7 +102,16 @@ export default function (phase) {
       'sharp',
       'pg',
     ],
+    eslint: {
+      ignoreDuringBuilds: false,
+    },
+    typescript: {
+      ignoreBuildErrors: false,
+    },
     experimental: {
+      webpackMemoryOptimizations: true,
+      cpus: 1,
+      workerThreads: false,
       optimizePackageImports: ['lucide-react', 'recharts'],
       serverActions: {
         allowedOrigins: [

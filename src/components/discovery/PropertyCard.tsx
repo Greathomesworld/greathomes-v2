@@ -7,7 +7,16 @@ import {
   ResaleDiscoveryCardDto, 
   RentDiscoveryCardDto 
 } from '@/src/domain/projects/dto/discoveryDto';
-import { formatIndianPrice, formatArea, formatFurnishing, formatFloorCategory, formatPropertyType, formatProjectStatus } from './formatters';
+import {
+  formatIndianPrice,
+  formatArea,
+  formatAreaDetails,
+  formatListingDisplayTitle,
+  formatFurnishing,
+  formatFloorCategory,
+  formatPropertyType,
+  formatProjectStatus,
+} from './formatters';
 import { ListingImage } from './ListingImage';
 import { formatProjectLocationShortLabel } from '@/src/domain/projects/viewModels/projectLocationViewModel';
 import { AddToCompareButton } from '@/src/components/comparison/AddToCompareButton';
@@ -143,17 +152,40 @@ function ResaleCard({ item, id }: { item: ResaleDiscoveryCardDto; id?: string })
   const targetUrl = item.slug && item.slug.trim().length > 0
     ? `/buy/${item.slug}`
     : `/buy/${item.id}`;
-  const locationLabel = formatProjectLocationShortLabel(item.location || item.project?.location);
-  const areaSummary = formatArea(item.carpetArea);
-  const floorLabel = formatFloorCategory(item.floorCategory);
-  const furnishLabel = formatFurnishing(item.furnishing);
+  const isPlot = item.propertyType?.toUpperCase() === 'PLOT';
+  const locationLabel =
+    formatProjectLocationShortLabel(item.location || item.project?.location) ||
+    item.customLocalityDisplay ||
+    null;
+  const projectOrCustom = item.project?.name || item.customProjectDisplay || null;
+  const displayTitle = formatListingDisplayTitle({
+    configuration: item.configuration,
+    bedroomCount: item.bedroomCount,
+    propertyType: item.propertyType,
+    furnishing: item.furnishing,
+    plotArea: item.plotArea,
+    mode: 'RESALE',
+    projectName: projectOrCustom,
+  });
+  const areaDetails = formatAreaDetails(
+    item.carpetArea,
+    null,
+    null,
+    item.plotArea,
+    item.propertyType
+  );
+  const floorLabel = isPlot ? null : formatFloorCategory(item.floorCategory);
+  const furnishLabel = isPlot || !item.furnishing ? null : formatFurnishing(item.furnishing);
+  const highlightLeft =
+    [floorLabel, furnishLabel].filter(Boolean).join(' · ') ||
+    (isPlot ? 'Residential Plot' : formatPropertyType(item.propertyType));
   const isVerified = item.verificationStatus === 'VERIFIED';
 
   return (
     <Link
       href={targetUrl}
       id={id || `card-resale-${item.id}`}
-      aria-label={`${item.bedroomCount} BHK Resale Home at ${item.project?.name || item.configuration}`}
+      aria-label={`${displayTitle.title} Resale${projectOrCustom ? ` at ${projectOrCustom}` : locationLabel ? ` in ${locationLabel}` : ''}`}
       className="group flex flex-col h-full bg-white border border-[rgba(17,17,17,0.08)] rounded-xl overflow-hidden hover:border-[rgba(17,17,17,0.2)] hover:shadow-md transition-all duration-200 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2"
     >
       <article className="flex flex-col flex-grow">
@@ -161,7 +193,7 @@ function ResaleCard({ item, id }: { item: ResaleDiscoveryCardDto; id?: string })
         <div className="relative aspect-[16/10] bg-neutral-100 overflow-hidden">
           <ListingImage
             src={item.featuredImageUrl}
-            alt={item.configuration}
+            alt={displayTitle.title}
             fallbackType="resale"
             isVerified={isVerified}
           />
@@ -197,19 +229,21 @@ function ResaleCard({ item, id }: { item: ResaleDiscoveryCardDto; id?: string })
           <div className="space-y-2">
             <div>
               <h3 className="font-display font-semibold text-base text-[#111111] group-hover:text-[#E85D3F] transition-colors line-clamp-1 leading-snug">
-                {item.bedroomCount} BHK {formatPropertyType(item.propertyType)}
+                {displayTitle.title}
               </h3>
               <p className="text-xs text-neutral-600 mt-0.5 line-clamp-1 leading-tight">
-                {[item.project?.name || item.configuration, locationLabel].filter(Boolean).join(' · ')}
+                {[projectOrCustom || (!isPlot ? item.configuration : null), locationLabel]
+                  .filter(Boolean)
+                  .join(' · ') || 'Kolkata'}
               </p>
             </div>
 
             {/* Highlights */}
             <div className="py-2 px-2.5 bg-[#FAFAF8] rounded-lg border border-[rgba(17,17,17,0.06)] text-xs text-neutral-700 flex flex-wrap items-center justify-between gap-1">
-              <span className="font-medium text-neutral-800">
-                {[floorLabel, furnishLabel].filter(Boolean).join(' · ')}
-              </span>
-              {areaSummary && <span className="text-neutral-500">{areaSummary}</span>}
+              <span className="font-medium text-neutral-800">{highlightLeft}</span>
+              {areaDetails.primaryValue && (
+                <span className="text-neutral-500 tabular-nums">{areaDetails.primaryValue}</span>
+              )}
             </div>
           </div>
 
@@ -218,7 +252,7 @@ function ResaleCard({ item, id }: { item: ResaleDiscoveryCardDto; id?: string })
             <div>
               <span className="text-[10px] uppercase tracking-wider text-neutral-500 block leading-none">Asking Price</span>
               <div className="flex items-baseline gap-1.5 mt-0.5">
-                <span className="font-display font-bold text-lg sm:text-xl text-[#111111] leading-tight">
+                <span className="font-display font-bold text-lg sm:text-xl text-[#111111] leading-tight tabular-nums">
                   {formatIndianPrice(item.askingPrice)}
                 </span>
               </div>
@@ -227,7 +261,7 @@ function ResaleCard({ item, id }: { item: ResaleDiscoveryCardDto; id?: string })
               </span>
             </div>
 
-            <span className="inline-flex items-center gap-1.5 text-xs font-display font-semibold text-[#111111] group-hover:text-[#E85D3F] transition-colors h-9 px-3 rounded-lg border border-[rgba(17,17,17,0.12)] group-hover:border-[#E85D3F]">
+            <span className="inline-flex items-center gap-1.5 text-xs font-display font-semibold text-[#111111] group-hover:text-[#E85D3F] transition-colors h-9 px-3 rounded-lg border border-[rgba(17,17,17,0.12)] group-hover:border-[#E85D3F] whitespace-nowrap">
               <span>View Property</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </span>
@@ -242,17 +276,40 @@ function RentCard({ item, id }: { item: RentDiscoveryCardDto; id?: string }) {
   const targetUrl = item.slug && item.slug.trim().length > 0
     ? `/rent/${item.slug}`
     : `/rent/${item.id}`;
-  const locationLabel = formatProjectLocationShortLabel(item.location || item.project?.location);
-  const areaSummary = formatArea(item.carpetArea);
-  const floorLabel = formatFloorCategory(item.floorCategory);
-  const furnishLabel = formatFurnishing(item.furnishing);
+  const isPlot = item.propertyType?.toUpperCase() === 'PLOT';
+  const locationLabel =
+    formatProjectLocationShortLabel(item.location || item.project?.location) ||
+    item.customLocalityDisplay ||
+    null;
+  const projectOrCustom = item.project?.name || item.customProjectDisplay || null;
+  const displayTitle = formatListingDisplayTitle({
+    configuration: item.configuration,
+    bedroomCount: item.bedroomCount,
+    propertyType: item.propertyType,
+    furnishing: item.furnishing,
+    plotArea: item.plotArea,
+    mode: 'RENTAL',
+    projectName: projectOrCustom,
+  });
+  const areaDetails = formatAreaDetails(
+    item.carpetArea,
+    null,
+    null,
+    item.plotArea,
+    item.propertyType
+  );
+  const floorLabel = isPlot ? null : formatFloorCategory(item.floorCategory);
+  const furnishLabel = isPlot || !item.furnishing ? null : formatFurnishing(item.furnishing);
+  const highlightLeft =
+    [floorLabel, furnishLabel].filter(Boolean).join(' · ') ||
+    (isPlot ? 'Residential Plot' : formatPropertyType(item.propertyType));
   const isVerified = item.verificationStatus === 'VERIFIED';
 
   return (
     <Link
       href={targetUrl}
       id={id || `card-rent-${item.id}`}
-      aria-label={`${item.bedroomCount} BHK Rental Home at ${item.project?.name || item.configuration}`}
+      aria-label={`${displayTitle.title} Rental${projectOrCustom ? ` at ${projectOrCustom}` : locationLabel ? ` in ${locationLabel}` : ''}`}
       className="group flex flex-col h-full bg-white border border-[rgba(17,17,17,0.08)] rounded-xl overflow-hidden hover:border-[rgba(17,17,17,0.2)] hover:shadow-md transition-all duration-200 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2"
     >
       <article className="flex flex-col flex-grow">
@@ -260,7 +317,7 @@ function RentCard({ item, id }: { item: RentDiscoveryCardDto; id?: string }) {
         <div className="relative aspect-[16/10] bg-neutral-100 overflow-hidden">
           <ListingImage
             src={item.featuredImageUrl}
-            alt={item.configuration}
+            alt={displayTitle.title}
             fallbackType="rent"
             isVerified={isVerified}
           />
@@ -296,19 +353,21 @@ function RentCard({ item, id }: { item: RentDiscoveryCardDto; id?: string }) {
           <div className="space-y-2">
             <div>
               <h3 className="font-display font-semibold text-base text-[#111111] group-hover:text-[#E85D3F] transition-colors line-clamp-1 leading-snug">
-                {item.bedroomCount} BHK {formatPropertyType(item.propertyType)}
+                {displayTitle.title}
               </h3>
               <p className="text-xs text-neutral-600 mt-0.5 line-clamp-1 leading-tight">
-                {[item.project?.name || item.configuration, locationLabel].filter(Boolean).join(' · ')}
+                {[projectOrCustom || (!isPlot ? item.configuration : null), locationLabel]
+                  .filter(Boolean)
+                  .join(' · ') || 'Kolkata'}
               </p>
             </div>
 
             {/* Highlights */}
             <div className="py-2 px-2.5 bg-[#FAFAF8] rounded-lg border border-[rgba(17,17,17,0.06)] text-xs text-neutral-700 flex flex-wrap items-center justify-between gap-1">
-              <span className="font-medium text-neutral-800">
-                {[floorLabel, furnishLabel].filter(Boolean).join(' · ')}
-              </span>
-              {areaSummary && <span className="text-neutral-500">{areaSummary}</span>}
+              <span className="font-medium text-neutral-800">{highlightLeft}</span>
+              {areaDetails.primaryValue && (
+                <span className="text-neutral-500 tabular-nums">{areaDetails.primaryValue}</span>
+              )}
             </div>
           </div>
 
@@ -317,7 +376,7 @@ function RentCard({ item, id }: { item: RentDiscoveryCardDto; id?: string }) {
             <div>
               <span className="text-[10px] uppercase tracking-wider text-neutral-500 block leading-none">Monthly Rent</span>
               <div className="flex items-baseline gap-1 mt-0.5">
-                <span className="font-display font-bold text-lg sm:text-xl text-[#111111] leading-tight">
+                <span className="font-display font-bold text-lg sm:text-xl text-[#111111] leading-tight tabular-nums">
                   ₹{item.monthlyRent.toLocaleString('en-IN')}
                 </span>
                 <span className="text-xs text-neutral-500">/ mo</span>
@@ -325,10 +384,13 @@ function RentCard({ item, id }: { item: RentDiscoveryCardDto; id?: string }) {
               <div className="flex items-center gap-2 text-[10.5px] text-neutral-500 leading-tight">
                 {item.maintenance ? <span>+ ₹{item.maintenance.toLocaleString('en-IN')} maint.</span> : null}
                 {item.securityDeposit ? <span>Deposit: ₹{item.securityDeposit.toLocaleString('en-IN')}</span> : null}
+                {!item.maintenance && !item.securityDeposit && (
+                  <span>{item.listingPartyLabel || 'Verified Listing'}</span>
+                )}
               </div>
             </div>
 
-            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#111111] group-hover:text-[#E85D3F] transition-colors h-9 px-3 rounded-lg border border-[rgba(17,17,17,0.12)] group-hover:border-[#E85D3F]">
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#111111] group-hover:text-[#E85D3F] transition-colors h-9 px-3 rounded-lg border border-[rgba(17,17,17,0.12)] group-hover:border-[#E85D3F] whitespace-nowrap">
               <span>View Property</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </span>
@@ -347,13 +409,15 @@ function ProjectCard({ item, id }: { item: ProjectDiscoveryCardDto; id?: string 
   const hasStartingPrice = Boolean(!item.priceOnRequest && item.startingPrice && item.startingPrice > 0);
 
   return (
-    <Link
-      href={targetUrl}
+    <article
       id={id || `card-proj-${item.id}`}
-      aria-label={`${item.name} development in ${locationLabel}`}
-      className="group flex flex-col h-full bg-white border border-[rgba(17,17,17,0.08)] rounded-xl overflow-hidden hover:border-[rgba(17,17,17,0.2)] hover:shadow-md transition-all duration-200 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2"
+      className="group flex flex-col h-full bg-white border border-[rgba(17,17,17,0.08)] rounded-xl overflow-hidden hover:border-[rgba(17,17,17,0.2)] hover:shadow-md transition-all duration-200"
     >
-      <article className="flex flex-col flex-grow">
+      <Link
+        href={targetUrl}
+        aria-label={`${item.name} development in ${locationLabel}`}
+        className="flex flex-col flex-grow focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2"
+      >
         {/* Media Header (Unchanged original aspect-[16/10]) */}
         <div className="relative aspect-[16/10] bg-neutral-100 overflow-hidden">
           <ListingImage
@@ -384,7 +448,7 @@ function ProjectCard({ item, id }: { item: ProjectDiscoveryCardDto; id?: string 
         </div>
 
         {/* Compact Details Body Below Image */}
-        <div className="px-4 pt-3 pb-3.5 flex flex-col flex-grow justify-between gap-2.5">
+        <div className="px-4 pt-3 pb-2 flex flex-col flex-grow justify-between gap-2.5">
           <div className="space-y-2">
             <div>
               <h3 className="font-display font-semibold text-base text-[#111111] group-hover:text-[#E85D3F] transition-colors line-clamp-1 leading-snug">
@@ -404,33 +468,33 @@ function ProjectCard({ item, id }: { item: ProjectDiscoveryCardDto; id?: string 
           </div>
 
           {/* Pricing & CTA */}
-          <div className="pt-2 border-t border-[rgba(17,17,17,0.06)] flex flex-col gap-2">
-            <div className="flex items-end justify-between gap-2">
-              <div>
-                <span className="text-[10px] uppercase tracking-wider text-neutral-500 block leading-none">Starting Price</span>
-                <div className="flex items-baseline gap-1.5 mt-0.5">
-                  <span className="font-display font-bold text-lg sm:text-xl text-[#111111] leading-tight">
-                    {hasStartingPrice ? formatIndianPrice(item.startingPrice!) : 'Price on Request'}
-                  </span>
-                  {hasStartingPrice && (
-                    <span className="text-xs text-neutral-500">onwards</span>
-                  )}
-                </div>
+          <div className="pt-2 border-t border-[rgba(17,17,17,0.06)] flex items-end justify-between gap-2">
+            <div>
+              <span className="text-[10px] uppercase tracking-wider text-neutral-500 block leading-none">Starting Price</span>
+              <div className="flex items-baseline gap-1.5 mt-0.5">
+                <span className="font-display font-bold text-lg sm:text-xl text-[#111111] leading-tight">
+                  {hasStartingPrice ? formatIndianPrice(item.startingPrice!) : 'Price on Request'}
+                </span>
+                {hasStartingPrice && (
+                  <span className="text-xs text-neutral-500">onwards</span>
+                )}
               </div>
-
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#111111] group-hover:text-[#E85D3F] transition-colors h-9 px-3 rounded-lg border border-[rgba(17,17,17,0.12)] group-hover:border-[#E85D3F] shrink-0">
-                <span>View Project</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </span>
             </div>
 
-            <div className="flex items-center justify-between pt-1.5 border-t border-[rgba(17,17,17,0.05)]">
-              <AddToCompareButton mode="PROJECTS" id={item.id} name={item.name} />
-            </div>
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#111111] group-hover:text-[#E85D3F] transition-colors h-9 px-3 rounded-lg border border-[rgba(17,17,17,0.12)] group-hover:border-[#E85D3F] shrink-0">
+              <span>View Project</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </span>
           </div>
         </div>
-      </article>
-    </Link>
+      </Link>
+
+      <div className="px-4 pb-3.5">
+        <div className="flex items-center justify-between pt-1.5 border-t border-[rgba(17,17,17,0.05)]">
+          <AddToCompareButton mode="PROJECTS" id={item.id} name={item.name} />
+        </div>
+      </div>
+    </article>
   );
 }
 

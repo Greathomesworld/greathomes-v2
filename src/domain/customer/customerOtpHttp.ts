@@ -1,11 +1,8 @@
 import { NextResponse } from 'next/server';
-import { withCorrelationHeaders } from '../../lib/requestContext.ts';
+import { extractTrustedClientIp, withCorrelationHeaders } from '../../lib/requestContext.ts';
 
 export function getCustomerOtpClientIp(request: Request): string {
-  const realIp = request.headers.get('x-real-ip')?.trim();
-  if (realIp) return realIp;
-  const forwardedFor = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
-  return forwardedFor || 'unknown';
+  return extractTrustedClientIp(request.headers) || 'unknown';
 }
 
 export function customerOtpErrorResponse(error: any, requestId: string, fallbackMessage: string) {
@@ -20,7 +17,7 @@ export function customerOtpErrorResponse(error: any, requestId: string, fallback
       error: publicMessage,
       code: typeof error?.code === 'string' ? error.code : undefined,
     },
-    { status }
+    { status, headers: { 'Cache-Control': 'no-store, max-age=0' } }
   );
   if (status === 429 && Number.isFinite(error?.retryAfterSeconds)) {
     response.headers.set('Retry-After', String(Math.max(1, Math.ceil(error.retryAfterSeconds))));

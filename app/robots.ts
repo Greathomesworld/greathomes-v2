@@ -6,7 +6,15 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: '*',
         allow: '/',
-        disallow: ['/api/', '/admin/', '/account/'],
+        disallow: [
+          '/api/',
+          '/admin/',
+          '/account/',
+          '/my-properties',
+          '/post-property',
+          '/compression-gallery',
+          '/compare',
+        ],
       },
     ],
     sitemap: 'https://www.greathomes.co.in/sitemap.xml',

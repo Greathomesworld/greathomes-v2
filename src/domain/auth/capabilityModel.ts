@@ -138,7 +138,32 @@ export type StaffCapability =
 
   // Visitor & Customer 360 Intelligence
   | 'customer_intelligence.read'
-  | 'customer_intelligence.pii';
+  | 'customer_intelligence.pii'
+
+  // Property Submissions Verification & Publication
+  | 'submission.read'
+  | 'submission.review'
+  | 'submission.requestChanges'
+  | 'submission.assign'
+  | 'submission.manageNotes'
+  | 'submission.editCurated'
+  | 'submission.approve'
+  | 'submission.reject'
+  | 'submission.publish'
+  | 'submission.deactivate'
+  | 'submission.reactivate'
+  | 'submission.override'
+  | 'submission.resolveDuplicate'
+  | 'submission.resolveCorrection'
+  | 'submission.resolveRemoval'
+
+  // Listing Partner Application & Account Management
+  | 'partner.read'
+  | 'partner.approve'
+  | 'partner.reject'
+  | 'partner.suspend'
+  | 'partner.revoke'
+  | 'partner.reactivate';
 
 const ALL_RESALE_CAPS: StaffCapability[] = [
   'resale.read',
@@ -197,6 +222,15 @@ const ALL_ENQUIRY_CAPS: StaffCapability[] = [
   'enquiry.manageFollowUp',
   'enquiry.manageSiteVisit',
   'enquiry.delete',
+];
+
+const ALL_PARTNER_CAPS: StaffCapability[] = [
+  'partner.read',
+  'partner.approve',
+  'partner.reject',
+  'partner.suspend',
+  'partner.revoke',
+  'partner.reactivate',
 ];
 
 const ALL_CAPABILITIES_LIST: StaffCapability[] = [
@@ -262,6 +296,22 @@ const ALL_CAPABILITIES_LIST: StaffCapability[] = [
   'audit.read',
   'customer_intelligence.read',
   'customer_intelligence.pii',
+  'submission.read',
+  'submission.review',
+  'submission.requestChanges',
+  'submission.assign',
+  'submission.manageNotes',
+  'submission.editCurated',
+  'submission.approve',
+  'submission.reject',
+  'submission.publish',
+  'submission.deactivate',
+  'submission.reactivate',
+  'submission.override',
+  'submission.resolveDuplicate',
+  'submission.resolveCorrection',
+  'submission.resolveRemoval',
+  ...ALL_PARTNER_CAPS,
 ];
 
 export const ROLE_CAPABILITIES: Record<StaffRole, StaffCapability[]> = {
@@ -323,6 +373,44 @@ export const ROLE_CAPABILITIES: Record<StaffRole, StaffCapability[]> = {
     'audit.read',
     'customer_intelligence.read',
     'customer_intelligence.pii',
+    'submission.read',
+    'submission.review',
+    'submission.requestChanges',
+    'submission.assign',
+    'submission.manageNotes',
+    'submission.editCurated',
+    'submission.approve',
+    'submission.reject',
+    'submission.publish',
+    'submission.deactivate',
+    'submission.reactivate',
+    'submission.resolveDuplicate',
+    'submission.resolveCorrection',
+    'submission.resolveRemoval',
+    ...ALL_PARTNER_CAPS,
+  ],
+  VERIFICATION_EXECUTIVE: [
+    'dashboard.read',
+    'VIEW_DASHBOARD',
+    'location.read',
+    'project.read',
+    'developer.read',
+    'configuration.read',
+    'rera.read',
+    'media.read',
+    'amenity.read',
+    'resale.read',
+    'rental.read',
+    'listing.read',
+    'audit.read',
+    'submission.read',
+    'submission.review',
+    'submission.requestChanges',
+    'submission.manageNotes',
+    'submission.editCurated',
+    'submission.approve',
+    'submission.reject',
+    'submission.resolveDuplicate',
   ],
   CONTENT_MANAGER: [
     'dashboard.read',
@@ -411,9 +499,9 @@ export const ROLE_CAPABILITIES: Record<StaffRole, StaffCapability[]> = {
     'faq.create',
     'faq.update',
     'faq.delete',
-    ...ALL_RESALE_CAPS,
-    ...ALL_RENTAL_CAPS,
-    ...ALL_LISTING_CAPS,
+    ...ALL_RESALE_CAPS.filter((c) => c !== 'resale.publish'),
+    ...ALL_RENTAL_CAPS.filter((c) => c !== 'rental.publish'),
+    ...ALL_LISTING_CAPS.filter((c) => c !== 'listing.publish'),
     'VIEW_ENQUIRIES',
     'enquiry.read',
     'audit.read',

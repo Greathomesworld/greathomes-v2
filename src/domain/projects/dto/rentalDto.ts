@@ -59,20 +59,23 @@ export interface PublicRentalListingDto {
   projectId: string | null;
   project: BoundedRentalProjectDto | null;
   location?: BoundedLocationDto | null;
+  customLocalityDisplay?: string | null;
+  customProjectDisplay?: string | null;
   propertyType: PropertyType;
-  configuration: string;
-  bedroomCount: number;
+  configuration?: string | null;
+  bedroomCount?: number | null;
   carpetArea: number | null;
   builtUpArea: number | null;
   superBuiltUpArea: number | null;
+  plotArea?: number | null;
 
   monthlyRent: number;
   maintenance: number | null;
   securityDeposit: number | null;
 
-  furnishing: FurnishingStatus;
+  furnishing?: FurnishingStatus | null;
   facing: FacingDirection;
-  floorCategory: FloorCategory;
+  floorCategory?: FloorCategory | null;
   possession: PossessionStatus;
   availabilityDate: string | null;
   leaseDuration: string | null;

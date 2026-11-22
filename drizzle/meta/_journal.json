@@ -57,6 +57,41 @@
       "when": 1795000000000,
       "tag": "0007_new_booking_availability",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795500000000,
+      "tag": "0008_customer_phone_change_security",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1796000000000,
+      "tag": "0009_submission_media_assets",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1796500000000,
+      "tag": "0010_pp10b_enquiry_idempotency_and_rate_limits",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1797000000000,
+      "tag": "0011_pp10c2_site_visit_active_slot_uniqueness_and_index_alignment",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1797500000000,
+      "tag": "0012_post_property_phase1_full_parity",
+      "breakpoints": true
     }
   ]
 }

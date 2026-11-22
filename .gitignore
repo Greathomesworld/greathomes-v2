@@ -6,9 +6,16 @@ coverage/
 *.log
 .env*
 !.env.example
+.dev.env.json
+**/.dev.env.json
 *.tsbuildinfo
 tmp/
 scripts/audit-merlin.ts
 scripts/audit-verify.ts
 public/assets/aistudio/*.zip
 /app/applet/
+.private-audit-archive/
+*.pem
+*.key
+*.p12
+*.pfx

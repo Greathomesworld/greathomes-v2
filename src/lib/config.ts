@@ -139,6 +139,25 @@ export function isProduction(): boolean {
   return validateAndGetConfig().nodeEnv === 'production';
 }
 
+/**
+ * Multi-platform production deployment guard (Vercel, Cloud Run, Docker, self-hosted Node).
+ * Fails closed whenever production indicators are active, unless explicitly running inside
+ * a non-production preview/development environment (e.g., VERCEL_ENV=preview or APP_ENV=preview).
+ */
+export function isProductionDeployment(env: NodeJS.ProcessEnv = process.env): boolean {
+  const vercelEnv = (env.VERCEL_ENV || '').trim().toLowerCase();
+  const appEnv = (env.APP_ENV || env.GH_DEPLOYMENT_ENV || env.NEXT_PUBLIC_APP_ENV || '').trim().toLowerCase();
+  const nodeEnv = (env.NODE_ENV || '').trim().toLowerCase();
+
+  if (vercelEnv === 'production' || appEnv === 'production') {
+    return true;
+  }
+  if (vercelEnv === 'preview' || vercelEnv === 'development' || appEnv === 'preview' || appEnv === 'development' || appEnv === 'staging') {
+    return false;
+  }
+  return nodeEnv === 'production';
+}
+
 export function isPostgresPersistence(): boolean {
   return validateAndGetConfig().persistenceProvider === 'postgres';
 }

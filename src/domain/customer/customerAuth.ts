@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import type { NextRequest } from 'next/server';
 import { sql } from 'drizzle-orm';
-import { getDb, ensureSchemaUpdates } from '../../db/client.ts';
+import { getDb } from '../../db/client.ts';
 
 export function getCustomerAuthSecret(): string {
   const secret = process.env.CUSTOMER_AUTH_SECRET;
@@ -96,7 +96,6 @@ export function verifyCustomerToken(token: string): string | null {
 export async function createCustomerSession(customerId: string): Promise<string> {
   const db = getDb();
   if (!db) throw Object.assign(new Error('Customer session storage is unavailable.'), { statusCode: 503 });
-  await ensureSchemaUpdates(db);
 
   const token = crypto.randomBytes(32).toString('base64url');
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
@@ -118,7 +117,6 @@ export async function revokeCustomerSession(token: string | null): Promise<void>
   if (!token) return;
   const db = getDb();
   if (!db) return;
-  await ensureSchemaUpdates(db);
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
   await db.execute(sql`
     UPDATE customer_auth_sessions
@@ -184,7 +182,6 @@ export async function verifyCustomerAuth(request: Request | NextRequest): Promis
     if (!db) {
       return { authorized: false, statusCode: 503, error: 'Customer authentication is temporarily unavailable.' };
     }
-    await ensureSchemaUpdates(db);
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const result: any = await db.execute(sql`
       SELECT s.customer_id

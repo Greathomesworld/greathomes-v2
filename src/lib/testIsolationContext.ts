@@ -1,7 +1,8 @@
 import { AsyncLocalStorage } from 'async_hooks';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import fs from 'fs';
 import path from 'path';
+import { isProductionDeployment } from './config';
 
 const testIsolationStorage = new AsyncLocalStorage<boolean>();
 
@@ -28,6 +29,9 @@ export function getActiveTestRunnerSecret(): string | null {
 }
 
 export function isTestIsolationActive(req?: { headers?: { get?: (name: string) => string | null } } | null): boolean {
+  if (isProductionDeployment()) {
+    return false;
+  }
   if (process.env.MEDIA_TEST_ISOLATED === 'true') {
     return true;
   }
@@ -37,10 +41,14 @@ export function isTestIsolationActive(req?: { headers?: { get?: (name: string) =
   // External request header x-test-isolated is strictly rejected unless matched with the local test runner secret
   if (req?.headers && typeof req.headers.get === 'function') {
     const headerVal = req.headers.get('x-test-isolated');
-    const suppliedToken = req.headers.get('x-staff-test-token')?.trim();
+    const suppliedToken = req.headers.get('x-staff-test-token')?.trim() || '';
     const activeSecret = getActiveTestRunnerSecret();
-    if ((headerVal === 'true' || headerVal === '1') && activeSecret && suppliedToken === activeSecret) {
-      return true;
+    if ((headerVal === 'true' || headerVal === '1') && activeSecret && activeSecret.length >= 32) {
+      const expectedBuf = Buffer.from(activeSecret, 'utf8');
+      const suppliedBuf = Buffer.from(suppliedToken, 'utf8');
+      if (suppliedBuf.length === expectedBuf.length && timingSafeEqual(suppliedBuf, expectedBuf)) {
+        return true;
+      }
     }
   }
   return false;

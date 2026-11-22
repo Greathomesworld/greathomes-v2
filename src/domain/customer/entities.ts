@@ -1,10 +1,13 @@
 export type CustomerStatus = 'ACTIVE' | 'DISABLED' | 'DELETED';
+export type CustomerAccountType = 'OWNER' | 'LISTING_PARTNER';
+export type PartnerProfileStatus = 'PENDING' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED' | 'REVOKED';
 
 export interface Customer {
   id: string;
   email?: string | null;
   phone?: string | null;
   name: string;
+  accountType?: CustomerAccountType | null;
   passwordHash?: string | null;
   avatarUrl?: string | null;
   status: CustomerStatus;
@@ -20,9 +23,42 @@ export interface CustomerDto {
   email?: string | null;
   phone?: string | null;
   name: string;
+  accountType?: CustomerAccountType | null;
+  partnerStatus?: PartnerProfileStatus | null;
   avatarUrl?: string | null;
   status: CustomerStatus;
   createdAt: string;
+}
+
+export interface PartnerProfile {
+  id: string;
+  customerId: string;
+  status: PartnerProfileStatus;
+  agencyName: string | null;
+  businessAddress: string | null;
+  locality: string | null;
+  city: string | null;
+  agencyContactPhone: string | null;
+  declarationAccepted: boolean;
+  declarationText: string | null;
+  declarationAcceptedAt: Date | null;
+  approvedByStaffId: string | null;
+  approvedAt: Date | null;
+  rejectionReason: string | null;
+  suspensionReason: string | null;
+  revocationReason: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface PartnerAuditHistoryEntry {
+  id: string;
+  customerId: string;
+  previousStatus: string | null;
+  newStatus: string;
+  actingStaffUserId: string | null;
+  reason: string | null;
+  createdAt: Date;
 }
 
 export type SavedItemResourceType = 'PROJECT' | 'RESALE_LISTING' | 'RENTAL_LISTING';
@@ -222,7 +258,12 @@ export type NotificationType =
   | 'RESALE_STATUS_CHANGED'
   | 'RENT_PRICE_CHANGED'
   | 'RENT_STATUS_CHANGED'
-  | 'LISTING_BECAME_UNAVAILABLE';
+  | 'LISTING_BECAME_UNAVAILABLE'
+  | 'PARTNER_STATUS_CHANGED'
+  | 'SUBMISSION_STATUS_CHANGED'
+  | 'SUBMISSION_PUBLISHED'
+  | 'LISTING_DEACTIVATED'
+  | 'CHANGE_REQUEST_UPDATED';
 
 export interface Notification {
   id: string;
@@ -236,6 +277,7 @@ export interface Notification {
   locationId?: string | null;
   savedItemId?: string | null;
   watchId?: string | null;
+  dedupKey?: string | null;
   metadata?: any;
   isRead: boolean;
   readAt?: Date | null;

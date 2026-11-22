@@ -12,6 +12,7 @@ export function PropertyRentalTermsCard({ listing }: PropertyRentalTermsCardProp
         day: 'numeric',
         month: 'short',
         year: 'numeric',
+        timeZone: 'Asia/Kolkata',
       })
     : null;
 

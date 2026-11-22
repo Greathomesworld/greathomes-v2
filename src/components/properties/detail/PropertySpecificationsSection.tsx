@@ -17,24 +17,43 @@ export function PropertySpecificationsSection({
   listing,
 }: PropertySpecificationsSectionProps) {
   const isResale = listing.mode === 'RESALE';
+  const isPlot = listing.propertyType === 'PLOT';
 
   const specs: { label: string; value: string }[] = [
     { label: 'Property Type', value: listing.propertyTypeDisplay },
-    { label: 'Configuration', value: listing.configuration },
-    {
-      label: 'Carpet Area',
-      value: listing.carpetAreaDisplay || 'On Request',
-    },
+    ...(listing.configuration
+      ? [{ label: 'Configuration', value: listing.configuration }]
+      : []),
+    ...(isPlot
+      ? [
+          {
+            label: 'Plot Area',
+            value: listing.plotAreaDisplay || 'On Request',
+          },
+        ]
+      : [
+          {
+            label: 'Carpet Area',
+            value: listing.carpetAreaDisplay || 'On Request',
+          },
+        ]),
     ...(listing.builtUpAreaDisplay
       ? [{ label: 'Built-Up Area', value: listing.builtUpAreaDisplay }]
       : []),
     ...(listing.superBuiltUpAreaDisplay
       ? [{ label: 'Super Built-Up Area', value: listing.superBuiltUpAreaDisplay }]
       : []),
-    { label: 'Furnishing Status', value: listing.furnishingDisplay },
+    ...(!isPlot && listing.plotAreaDisplay
+      ? [{ label: 'Plot Area', value: listing.plotAreaDisplay }]
+      : []),
+    ...(listing.furnishingDisplay
+      ? [{ label: 'Furnishing Status', value: listing.furnishingDisplay }]
+      : []),
     { label: 'Facing Direction', value: listing.facingDisplay },
-    // Strictly floor category only — never exact floor number
-    { label: 'Floor Level', value: listing.floorCategoryDisplay },
+    // Strictly floor category only — never exact floor number; omit when not applicable
+    ...(listing.floorCategoryDisplay
+      ? [{ label: 'Floor Level', value: listing.floorCategoryDisplay }]
+      : []),
     {
       label: isResale ? 'Possession Status' : 'Availability Status',
       value: listing.possessionDisplay,
@@ -43,26 +62,44 @@ export function PropertySpecificationsSection({
   ];
 
   const mobileHighlightCards = [
-    {
-      icon: BedDouble,
-      value: listing.configuration,
-      label: 'Configuration',
-    },
+    ...(!isPlot && listing.configuration
+      ? [
+          {
+            icon: BedDouble,
+            value: listing.configuration,
+            label: 'Configuration',
+          },
+        ]
+      : [
+          {
+            icon: Layers,
+            value: listing.propertyTypeDisplay,
+            label: 'Property Type',
+          },
+        ]),
     {
       icon: Maximize2,
       value: listing.primaryAreaDisplay || 'On Request',
       label: listing.primaryAreaLabel,
     },
-    {
-      icon: Layers,
-      value: listing.floorCategoryDisplay,
-      label: 'Floor Level',
-    },
-    {
-      icon: Armchair,
-      value: listing.furnishingDisplay,
-      label: 'Furnishing',
-    },
+    ...(listing.floorCategoryDisplay
+      ? [
+          {
+            icon: Layers,
+            value: listing.floorCategoryDisplay,
+            label: 'Floor Level',
+          },
+        ]
+      : []),
+    ...(listing.furnishingDisplay
+      ? [
+          {
+            icon: Armchair,
+            value: listing.furnishingDisplay,
+            label: 'Furnishing',
+          },
+        ]
+      : []),
     {
       icon: KeyRound,
       value: listing.possessionDisplay,

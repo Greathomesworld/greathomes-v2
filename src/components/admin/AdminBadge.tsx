@@ -5,16 +5,24 @@ import React from 'react';
 type BadgeVariant =
   | 'PUBLISHED'
   | 'APPROVED'
+  | 'ACTIVE'
   | 'VERIFIED'
   | 'DRAFT'
   | 'SUBMITTED'
   | 'UNDER_REVIEW'
+  | 'PENDING'
+  | 'CHANGES_REQUESTED'
   | 'UNVERIFIED'
   | 'PAUSED'
+  | 'SUSPENDED'
+  | 'REJECTED'
+  | 'REVOKED'
+  | 'OVERRIDDEN'
   | 'SOLD_RENTED'
   | 'ARCHIVED'
   | 'SUPER_ADMIN'
   | 'ADMIN'
+  | 'VERIFICATION_EXECUTIVE'
   | 'CONTENT_MANAGER'
   | 'PROPERTY_MANAGER'
   | 'SALES'
@@ -51,6 +59,7 @@ export function AdminBadge({ label, variant = 'DEFAULT', size = 'sm' }: AdminBad
   switch (normalizedVariant) {
     case 'PUBLISHED':
     case 'APPROVED':
+    case 'ACTIVE':
     case 'VERIFIED':
     case 'CONVERTED':
     case 'SITE_VISIT_COMPLETED':
@@ -60,10 +69,15 @@ export function AdminBadge({ label, variant = 'DEFAULT', size = 'sm' }: AdminBad
     case 'DRAFT':
     case 'SUBMITTED':
     case 'UNDER_REVIEW':
+    case 'PENDING':
     case 'IN_REVIEW':
     case 'UNVERIFIED':
     case 'SITE_VISIT_SCHEDULED':
       style = 'bg-amber-50 text-amber-800 border-amber-200/80 font-medium';
+      break;
+    case 'CHANGES_REQUESTED':
+    case 'SUSPENDED':
+      style = 'bg-orange-50 text-orange-800 border-orange-200 font-medium';
       break;
     case 'PAUSED':
     case 'SOLD_RENTED':
@@ -73,10 +87,13 @@ export function AdminBadge({ label, variant = 'DEFAULT', size = 'sm' }: AdminBad
       break;
     case 'ARCHIVED':
     case 'URGENT':
+    case 'REJECTED':
+    case 'REVOKED':
       style = 'bg-rose-50 text-rose-700 border-rose-200 font-semibold';
       break;
     case 'HIGH':
     case 'NEGOTIATION':
+    case 'OVERRIDDEN':
       style = 'bg-amber-100/70 text-amber-900 border-amber-300 font-medium';
       break;
     case 'NEW':
@@ -93,6 +110,7 @@ export function AdminBadge({ label, variant = 'DEFAULT', size = 'sm' }: AdminBad
       style = 'bg-indigo-50 text-indigo-700 border-indigo-200 font-medium';
       break;
     case 'ADMIN':
+    case 'VERIFICATION_EXECUTIVE':
     case 'CONTENT_MANAGER':
     case 'PROPERTY_MANAGER':
     case 'SALES':

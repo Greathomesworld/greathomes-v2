@@ -1,4 +1,5 @@
 import { PublicProjectDto } from '@/src/domain/projects/dto/projectDto';
+import { safeJsonLd } from '@/src/lib/safeJsonLd';
 
 interface ProjectStructuredDataProps {
   project: PublicProjectDto;
@@ -152,7 +153,7 @@ export function ProjectStructuredData({ project }: ProjectStructuredDataProps) {
   return (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(graphData) }}
+      dangerouslySetInnerHTML={{ __html: safeJsonLd(graphData) }}
     />
   );
 }

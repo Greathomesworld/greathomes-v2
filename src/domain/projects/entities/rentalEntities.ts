@@ -28,7 +28,12 @@ export type FacingDirection =
   | 'SOUTH_WEST'
   | 'UNKNOWN';
 
-export type FloorCategory = 'LOWER_FLOOR' | 'MID_FLOOR' | 'HIGH_FLOOR';
+export type FloorCategory =
+  | 'GROUND_FLOOR'
+  | 'LOWER_FLOOR'
+  | 'MID_FLOOR'
+  | 'HIGHER_FLOOR'
+  | 'HIGH_FLOOR';
 
 export type PossessionStatus = 'READY' | 'UNDER_CONSTRUCTION' | 'OCCUPIED' | 'AVAILABLE_FROM_DATE';
 
@@ -61,24 +66,27 @@ export interface RentalListing {
   longitude?: number | null;
   geometry?: string | null;
   propertyType: PropertyType;
-  configuration: string;
-  bedroomCount: number;
+  configuration?: string | null;
+  bedroomCount?: number | null;
   carpetArea?: number | null;
   builtUpArea?: number | null;
   superBuiltUpArea?: number | null;
+  plotArea?: number | null;
 
   monthlyRent: number;
   maintenance?: number | null;
   securityDeposit?: number | null;
 
-  furnishing: FurnishingStatus;
+  furnishing?: FurnishingStatus | null;
   facing: FacingDirection;
-  floorCategory: FloorCategory;
+  floorCategory?: FloorCategory | null;
   possession: PossessionStatus;
   availabilityDate?: Date | null;
   leaseDuration?: string | null;
   noticePeriod?: string | null;
   description?: string | null;
+  customLocalityDisplay?: string | null;
+  customProjectDisplay?: string | null;
 
   listingPartyType: ListingPartyType;
   listingPartyDisplayName?: string | null;

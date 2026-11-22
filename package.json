@@ -6,16 +6,9 @@
     "dev": "next dev -H 0.0.0.0 -p 3000",
     "build": "NODE_ENV=production next build",
     "start": "next start -H 0.0.0.0 -p 3000",
-    "lint": "tsc --noEmit && eslint app src --max-warnings 100",
+    "lint": "node ./node_modules/typescript/bin/tsc --noEmit && eslint app src --max-warnings 100",
     "test": "node scripts/test-connection-validation.mjs",
-    "test:staff-auth": "tsx scripts/test-phase-06-2.mjs",
-    "test:customer-otp": "tsx scripts/test-customer-otp.mjs",
-    "test:customer-360": "tsx scripts/test-visitor-customer-360.mjs",
-    "test:connection-safety": "node scripts/test-connection-validation.mjs",
-    "test:postgres-live": "tsx scripts/test-postgres-live.mjs",
-    "test:seo": "tsx scripts/test-seo-governance.ts",
-    "audit:security": "npm audit --audit-level=high",
-    "provision:first-super-admin": "tsx scripts/provision-first-super-admin.ts"
+    "db:migrate": "tsx scripts/run-migrations.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.750.0",
@@ -40,7 +33,8 @@
     "recharts": "^2.15.1",
     "sharp": "^0.33.5",
     "tailwind-merge": "^3.0.1",
-    "uuid": "^10.0.0"
+    "uuid": "^10.0.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.6",
@@ -53,7 +47,7 @@
     "eslint-config-next": "15.5.28",
     "tailwindcss": "^4.0.6",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.3"
+    "typescript": "5.8.2"
   },
   "trustedDependencies": [
     "@google/genai",

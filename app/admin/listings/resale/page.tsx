@@ -13,6 +13,7 @@ import { AdminConfirmDialog } from '@/src/components/admin/AdminConfirmDialog';
 import { AdminLoadingState } from '@/src/components/admin/AdminLoadingState';
 import { AdminErrorState } from '@/src/components/admin/AdminErrorState';
 import { getAdminHeaders } from '@/src/lib/adminAuth';
+import { safeFetchJson } from '@/src/lib/safeApiFetch';
 import { formatIndianPrice } from '@/src/components/discovery/formatters';
 import { Plus, RefreshCw, Eye, Edit3, Trash2, ArrowUpDown } from 'lucide-react';
 
@@ -48,16 +49,16 @@ export default function AdminResalePage() {
       setLoading(true);
       setError(null);
 
-      const res = await fetch('/api/resale', {
+      const res = await safeFetchJson<{ data?: any[] }>('/api/resale', {
         headers: getAdminHeaders(),
       });
 
       if (!res.ok) {
-        throw new Error(`Failed to load resale listings: ${res.statusText}`);
+        setError(res.error || 'Failed to load resale listings');
+        return;
       }
 
-      const json = await res.json();
-      setListings(json.data || []);
+      setListings(res.data?.data || []);
     } catch (err: any) {
       setError(err.message || 'Error fetching resale listings');
     } finally {
@@ -73,18 +74,20 @@ export default function AdminResalePage() {
     if (!deleteId) return;
     try {
       setIsDeleting(true);
-      const res = await fetch(`/api/resale/${deleteId}`, {
+      const res = await safeFetchJson(`/api/resale/${deleteId}`, {
         method: 'DELETE',
         headers: getAdminHeaders(),
       });
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to delete listing');
+        setError(res.error || 'Failed to delete listing');
+        setDeleteId(null);
+        return;
       }
       setDeleteId(null);
       await fetchListings();
     } catch (err: any) {
-      alert(err.message);
+      setError(err.message || 'Failed to delete listing');
+      setDeleteId(null);
     } finally {
       setIsDeleting(false);
     }

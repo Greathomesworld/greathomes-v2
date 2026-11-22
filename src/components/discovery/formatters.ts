@@ -120,6 +120,7 @@ export function formatPossession(possession?: string | null, dateStr?: string | 
             day: 'numeric',
             month: 'short',
             year: 'numeric',
+            timeZone: 'Asia/Kolkata',
           })}`;
         }
       }
@@ -146,12 +147,24 @@ export interface FormattedAreaDetails {
 export function formatAreaDetails(
   carpetArea?: number | null,
   builtUpArea?: number | null,
-  superBuiltUpArea?: number | null
+  superBuiltUpArea?: number | null,
+  plotArea?: number | null,
+  propertyType?: string | null
 ): FormattedAreaDetails {
   const hasCarpet = typeof carpetArea === 'number' && Number.isFinite(carpetArea) && carpetArea > 0;
   const hasBuiltUp = typeof builtUpArea === 'number' && Number.isFinite(builtUpArea) && builtUpArea > 0;
   const hasSuperBuiltUp =
     typeof superBuiltUpArea === 'number' && Number.isFinite(superBuiltUpArea) && superBuiltUpArea > 0;
+  const hasPlot = typeof plotArea === 'number' && Number.isFinite(plotArea) && plotArea > 0;
+  const isPlot = propertyType?.toUpperCase() === 'PLOT';
+
+  if (isPlot && hasPlot) {
+    return {
+      primaryLabel: 'Plot Area',
+      primaryValue: `${plotArea!.toLocaleString('en-IN')} sq.ft.`,
+      secondaryText: null,
+    };
+  }
 
   if (hasCarpet) {
     const primaryValue = `${carpetArea!.toLocaleString('en-IN')} sq.ft.`;
@@ -159,6 +172,8 @@ export function formatAreaDetails(
       ? `Built-up: ${builtUpArea!.toLocaleString('en-IN')} sq.ft.`
       : hasSuperBuiltUp
       ? `Super Built-up: ${superBuiltUpArea!.toLocaleString('en-IN')} sq.ft.`
+      : hasPlot
+      ? `Plot: ${plotArea!.toLocaleString('en-IN')} sq.ft.`
       : null;
     return {
       primaryLabel: 'Carpet Area',
@@ -171,6 +186,8 @@ export function formatAreaDetails(
     const primaryValue = `${builtUpArea!.toLocaleString('en-IN')} sq.ft.`;
     const secondaryText = hasSuperBuiltUp
       ? `Super Built-up: ${superBuiltUpArea!.toLocaleString('en-IN')} sq.ft.`
+      : hasPlot
+      ? `Plot: ${plotArea!.toLocaleString('en-IN')} sq.ft.`
       : null;
     return {
       primaryLabel: 'Built-up Area',
@@ -183,12 +200,20 @@ export function formatAreaDetails(
     return {
       primaryLabel: 'Super Built-up',
       primaryValue: `${superBuiltUpArea!.toLocaleString('en-IN')} sq.ft.`,
+      secondaryText: hasPlot ? `Plot: ${plotArea!.toLocaleString('en-IN')} sq.ft.` : null,
+    };
+  }
+
+  if (hasPlot) {
+    return {
+      primaryLabel: 'Plot Area',
+      primaryValue: `${plotArea!.toLocaleString('en-IN')} sq.ft.`,
       secondaryText: null,
     };
   }
 
   return {
-    primaryLabel: 'Carpet Area',
+    primaryLabel: isPlot ? 'Plot Area' : 'Carpet Area',
     primaryValue: null,
     secondaryText: null,
   };
@@ -203,6 +228,7 @@ export function formatListingDisplayTitle(params: {
   bedroomCount?: number | null;
   propertyType?: string | null;
   furnishing?: string | null;
+  plotArea?: number | null;
   mode: 'RESALE' | 'RENTAL';
   projectName?: string | null;
 }): {
@@ -210,14 +236,35 @@ export function formatListingDisplayTitle(params: {
   subtitle: string;
   bhkBadge: string;
 } {
-  const { configuration, bedroomCount, propertyType, furnishing, mode, projectName } = params;
+  const { configuration, bedroomCount, propertyType, furnishing, plotArea, mode, projectName } = params;
+  const isPlot = propertyType?.toUpperCase() === 'PLOT';
   const propTypeLabel = formatPropertyType(propertyType);
   const hasBeds = typeof bedroomCount === 'number' && Number.isFinite(bedroomCount) && bedroomCount > 0;
-  const bhkBadge = hasBeds ? `${bedroomCount} BHK` : configuration?.trim() || propTypeLabel;
+  const hasPlotArea = typeof plotArea === 'number' && Number.isFinite(plotArea) && plotArea > 0;
+
+  if (isPlot) {
+    const plotBadge = hasPlotArea ? `${plotArea!.toLocaleString('en-IN')} sq.ft. Plot` : 'Residential Plot';
+    const title = hasPlotArea
+      ? `Residential Plot (${plotArea!.toLocaleString('en-IN')} sq.ft.)`
+      : 'Residential Plot';
+    const subtitleParts = [
+      'Plot',
+      hasPlotArea ? `${plotArea!.toLocaleString('en-IN')} sq.ft.` : null,
+      projectName || null,
+    ].filter(Boolean);
+    return {
+      title,
+      subtitle: subtitleParts.join(' · '),
+      bhkBadge: plotBadge,
+    };
+  }
+
+  const configTrimmed = configuration?.trim() || '';
+  const bhkBadge = hasBeds ? `${bedroomCount} BHK` : configTrimmed || propTypeLabel;
 
   let subtypeNote = '';
-  if (configuration && configuration.trim().length > 0) {
-    let cleaned = configuration.trim();
+  if (configTrimmed.length > 0) {
+    let cleaned = configTrimmed;
     if (projectName) {
       const escapedProj = projectName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       cleaned = cleaned.replace(new RegExp(`\\b(in|at)\\s+${escapedProj}\\b`, 'gi'), '');
@@ -236,10 +283,12 @@ export function formatListingDisplayTitle(params: {
   }
 
   if (mode === 'RENTAL') {
-    const furnishLabel = formatFurnishing(furnishing);
+    const furnishLabel = furnishing ? formatFurnishing(furnishing) : null;
     const title = hasBeds
-      ? `${bedroomCount} BHK ${ propTypeLabel }`
-      : `${bhkBadge} ${propTypeLabel}`;
+      ? `${bedroomCount} BHK ${propTypeLabel}`
+      : configTrimmed && !configTrimmed.toLowerCase().includes(propTypeLabel.toLowerCase())
+      ? `${configTrimmed} ${propTypeLabel}`
+      : configTrimmed || propTypeLabel;
     const subtitleParts = [
       hasBeds ? `${bedroomCount} BHK` : null,
       subtypeNote || furnishLabel,
@@ -256,7 +305,9 @@ export function formatListingDisplayTitle(params: {
     ? subtypeNote && !propTypeLabel.toLowerCase().includes(subtypeNote.toLowerCase())
       ? `${bedroomCount} BHK ${subtypeNote} ${propTypeLabel}`
       : `${bedroomCount} BHK ${propTypeLabel}`
-    : configuration?.trim() || propTypeLabel;
+    : configTrimmed && !configTrimmed.toLowerCase().includes(propTypeLabel.toLowerCase())
+    ? `${configTrimmed} ${propTypeLabel}`
+    : configTrimmed || propTypeLabel;
 
   const subtitleParts = [
     hasBeds ? `${bedroomCount} BHK` : null,

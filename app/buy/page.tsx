@@ -48,7 +48,11 @@ export default async function BuyPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  await ensureSeedData();
+  try {
+    await ensureSeedData();
+  } catch (seedError) {
+    console.warn('BuyPage ensureSeedData warning:', seedError);
+  }
 
   const params = await searchParams;
   const qParam = typeof params.q === 'string' ? params.q : typeof params.query === 'string' ? params.query : undefined;

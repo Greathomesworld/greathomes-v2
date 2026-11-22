@@ -3,6 +3,7 @@ import { resaleListingService } from '@/src/domain/projects/services/resaleServi
 import { verifyStaffCapability } from '@/src/domain/auth/capabilities';
 import { ensureSeedData } from '@/src/infrastructure/seed';
 import { revalidateResalePaths } from '@/src/lib/revalidateListingPaths';
+import { isPersistenceUnavailableError } from '@/src/lib/persistenceGuard';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -15,6 +16,12 @@ export async function GET(req: NextRequest, context: RouteContext) {
     const amenities = await resaleListingService.findAmenitiesByListingId(id);
     return NextResponse.json({ success: true, data: amenities });
   } catch (error: any) {
+    if (isPersistenceUnavailableError(error)) {
+      return NextResponse.json(
+        { success: false, code: 'PERSISTENCE_UNAVAILABLE', error: error.message },
+        { status: 503 }
+      );
+    }
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -45,6 +52,12 @@ export async function POST(req: NextRequest, context: RouteContext) {
     });
     return NextResponse.json({ success: true, message: 'Amenity associated successfully' }, { status: 201 });
   } catch (error: any) {
+    if (isPersistenceUnavailableError(error)) {
+      return NextResponse.json(
+        { success: false, code: 'PERSISTENCE_UNAVAILABLE', error: error.message },
+        { status: 503 }
+      );
+    }
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -85,6 +98,12 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
     });
     return NextResponse.json({ success: true, message: 'Amenity disassociated successfully' });
   } catch (error: any) {
+    if (isPersistenceUnavailableError(error)) {
+      return NextResponse.json(
+        { success: false, code: 'PERSISTENCE_UNAVAILABLE', error: error.message },
+        { status: 503 }
+      );
+    }
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

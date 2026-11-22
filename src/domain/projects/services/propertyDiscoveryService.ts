@@ -190,6 +190,9 @@ export class PropertyDiscoveryService {
       propertyType?: string | null;
       slug?: string | null;
       description?: string | null;
+      plotArea?: number | null;
+      customLocalityDisplay?: string | null;
+      customProjectDisplay?: string | null;
     }
   ): boolean {
     const q = rawQuery.toLowerCase().trim();
@@ -203,6 +206,10 @@ export class PropertyDiscoveryService {
       typeof fields.bedroomCount === 'number' && fields.bedroomCount > 0
         ? `${fields.bedroomCount} bhk ${fields.bedroomCount}bhk`
         : '';
+    const plotText =
+      typeof fields.plotArea === 'number' && fields.plotArea > 0
+        ? `${fields.plotArea} sq.ft ${fields.plotArea} sqft`
+        : '';
     const propTypeText = (fields.propertyType || '').replace(/_/g, ' ').toLowerCase();
 
     const searchableHaystack = [
@@ -210,9 +217,12 @@ export class PropertyDiscoveryService {
       fields.locationSlug,
       fields.projectName,
       fields.projectSlug,
+      fields.customLocalityDisplay,
+      fields.customProjectDisplay,
       fields.developerName,
       fields.configuration,
       bhkText,
+      plotText,
       propTypeText,
       fields.slug,
       fields.description,
@@ -469,10 +479,12 @@ export class PropertyDiscoveryService {
     }
 
     if (includeResale) {
-      const resale = await resaleListingService.listPublicListings({
-        skipAmenities: true,
-        preloadedContext: { ...maps, allowedLocationIds: allowedLocationIds || undefined },
-      });
+      const resale = await resaleListingService
+        .listPublicListings({
+          skipAmenities: true,
+          preloadedContext: { ...maps, allowedLocationIds: allowedLocationIds || undefined },
+        })
+        .catch(() => []);
       for (const r of resale) {
         if (isKnownTestResaleListing(r)) continue;
         if (filters.bedroomCount !== undefined && r.bedroomCount !== filters.bedroomCount) continue;
@@ -521,9 +533,12 @@ export class PropertyDiscoveryService {
             locationSlug: cardLocation?.slug,
             projectName: bp?.name,
             projectSlug: bp?.slug,
+            customLocalityDisplay: r.customLocalityDisplay ?? null,
+            customProjectDisplay: r.customProjectDisplay ?? null,
             developerName: bp?.developer?.name,
             configuration: r.configuration,
             bedroomCount: r.bedroomCount,
+            plotArea: r.plotArea ?? null,
             propertyType: r.propertyType,
             slug: r.slug,
             description: r.description,
@@ -537,12 +552,15 @@ export class PropertyDiscoveryService {
           type: 'RESALE' as const,
           project: bp,
           propertyType: r.propertyType as PropertyType,
-          configuration: r.configuration,
-          bedroomCount: r.bedroomCount,
-          carpetArea: r.carpetArea,
+          configuration: r.configuration ?? null,
+          bedroomCount: r.bedroomCount ?? null,
+          carpetArea: r.carpetArea ?? null,
+          plotArea: r.plotArea ?? null,
           askingPrice: r.askingPrice,
-          furnishing: r.furnishing,
-          floorCategory: r.floorCategory,
+          furnishing: r.furnishing ?? null,
+          floorCategory: r.floorCategory ?? null,
+          customLocalityDisplay: r.customLocalityDisplay ?? null,
+          customProjectDisplay: r.customProjectDisplay ?? null,
           listingPartyLabel: r.listingParty.label,
           verificationStatus: rVerificationStatus,
           location: cardLocation,
@@ -602,10 +620,12 @@ export class PropertyDiscoveryService {
     const q = filters.query ? filters.query.toLowerCase().trim() : '';
     const matchedLocIds = q ? await this.getLocationScopeIds(q, 'DESCENDANT', maps.locs) : new Set<string>();
 
-    const rent = await rentalListingService.listPublicListings({
-      skipAmenities: true,
-      preloadedContext: { ...maps, allowedLocationIds: allowedLocationIds || undefined },
-    });
+    const rent = await rentalListingService
+      .listPublicListings({
+        skipAmenities: true,
+        preloadedContext: { ...maps, allowedLocationIds: allowedLocationIds || undefined },
+      })
+      .catch(() => []);
 
     for (const r of rent) {
       if (isKnownTestRentalListing(r)) continue;
@@ -656,9 +676,12 @@ export class PropertyDiscoveryService {
           locationSlug: cardLocation?.slug,
           projectName: bp?.name,
           projectSlug: bp?.slug,
+          customLocalityDisplay: r.customLocalityDisplay ?? null,
+          customProjectDisplay: r.customProjectDisplay ?? null,
           developerName: bp?.developer?.name,
           configuration: r.configuration,
           bedroomCount: r.bedroomCount,
+          plotArea: r.plotArea ?? null,
           propertyType: r.propertyType,
           slug: r.slug,
           description: r.description,
@@ -672,14 +695,17 @@ export class PropertyDiscoveryService {
         type: 'RENT' as const,
         project: bp,
         propertyType: r.propertyType as PropertyType,
-        configuration: r.configuration,
-        bedroomCount: r.bedroomCount,
-        carpetArea: r.carpetArea,
+        configuration: r.configuration ?? null,
+        bedroomCount: r.bedroomCount ?? null,
+        carpetArea: r.carpetArea ?? null,
+        plotArea: r.plotArea ?? null,
         monthlyRent: r.monthlyRent,
         maintenance: r.maintenance,
         securityDeposit: r.securityDeposit,
-        furnishing: r.furnishing,
-        floorCategory: r.floorCategory,
+        furnishing: r.furnishing ?? null,
+        floorCategory: r.floorCategory ?? null,
+        customLocalityDisplay: r.customLocalityDisplay ?? null,
+        customProjectDisplay: r.customProjectDisplay ?? null,
         listingPartyLabel: r.listingParty.label,
         verificationStatus: rVerificationStatus,
         location: cardLocation,
@@ -1216,7 +1242,8 @@ export class PropertyDiscoveryService {
       if (r.lifecycleStatus !== 'PUBLISHED') continue;
       // Never include listings belonging to the current project in Nearby
       if (r.projectId && r.projectId === currentProject.id) continue;
-      if (!r.configuration || typeof r.askingPrice !== 'number' || r.askingPrice <= 0) continue;
+      const isPlotEligible = r.propertyType === 'PLOT' && typeof r.plotArea === 'number' && r.plotArea > 0;
+      if ((!r.configuration && !isPlotEligible) || typeof r.askingPrice !== 'number' || r.askingPrice <= 0) continue;
 
       let bp: BoundedProject | null = null;
       let cardLocation: BoundedLocation | null = null;
@@ -1246,12 +1273,15 @@ export class PropertyDiscoveryService {
         type: 'RESALE',
         project: bp,
         propertyType: r.propertyType as PropertyType,
-        configuration: r.configuration,
-        bedroomCount: r.bedroomCount,
+        configuration: r.configuration ?? null,
+        bedroomCount: r.bedroomCount ?? null,
         carpetArea: r.carpetArea ?? r.builtUpArea ?? null,
+        plotArea: r.plotArea ?? null,
         askingPrice: r.askingPrice,
-        furnishing: r.furnishing,
-        floorCategory: r.floorCategory,
+        furnishing: r.furnishing ?? null,
+        floorCategory: r.floorCategory ?? null,
+        customLocalityDisplay: r.customLocalityDisplay ?? null,
+        customProjectDisplay: r.customProjectDisplay ?? null,
         listingPartyLabel: r.listingParty.label,
         verificationStatus: r.verificationStatus,
         location: cardLocation,
@@ -1276,7 +1306,7 @@ export class PropertyDiscoveryService {
       else if (dist <= 15.0) score += 8;
 
       // 2. Matching BHK/configuration
-      if (currentBhks.has(item.bedroomCount)) score += 25;
+      if (typeof item.bedroomCount === 'number' && item.bedroomCount > 0 && currentBhks.has(item.bedroomCount)) score += 25;
 
       // 3. Budget range compatibility
       if (projBasePrice > 0 && item.askingPrice > 0) {
@@ -1315,7 +1345,8 @@ export class PropertyDiscoveryService {
       if (r.lifecycleStatus !== 'PUBLISHED') continue;
       // Never include listings belonging to the current project in Nearby
       if (r.projectId && r.projectId === currentProject.id) continue;
-      if (!r.configuration || typeof r.monthlyRent !== 'number' || r.monthlyRent <= 0) continue;
+      const isPlotEligible = r.propertyType === 'PLOT' && typeof r.plotArea === 'number' && r.plotArea > 0;
+      if ((!r.configuration && !isPlotEligible) || typeof r.monthlyRent !== 'number' || r.monthlyRent <= 0) continue;
 
       let bp: BoundedProject | null = null;
       let cardLocation: BoundedLocation | null = null;
@@ -1345,14 +1376,17 @@ export class PropertyDiscoveryService {
         type: 'RENT',
         project: bp,
         propertyType: r.propertyType as PropertyType,
-        configuration: r.configuration,
-        bedroomCount: r.bedroomCount,
+        configuration: r.configuration ?? null,
+        bedroomCount: r.bedroomCount ?? null,
         carpetArea: r.carpetArea ?? r.builtUpArea ?? null,
+        plotArea: r.plotArea ?? null,
         monthlyRent: r.monthlyRent,
         maintenance: r.maintenance,
         securityDeposit: r.securityDeposit,
-        furnishing: r.furnishing,
-        floorCategory: r.floorCategory,
+        furnishing: r.furnishing ?? null,
+        floorCategory: r.floorCategory ?? null,
+        customLocalityDisplay: r.customLocalityDisplay ?? null,
+        customProjectDisplay: r.customProjectDisplay ?? null,
         listingPartyLabel: r.listingParty.label,
         verificationStatus: r.verificationStatus,
         location: cardLocation,
@@ -1380,7 +1414,7 @@ export class PropertyDiscoveryService {
       else if (dist <= 15.0) score += 8;
 
       // 2. Matching BHK/configuration
-      if (currentBhks.has(item.bedroomCount)) score += 25;
+      if (typeof item.bedroomCount === 'number' && item.bedroomCount > 0 && currentBhks.has(item.bedroomCount)) score += 25;
 
       // 3. Rental range compatibility
       if (targetMonthlyRent > 0 && item.monthlyRent > 0) {
@@ -1503,7 +1537,7 @@ export class PropertyDiscoveryService {
     listingSlug?: string | null;
     projectId?: string | null;
     locationId?: string | null;
-    bedroomCount: number;
+    bedroomCount?: number | null;
     propertyType: string;
     priceOrRent: number;
     limit?: number;
@@ -1565,7 +1599,8 @@ export class PropertyDiscoveryService {
         if (r.id === params.listingId) continue;
         if (params.listingSlug && r.slug && r.slug === params.listingSlug) continue;
         if (r.lifecycleStatus !== 'PUBLISHED') continue;
-        if (!r.configuration || typeof r.askingPrice !== 'number' || r.askingPrice <= 0) continue;
+        const isPlotEligible = r.propertyType === 'PLOT' && typeof r.plotArea === 'number' && r.plotArea > 0;
+        if ((!r.configuration && !isPlotEligible) || typeof r.askingPrice !== 'number' || r.askingPrice <= 0) continue;
 
         let bp: BoundedProject | null = null;
         let cardLocation: BoundedLocation | null = null;
@@ -1598,10 +1633,12 @@ export class PropertyDiscoveryService {
           }
         }
         // 3. Matching BHK & Property Type
-        if (r.bedroomCount === params.bedroomCount) {
-          score += 28;
-        } else if (Math.abs(r.bedroomCount - params.bedroomCount) === 1) {
-          score += 10;
+        if (typeof r.bedroomCount === 'number' && typeof params.bedroomCount === 'number' && params.bedroomCount > 0) {
+          if (r.bedroomCount === params.bedroomCount) {
+            score += 28;
+          } else if (Math.abs(r.bedroomCount - params.bedroomCount) === 1) {
+            score += 10;
+          }
         }
         if (r.propertyType === params.propertyType) {
           score += 10;
@@ -1628,12 +1665,15 @@ export class PropertyDiscoveryService {
             type: 'RESALE',
             project: bp,
             propertyType: r.propertyType as PropertyType,
-            configuration: r.configuration,
-            bedroomCount: r.bedroomCount,
+            configuration: r.configuration ?? null,
+            bedroomCount: r.bedroomCount ?? null,
             carpetArea: r.carpetArea ?? r.builtUpArea ?? null,
+            plotArea: r.plotArea ?? null,
             askingPrice: r.askingPrice,
-            furnishing: r.furnishing,
-            floorCategory: r.floorCategory,
+            furnishing: r.furnishing ?? null,
+            floorCategory: r.floorCategory ?? null,
+            customLocalityDisplay: r.customLocalityDisplay ?? null,
+            customProjectDisplay: r.customProjectDisplay ?? null,
             listingPartyLabel: r.listingParty.label,
             verificationStatus: r.verificationStatus,
             location: cardLocation,
@@ -1663,7 +1703,8 @@ export class PropertyDiscoveryService {
         if (r.id === params.listingId) continue;
         if (params.listingSlug && r.slug && r.slug === params.listingSlug) continue;
         if (r.lifecycleStatus !== 'PUBLISHED') continue;
-        if (!r.configuration || typeof r.monthlyRent !== 'number' || r.monthlyRent <= 0) continue;
+        const isPlotEligible = r.propertyType === 'PLOT' && typeof r.plotArea === 'number' && r.plotArea > 0;
+        if ((!r.configuration && !isPlotEligible) || typeof r.monthlyRent !== 'number' || r.monthlyRent <= 0) continue;
 
         let bp: BoundedProject | null = null;
         let cardLocation: BoundedLocation | null = null;
@@ -1696,10 +1737,12 @@ export class PropertyDiscoveryService {
           }
         }
         // 3. Matching BHK & Property Type
-        if (r.bedroomCount === params.bedroomCount) {
-          score += 28;
-        } else if (Math.abs(r.bedroomCount - params.bedroomCount) === 1) {
-          score += 10;
+        if (typeof r.bedroomCount === 'number' && typeof params.bedroomCount === 'number' && params.bedroomCount > 0) {
+          if (r.bedroomCount === params.bedroomCount) {
+            score += 28;
+          } else if (Math.abs(r.bedroomCount - params.bedroomCount) === 1) {
+            score += 10;
+          }
         }
         if (r.propertyType === params.propertyType) {
           score += 10;
@@ -1726,14 +1769,17 @@ export class PropertyDiscoveryService {
             type: 'RENT',
             project: bp,
             propertyType: r.propertyType as PropertyType,
-            configuration: r.configuration,
-            bedroomCount: r.bedroomCount,
+            configuration: r.configuration ?? null,
+            bedroomCount: r.bedroomCount ?? null,
             carpetArea: r.carpetArea ?? r.builtUpArea ?? null,
+            plotArea: r.plotArea ?? null,
             monthlyRent: r.monthlyRent,
             maintenance: r.maintenance,
             securityDeposit: r.securityDeposit,
-            furnishing: r.furnishing,
-            floorCategory: r.floorCategory,
+            furnishing: r.furnishing ?? null,
+            floorCategory: r.floorCategory ?? null,
+            customLocalityDisplay: r.customLocalityDisplay ?? null,
+            customProjectDisplay: r.customProjectDisplay ?? null,
             listingPartyLabel: r.listingParty.label,
             verificationStatus: r.verificationStatus,
             location: cardLocation,
@@ -1777,7 +1823,11 @@ export class PropertyDiscoveryService {
       if (bp.featuredImageUrl) score += 5;
 
       const projConfigs = maps.configsByProject.get(proj.id) || [];
-      if (projConfigs.some(c => c.bedroomCount === params.bedroomCount)) {
+      if (
+        typeof params.bedroomCount === 'number' &&
+        params.bedroomCount > 0 &&
+        projConfigs.some(c => c.bedroomCount === params.bedroomCount)
+      ) {
         score += 15;
       }
 

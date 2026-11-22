@@ -28,6 +28,7 @@ export default function CustomerSiteVisitsView() {
   const [newTimeWindow, setNewTimeWindow] = useState('12:00–15:00');
   const [rescheduleReason, setRescheduleReason] = useState('');
   const [isRescheduling, setIsRescheduling] = useState(false);
+  const [todayDateStr, setTodayDateStr] = useState('');
 
   // Cancel Modal state
   const [cancelVisit, setCancelVisit] = useState<CustomerSiteVisitDTO | null>(null);
@@ -55,6 +56,7 @@ export default function CustomerSiteVisitsView() {
   };
 
   useEffect(() => {
+    setTodayDateStr(new Date().toISOString().split('T')[0]);
     fetchVisits();
   }, []);
 
@@ -307,7 +309,7 @@ export default function CustomerSiteVisitsView() {
                   type="date"
                   required
                   value={newDate}
-                  min={new Date().toISOString().split('T')[0]}
+                  min={todayDateStr || undefined}
                   onChange={(e) => setNewDate(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[var(--color-border)] text-xs font-body text-[#111111]"
                 />

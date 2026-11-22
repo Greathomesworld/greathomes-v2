@@ -237,18 +237,21 @@ export const resaleListings = pgTable('resale_listings', {
   slug: text('slug'),
   projectId: uuid('project_id').references(() => projects.id),
   propertyType: text('property_type').notNull(),
-  configuration: text('configuration').notNull(),
-  bedroomCount: integer('bedroom_count').notNull(),
+  configuration: text('configuration'),
+  bedroomCount: integer('bedroom_count'),
   carpetArea: decimal('carpet_area', { precision: 12, scale: 2 }),
   builtUpArea: decimal('built_up_area', { precision: 12, scale: 2 }),
   superBuiltUpArea: decimal('super_built_up_area', { precision: 12, scale: 2 }),
+  plotArea: decimal('plot_area', { precision: 12, scale: 2 }),
   askingPrice: decimal('asking_price', { precision: 19, scale: 4 }).notNull(),
-  furnishing: text('furnishing').notNull(),
+  furnishing: text('furnishing'),
   facing: text('facing').notNull(),
-  floorCategory: text('floor_category').notNull(),
+  floorCategory: text('floor_category'),
   possession: text('possession').notNull(),
   possessionDate: timestamp('possession_date'),
   description: text('description'),
+  customLocalityDisplay: text('custom_locality_display'),
+  customProjectDisplay: text('custom_project_display'),
   listingPartyType: text('listing_party_type').notNull(),
   listingPartyDisplayName: text('listing_party_display_name'),
   ownerName: text('owner_name'),
@@ -272,7 +275,13 @@ export const resaleListings = pgTable('resale_listings', {
   geometry: text('geometry'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+}, (table) => [
+  index('idx_resale_listings_location_id').on(table.locationId),
+  index('idx_resale_listings_lifecycle_verif').on(table.lifecycleStatus, table.verificationStatus),
+  uniqueIndex('uq_resale_listings_slug_not_null')
+    .on(sql`LOWER(BTRIM(${table.slug}))`)
+    .where(sql`${table.slug} IS NOT NULL AND BTRIM(${table.slug}) <> ''`),
+]);
 
 // Resale Listing Media
 export const resaleListingMedia = pgTable('resale_listing_media', {
@@ -302,22 +311,25 @@ export const rentalListings = pgTable('rental_listings', {
   slug: text('slug'),
   projectId: uuid('project_id').references(() => projects.id),
   propertyType: text('property_type').notNull(),
-  configuration: text('configuration').notNull(),
-  bedroomCount: integer('bedroom_count').notNull(),
+  configuration: text('configuration'),
+  bedroomCount: integer('bedroom_count'),
   carpetArea: decimal('carpet_area', { precision: 12, scale: 2 }),
   builtUpArea: decimal('built_up_area', { precision: 12, scale: 2 }),
   superBuiltUpArea: decimal('super_built_up_area', { precision: 12, scale: 2 }),
+  plotArea: decimal('plot_area', { precision: 12, scale: 2 }),
   monthlyRent: decimal('monthly_rent', { precision: 19, scale: 4 }).notNull(),
   maintenance: decimal('maintenance', { precision: 19, scale: 4 }),
   securityDeposit: decimal('security_deposit', { precision: 19, scale: 4 }),
-  furnishing: text('furnishing').notNull(),
+  furnishing: text('furnishing'),
   facing: text('facing').notNull(),
-  floorCategory: text('floor_category').notNull(),
+  floorCategory: text('floor_category'),
   possession: text('possession').notNull(),
   availabilityDate: timestamp('availability_date'),
   leaseDuration: text('lease_duration'),
   noticePeriod: text('notice_period'),
   description: text('description'),
+  customLocalityDisplay: text('custom_locality_display'),
+  customProjectDisplay: text('custom_project_display'),
   listingPartyType: text('listing_party_type').notNull(),
   listingPartyDisplayName: text('listing_party_display_name'),
   ownerName: text('owner_name'),
@@ -341,7 +353,13 @@ export const rentalListings = pgTable('rental_listings', {
   geometry: text('geometry'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+}, (table) => [
+  index('idx_rental_listings_location_id').on(table.locationId),
+  index('idx_rental_listings_lifecycle_verif').on(table.lifecycleStatus, table.verificationStatus),
+  uniqueIndex('uq_rental_listings_slug_not_null')
+    .on(sql`LOWER(BTRIM(${table.slug}))`)
+    .where(sql`${table.slug} IS NOT NULL AND BTRIM(${table.slug}) <> ''`),
+]);
 
 // Rental Listing Media
 export const rentalListingMedia = pgTable('rental_listing_media', {
@@ -442,6 +460,7 @@ export const enquiries = pgTable('enquiries', {
   lastContactedAt: timestamp('last_contacted_at'),
   nextFollowUpAt: timestamp('next_follow_up_at'),
   siteVisitId: text('site_visit_id'),
+  idempotencyKey: text('idempotency_key'),
   metadata: text('metadata'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -459,6 +478,7 @@ export const enquiries = pgTable('enquiries', {
   index('idx_enquiries_project_id').on(table.projectId),
   index('idx_enquiries_listing_id').on(table.listingId),
   index('idx_enquiries_next_follow_up_at').on(table.nextFollowUpAt),
+  uniqueIndex('uq_enquiries_idempotency_key').on(table.idempotencyKey).where(sql`${table.idempotencyKey} IS NOT NULL`),
 ]);
 
 // Audit Logs & Administrative Accountability
@@ -493,8 +513,9 @@ export const auditLogs = pgTable('audit_logs', {
 // Unified Media Assets & Derivatives
 export const mediaAssets = pgTable('media_assets', {
   id: text('id').primaryKey(),
-  entityType: text('entity_type').notNull(), // 'PROJECT' | 'DEVELOPER' | 'RESALE' | 'RENTAL' | 'GENERAL'
+  entityType: text('entity_type').notNull(), // 'PROJECT' | 'DEVELOPER' | 'RESALE' | 'RENTAL' | 'SUBMISSION' | 'GENERAL'
   entityId: text('entity_id').notNull(),
+  customerId: text('customer_id').references(() => customers.id, { onDelete: 'set null' }),
   filename: text('filename').notNull(),
   mimeType: text('mime_type').notNull(),
   category: text('category').notNull(),
@@ -521,6 +542,8 @@ export const mediaAssets = pgTable('media_assets', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => [
   index('idx_media_assets_entity').on(table.entityType, table.entityId),
+  index('idx_media_assets_customer').on(table.customerId),
+  index('idx_media_assets_entity_sort').on(table.entityType, table.entityId, table.sortOrder, table.createdAt),
   index('idx_media_assets_category').on(table.category),
   index('idx_media_assets_created').on(table.createdAt),
 ]);
@@ -528,12 +551,13 @@ export const mediaAssets = pgTable('media_assets', {
 // Customer Status Enum
 export const customerStatusEnum = pgEnum('customer_status', ['ACTIVE', 'DISABLED', 'DELETED']);
 
-// Customers (Authenticated buyer accounts)
+// Customers (Authenticated buyer / owner / partner accounts)
 export const customers = pgTable('customers', {
   id: text('id').primaryKey(),
   email: text('email'),
   phone: text('phone'),
   name: text('name').notNull(),
+  accountType: text('account_type'), // 'OWNER' | 'LISTING_PARTNER' | null
   passwordHash: text('password_hash'),
   avatarUrl: text('avatar_url'),
   status: customerStatusEnum('status').default('ACTIVE').notNull(),
@@ -544,9 +568,10 @@ export const customers = pgTable('customers', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => [
   uniqueIndex('idx_customers_email_unique_non_null').on(sql`LOWER(${table.email})`).where(sql`${table.email} IS NOT NULL`),
-  index('idx_customers_email').on(table.email),
+  index('idx_customers_email_lookup').on(sql`LOWER(${table.email})`),
   index('idx_customers_phone').on(table.phone),
   index('idx_customers_status').on(table.status),
+  index('idx_customers_account_type').on(table.accountType),
 ]);
 
 // Saved Items (Generic bounded saved residential resources)
@@ -649,6 +674,7 @@ export const notifications = pgTable('notifications', {
   locationId: uuid('location_id').references(() => locations.id, { onDelete: 'set null' }),
   savedItemId: text('saved_item_id'),
   watchId: text('watch_id'),
+  dedupKey: text('dedup_key'),
   metadata: jsonb('metadata'),
   isRead: boolean('is_read').default(false).notNull(),
   readAt: timestamp('read_at'),
@@ -659,6 +685,7 @@ export const notifications = pgTable('notifications', {
   index('idx_notifications_customer_created').on(table.customerId, table.createdAt),
   index('idx_notifications_customer_read_created').on(table.customerId, table.isRead, table.createdAt),
   index('idx_notifications_customer_type_created').on(table.customerId, table.type, table.createdAt),
+  uniqueIndex('uq_notifications_customer_dedup_key').on(table.customerId, table.dedupKey).where(sql`${table.dedupKey} IS NOT NULL`),
 ]);
 
 // Alert Delivery Attempts
@@ -807,6 +834,9 @@ export const siteVisits = pgTable('site_visits', {
   index('idx_site_visits_status').on(table.status),
   index('idx_site_visits_date').on(table.preferredDate),
   index('idx_site_visits_created').on(table.createdAt),
+  uniqueIndex('uq_site_visits_active_enquiry_slot')
+    .on(table.enquiryId, table.preferredDate, table.preferredTimeWindow, table.visitType)
+    .where(sql`${table.status} <> 'CANCELLED'`),
 ]);
 
 // Visitor & Customer 360 Intelligence
@@ -895,9 +925,18 @@ export const visitorEvents = pgTable('visitor_events', {
 export const customerPartnerProfiles = pgTable('customer_partner_profiles', {
   id: text('id').primaryKey(),
   customerId: text('customer_id').references(() => customers.id, { onDelete: 'restrict' }).notNull().unique(),
-  status: text('status').default('PENDING').notNull(), // 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'REVOKED'
+  status: text('status').default('PENDING').notNull(), // 'PENDING' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED' | 'REVOKED'
+  agencyName: text('agency_name'),
+  businessAddress: text('business_address'),
+  locality: text('locality'),
+  city: text('city'),
+  agencyContactPhone: text('agency_contact_phone'),
+  declarationAccepted: boolean('declaration_accepted').default(false).notNull(),
+  declarationText: text('declaration_text'),
+  declarationAcceptedAt: timestamp('declaration_accepted_at', { withTimezone: true }),
   approvedByStaffId: text('approved_by_staff_id').references(() => staffUsers.id, { onDelete: 'set null' }),
   approvedAt: timestamp('approved_at', { withTimezone: true }),
+  rejectionReason: text('rejection_reason'),
   suspensionReason: text('suspension_reason'),
   revocationReason: text('revocation_reason'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -927,23 +966,44 @@ export const propertySubmissions = pgTable('property_submissions', {
   submitterCustomerId: text('submitter_customer_id').references(() => customers.id, { onDelete: 'restrict' }).notNull(),
   listingType: text('listing_type').notNull(), // 'RESALE' | 'RENTAL'
   listingSource: text('listing_source').notNull(), // 'OWNER' | 'PARTNER'
-  submissionStatus: text('submission_status').default('DRAFT').notNull(), // 'DRAFT' | 'SUBMITTED' | 'UNDER_REVIEW' | 'CHANGES_REQUESTED' | 'APPROVED' | 'REJECTED' | 'WITHDRAWAL_REQUESTED' | 'WITHDRAWN'
+  submissionStatus: text('submission_status').default('DRAFT').notNull(),
   resaleListingId: text('resale_listing_id').references(() => resaleListings.id, { onDelete: 'restrict' }),
   rentalListingId: text('rental_listing_id').references(() => rentalListings.id, { onDelete: 'restrict' }),
+  assignedReviewerId: text('assigned_reviewer_id').references(() => staffUsers.id, { onDelete: 'set null' }),
   payload: jsonb('payload').notNull(),
+  originalPayload: jsonb('original_payload'),
+  curatedPayload: jsonb('curated_payload'),
+  reviewChecklist: jsonb('review_checklist'),
+  contactConfirmed: boolean('contact_confirmed').default(false).notNull(),
+  version: integer('version').default(1).notNull(),
   submittedAt: timestamp('submitted_at', { withTimezone: true }),
   reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
   approvedAt: timestamp('approved_at', { withTimezone: true }),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+  publishedByStaffId: text('published_by_staff_id').references(() => staffUsers.id, { onDelete: 'set null' }),
+  deactivatedAt: timestamp('deactivated_at', { withTimezone: true }),
+  deactivatedByStaffId: text('deactivated_by_staff_id').references(() => staffUsers.id, { onDelete: 'set null' }),
+  overrideReason: text('override_reason'),
+  overrideByStaffId: text('override_by_staff_id').references(() => staffUsers.id, { onDelete: 'set null' }),
+  overrideAt: timestamp('override_at', { withTimezone: true }),
   withdrawnAt: timestamp('withdrawn_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   uniqueIndex('uq_submission_id_customer').on(table.id, table.submitterCustomerId),
   index('idx_property_submissions_customer').on(table.submitterCustomerId),
+  index('idx_property_submissions_customer_status_updated').on(
+    table.submitterCustomerId,
+    table.submissionStatus,
+    table.updatedAt
+  ),
   index('idx_property_submissions_status').on(table.submissionStatus),
   index('idx_property_submissions_source').on(table.listingSource),
   index('idx_property_submissions_resale').on(table.resaleListingId),
   index('idx_property_submissions_rental').on(table.rentalListingId),
+  index('idx_property_submissions_assigned_reviewer').on(table.assignedReviewerId),
+  index('idx_property_submissions_submitted_at').on(table.submittedAt),
+  index('idx_property_submissions_published_at').on(table.publishedAt),
   uniqueIndex('uq_resale_listing_submission').on(table.resaleListingId).where(sql`resale_listing_id IS NOT NULL`),
   uniqueIndex('uq_rental_listing_submission').on(table.rentalListingId).where(sql`rental_listing_id IS NOT NULL`),
 ]);
@@ -958,6 +1018,7 @@ export const propertySubmissionReviews = pgTable('property_submission_reviews', 
   newStatus: text('new_status').notNull(),
   internalNote: text('internal_note'),
   submitterFeedback: text('submitter_feedback'),
+  metadata: jsonb('metadata'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index('idx_property_submission_reviews_submission').on(table.submissionId),
@@ -973,8 +1034,66 @@ export const partnerAttestations = pgTable('partner_attestations', {
   declarationText: text('declaration_text').notNull(),
   acceptedAt: timestamp('accepted_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
+  foreignKey({
+    name: 'fk_partner_attestation_ownership',
+    columns: [table.submissionId, table.partnerCustomerId],
+    foreignColumns: [propertySubmissions.id, propertySubmissions.submitterCustomerId],
+  }).onDelete('restrict'),
   index('idx_partner_attestations_submission').on(table.submissionId),
   index('idx_partner_attestations_partner').on(table.partnerCustomerId),
 ]);
+
+// Property Submission Duplicate Flags
+export const propertySubmissionDuplicateFlags = pgTable('property_submission_duplicate_flags', {
+  id: text('id').primaryKey(),
+  submissionId: text('submission_id').references(() => propertySubmissions.id, { onDelete: 'restrict' }).notNull(),
+  matchedEntityType: text('matched_entity_type').notNull(), // 'SUBMISSION' | 'RESALE_LISTING' | 'RENTAL_LISTING'
+  matchedEntityId: text('matched_entity_id').notNull(),
+  matchReason: text('match_reason').notNull(),
+  confidenceScore: integer('confidence_score').default(0).notNull(),
+  signals: jsonb('signals'),
+  resolutionStatus: text('resolution_status').default('OPEN').notNull(), // 'OPEN' | 'CONFIRMED_DUPLICATE' | 'DISMISSED'
+  resolutionNote: text('resolution_note'),
+  resolvedByStaffId: text('resolved_by_staff_id').references(() => staffUsers.id, { onDelete: 'set null' }),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_sub_dup_flags_submission').on(table.submissionId),
+  index('idx_sub_dup_flags_status').on(table.resolutionStatus),
+  uniqueIndex('uq_submission_dup_flag_pair').on(table.submissionId, table.matchedEntityType, table.matchedEntityId),
+]);
+
+// Property Submission Change Requests (Correction & Removal Requests)
+export const propertySubmissionChangeRequests = pgTable('property_submission_change_requests', {
+  id: text('id').primaryKey(),
+  submissionId: text('submission_id').references(() => propertySubmissions.id, { onDelete: 'restrict' }).notNull(),
+  customerId: text('customer_id').references(() => customers.id, { onDelete: 'restrict' }).notNull(),
+  requestType: text('request_type').notNull(), // 'CORRECTION' | 'REMOVAL'
+  reason: text('reason').notNull(),
+  requestedChanges: jsonb('requested_changes'),
+  status: text('status').default('PENDING').notNull(), // 'PENDING' | 'APPROVED' | 'APPLIED' | 'REJECTED'
+  staffResponse: text('staff_response'),
+  resolvedByStaffId: text('resolved_by_staff_id').references(() => staffUsers.id, { onDelete: 'set null' }),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_sub_change_req_submission').on(table.submissionId),
+  index('idx_sub_change_req_customer').on(table.customerId),
+  index('idx_sub_change_req_status').on(table.status),
+]);
+
+// Distributed Rate Limit Buckets (PP-10B)
+export const rateLimitBuckets = pgTable('rate_limit_buckets', {
+  id: text('id').primaryKey(),
+  windowStart: timestamp('window_start', { withTimezone: true }).defaultNow().notNull(),
+  requestCount: integer('request_count').default(0).notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_rate_limit_buckets_expires_at').on(table.expiresAt),
+]);
+
 
 

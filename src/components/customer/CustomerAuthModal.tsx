@@ -4,18 +4,22 @@ import React, { useEffect, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
+  Building2,
   Clock3,
+  Home,
   Loader2,
   LockKeyhole,
   Mail,
   ShieldCheck,
   Smartphone,
-  UserRound,
   X,
 } from 'lucide-react';
 import { useCustomerAuth } from './CustomerAuthContext';
 
 type AuthStep = 'phone' | 'otp' | 'profile';
+
+const PARTNER_DECLARATION_COPY =
+  'I confirm that this account is the sole Great Homes Listing Partner login for my agency, all agency details provided are genuine and verifiable, and I will obtain explicit owner consent before submitting any property.';
 
 function maskPhoneForDisplay(value: string): string {
   const digits = value.replace(/\D/g, '');
@@ -45,6 +49,13 @@ export function CustomerAuthModal() {
   const [maskedPhone, setMaskedPhone] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [accountType, setAccountType] = useState<'OWNER' | 'LISTING_PARTNER'>('OWNER');
+  const [agencyName, setAgencyName] = useState('');
+  const [businessAddress, setBusinessAddress] = useState('');
+  const [locality, setLocality] = useState('');
+  const [city, setCity] = useState('Kolkata');
+  const [agencyContactPhone, setAgencyContactPhone] = useState('');
+  const [declarationAccepted, setDeclarationAccepted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [resendSeconds, setResendSeconds] = useState(0);
@@ -58,6 +69,13 @@ export function CustomerAuthModal() {
     setMaskedPhone('');
     setName('');
     setEmail('');
+    setAccountType('OWNER');
+    setAgencyName('');
+    setBusinessAddress('');
+    setLocality('');
+    setCity('Kolkata');
+    setAgencyContactPhone('');
+    setDeclarationAccepted(false);
     setError(null);
     setSubmitting(false);
     setResendSeconds(0);
@@ -96,10 +114,28 @@ export function CustomerAuthModal() {
         if (result.requiresProfileCompletion) {
           setChallengeId(result.challengeId || challengeId);
           setMaskedPhone(result.maskedPhone || maskedPhone);
+          if (!agencyContactPhone && phone) {
+            setAgencyContactPhone(phone);
+          }
           setStep('profile');
         }
       } else {
-        await completeProfile(challengeId, name.trim(), email.trim());
+        await completeProfile(
+          challengeId,
+          name.trim(),
+          email.trim() || undefined,
+          accountType === 'LISTING_PARTNER'
+            ? {
+                accountType: 'LISTING_PARTNER',
+                agencyName: agencyName.trim(),
+                businessAddress: businessAddress.trim(),
+                locality: locality.trim(),
+                city: city.trim() || 'Kolkata',
+                agencyContactPhone: agencyContactPhone.trim() || phone.trim(),
+                declarationAccepted,
+              }
+            : { accountType: 'OWNER' }
+        );
       }
     } catch (err: unknown) {
       setError(
@@ -124,14 +160,14 @@ export function CustomerAuthModal() {
         : 'Welcome to Great Homes'
       : step === 'otp'
         ? 'Verify your mobile'
-        : 'A little about you';
+        : 'Set up your account';
 
   const description =
     step === 'phone'
       ? 'Sign in securely with your mobile number. No password needed.'
       : step === 'otp'
         ? 'Enter the four-digit code sent to ' + maskedPhone + '.'
-        : 'Add your name and email to finish setting up your account.';
+        : 'Select your account type and enter your name to get started.';
 
   return (
     <div
@@ -144,7 +180,7 @@ export function CustomerAuthModal() {
         if (event.target === event.currentTarget && !submitting) closeAuthModal();
       }}
     >
-      <div className="relative max-h-[calc(100dvh-24px)] w-full max-w-[470px] overflow-y-auto rounded-2xl border border-white/80 bg-[#FAFAF8] p-5 shadow-[0_28px_80px_rgba(17,17,17,0.28)] sm:max-h-[calc(100dvh-48px)] sm:p-8">
+      <div className="relative max-h-[calc(100dvh-24px)] w-full max-w-[520px] overflow-y-auto rounded-2xl border border-white/80 bg-[#FAFAF8] p-5 shadow-[0_28px_80px_rgba(17,17,17,0.28)] sm:max-h-[calc(100dvh-48px)] sm:p-8">
         <button
           type="button"
           onClick={closeAuthModal}
@@ -155,7 +191,7 @@ export function CustomerAuthModal() {
           <X className="h-5 w-5" />
         </button>
 
-        <div className="mb-7 flex items-center gap-3 pr-10">
+        <div className="mb-6 flex items-center gap-3 pr-10">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#E85D3F] text-white shadow-sm">
             <Smartphone className="h-5 w-5" />
           </div>
@@ -172,20 +208,20 @@ export function CustomerAuthModal() {
         <div className="mb-6">
           <h2
             id="customer-auth-title"
-            className="text-[26px] font-semibold leading-tight tracking-[-0.035em] text-[#111111] sm:text-[29px]"
+            className="text-[26px] font-semibold leading-tight tracking-[-0.035em] text-[#111111] sm:text-[28px]"
           >
             {title}
           </h2>
           <p
             id="customer-auth-description"
-            className="mt-2 max-w-[365px] text-sm leading-6 text-[#6E6A65]"
+            className="mt-1.5 max-w-[400px] text-sm leading-6 text-[#6E6A65]"
           >
             {description}
           </p>
         </div>
 
         <div
-          className="mb-7 grid grid-cols-3 gap-3"
+          className="mb-6 grid grid-cols-3 gap-3"
           aria-label={'Step ' + (stepIndex + 1) + ' of 3'}
         >
           {steps.map((item, index) => {
@@ -221,7 +257,7 @@ export function CustomerAuthModal() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-4">
           {step === 'phone' && (
             <div>
               <label
@@ -250,7 +286,7 @@ export function CustomerAuthModal() {
                 />
               </div>
               <p id="customer-phone-help" className="mt-2 text-xs leading-5 text-[#77716B]">
-                Existing customers sign in after verification. New customers can create an account in the next step.
+                Existing customers sign in after verification. New accounts select Owner or Listing Partner next.
               </p>
             </div>
           )}
@@ -264,7 +300,7 @@ export function CustomerAuthModal() {
                 >
                   Four-digit code <span className="text-[#E85D3F]">*</span>
                 </label>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FBE5DF] px-2.5 py-1 text-[11px] font-semibold text-[#B9432D]">
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-[#FBE5DF] px-2 py-0.5 text-[11px] font-semibold text-[#B9432D]">
                   <ShieldCheck className="h-3.5 w-3.5" />
                   SMS verification
                 </span>
@@ -336,9 +372,59 @@ export function CustomerAuthModal() {
           {step === 'profile' && (
             <>
               <div>
+                <span className="mb-2 block text-xs font-bold uppercase tracking-[0.1em] text-[#46413C]">
+                  Account Type <span className="text-[#E85D3F]">*</span>
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => {
+                      setAccountType('OWNER');
+                      setError(null);
+                    }}
+                    className={`flex items-start gap-3 rounded-xl border p-3.5 text-left transition cursor-pointer ${
+                      accountType === 'OWNER'
+                        ? 'border-[#111111] bg-white ring-2 ring-[#111111]/10'
+                        : 'border-[#D9D5D0] bg-white/70 hover:border-[#ABA59E]'
+                    }`}
+                  >
+                    <Home className="mt-0.5 h-4 w-4 shrink-0 text-[#E85D3F]" />
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-[#111111]">Property Owner</div>
+                      <div className="mt-0.5 text-xs text-[#6E6A65]">
+                        Buyer or owner posting your own property
+                      </div>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => {
+                      setAccountType('LISTING_PARTNER');
+                      setError(null);
+                    }}
+                    className={`flex items-start gap-3 rounded-xl border p-3.5 text-left transition cursor-pointer ${
+                      accountType === 'LISTING_PARTNER'
+                        ? 'border-[#111111] bg-white ring-2 ring-[#111111]/10'
+                        : 'border-[#D9D5D0] bg-white/70 hover:border-[#ABA59E]'
+                    }`}
+                  >
+                    <Building2 className="mt-0.5 h-4 w-4 shrink-0 text-[#1F4E79]" />
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-[#111111]">Listing Partner</div>
+                      <div className="mt-0.5 text-xs text-[#6E6A65]">
+                        One agency login (Admin approval required)
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              <div>
                 <label
                   htmlFor="customer-name"
-                  className="mb-2 block text-xs font-bold uppercase tracking-[0.1em] text-[#46413C]"
+                  className="mb-1.5 block text-xs font-bold uppercase tracking-[0.1em] text-[#46413C]"
                 >
                   Full name <span className="text-[#E85D3F]">*</span>
                 </label>
@@ -356,32 +442,137 @@ export function CustomerAuthModal() {
                   className={inputClassName}
                 />
               </div>
+
               <div>
                 <label
                   htmlFor="customer-email"
-                  className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.1em] text-[#46413C]"
+                  className="mb-1.5 flex items-center justify-between text-xs font-bold uppercase tracking-[0.1em] text-[#46413C]"
                 >
-                  Email address <span className="text-[#E85D3F]">*</span>
+                  <span>Email address</span>
+                  <span className="font-normal normal-case tracking-normal text-[#77716B]">
+                    Optional
+                  </span>
                 </label>
                 <div className="relative">
                   <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A09B94]" />
                   <input
                     id="customer-email"
                     type="email"
-                    required
                     maxLength={254}
                     autoComplete="email"
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
-                    placeholder="you@example.com"
+                    placeholder="you@example.com (optional)"
                     disabled={submitting}
                     className={inputClassName + ' pl-10'}
                   />
                 </div>
-                <p className="mt-2 text-xs leading-5 text-[#77716B]">
-                  No email OTP is needed right now. Your mobile number has already been verified.
-                </p>
               </div>
+
+              {accountType === 'LISTING_PARTNER' && (
+                <div className="space-y-3 rounded-xl border border-[#D9D5D0] bg-white p-4">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-[#1F4E79]">
+                    Agency Registration Details (1 Login Per Agency)
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-[#46413C]">
+                      Agency Name <span className="text-[#E85D3F]">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      minLength={2}
+                      maxLength={160}
+                      value={agencyName}
+                      onChange={(e) => setAgencyName(e.target.value)}
+                      placeholder="e.g. Ballygunge Realty Associates"
+                      disabled={submitting}
+                      className={inputClassName}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-[#46413C]">
+                      Office / Business Address <span className="text-[#E85D3F]">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      minLength={5}
+                      maxLength={500}
+                      value={businessAddress}
+                      onChange={(e) => setBusinessAddress(e.target.value)}
+                      placeholder="Full office street address"
+                      disabled={submitting}
+                      className={inputClassName}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-[#46413C]">
+                        Locality <span className="text-[#E85D3F]">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        minLength={2}
+                        maxLength={120}
+                        value={locality}
+                        onChange={(e) => setLocality(e.target.value)}
+                        placeholder="e.g. Salt Lake"
+                        disabled={submitting}
+                        className={inputClassName}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-[#46413C]">
+                        City <span className="text-[#E85D3F]">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        minLength={2}
+                        maxLength={100}
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                        placeholder="Kolkata"
+                        disabled={submitting}
+                        className={inputClassName}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-[#46413C]">
+                      Agency Contact Mobile <span className="text-[#E85D3F]">*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      value={agencyContactPhone}
+                      onChange={(e) => setAgencyContactPhone(e.target.value)}
+                      placeholder="10-digit Indian mobile"
+                      disabled={submitting}
+                      className={inputClassName}
+                    />
+                  </div>
+
+                  <label className="flex items-start gap-2.5 pt-1 text-xs leading-5 text-[#46413C] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      required
+                      checked={declarationAccepted}
+                      onChange={(e) => setDeclarationAccepted(e.target.checked)}
+                      disabled={submitting}
+                      className="mt-1 h-4 w-4 rounded border-[#D9D5D0] text-[#E85D3F] focus:ring-[#E85D3F]"
+                    />
+                    <span>{PARTNER_DECLARATION_COPY}</span>
+                  </label>
+                </div>
+              )}
+
               <button
                 type="button"
                 disabled={submitting}
@@ -422,7 +613,9 @@ export function CustomerAuthModal() {
                     ? 'Send secure code'
                     : step === 'otp'
                       ? 'Verify and continue'
-                      : 'Create account'}
+                      : accountType === 'LISTING_PARTNER'
+                        ? 'Submit Partner Registration'
+                        : 'Create account'}
                 </span>
                 <ArrowRight className="h-4 w-4" />
               </>

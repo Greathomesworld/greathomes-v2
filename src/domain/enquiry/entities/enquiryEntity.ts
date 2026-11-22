@@ -98,6 +98,7 @@ export interface EnquiryEntity {
   lastContactedAt?: Date | null;
   nextFollowUpAt?: Date | null;
   siteVisitId?: string | null;
+  idempotencyKey?: string | null;
   metadata?: Record<string, any> | null;
 
   createdAt: Date;

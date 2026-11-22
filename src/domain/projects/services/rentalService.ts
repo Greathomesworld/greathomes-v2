@@ -28,6 +28,7 @@ import {
 } from '../viewModels/listingDetailViewModel';
 import { getEligibleRentalListings } from '../viewModels/projectSectionEligibility';
 import { generateNewListingSlug } from './listingSlugGenerator';
+import { parseListingDate } from './listingDateNormalizer';
 import { normalizeMediaPublicUrl } from '@/src/lib/mediaUtils';
 import {
   projectRepository,
@@ -379,24 +380,27 @@ export class RentalService {
       project: projectDto,
       location: locationDto,
       propertyType: listing.propertyType,
-      configuration: listing.configuration,
-      bedroomCount: listing.bedroomCount,
+      configuration: listing.configuration ?? null,
+      bedroomCount: listing.bedroomCount ?? null,
       carpetArea: listing.carpetArea ?? null,
       builtUpArea: listing.builtUpArea ?? null,
       superBuiltUpArea: listing.superBuiltUpArea ?? null,
+      plotArea: listing.plotArea ?? null,
 
       monthlyRent: listing.monthlyRent,
       maintenance: listing.maintenance ?? null,
       securityDeposit: listing.securityDeposit ?? null,
 
-      furnishing: listing.furnishing,
+      furnishing: listing.furnishing ?? null,
       facing: listing.facing,
-      floorCategory: listing.floorCategory,
+      floorCategory: listing.floorCategory ?? null,
       possession: listing.possession,
       availabilityDate: listing.availabilityDate ? listing.availabilityDate.toISOString() : null,
       leaseDuration: listing.leaseDuration ?? null,
       noticePeriod: listing.noticePeriod ?? null,
       description: listing.description ?? null,
+      customLocalityDisplay: listing.customLocalityDisplay ?? null,
+      customProjectDisplay: listing.customProjectDisplay ?? null,
 
       listingParty: {
         type: listing.listingPartyType,
@@ -529,22 +533,25 @@ export class RentalService {
     longitude?: number | null;
     geometry?: string | null;
     propertyType: PropertyType;
-    configuration: string;
-    bedroomCount: number;
+    configuration?: string | null;
+    bedroomCount?: number | null;
     carpetArea?: number | null;
     builtUpArea?: number | null;
     superBuiltUpArea?: number | null;
+    plotArea?: number | null;
     monthlyRent: number;
     maintenance?: number | null;
     securityDeposit?: number | null;
-    furnishing: FurnishingStatus;
+    furnishing?: FurnishingStatus | null;
     facing?: FacingDirection;
-    floorCategory?: FloorCategory;
+    floorCategory?: FloorCategory | null;
     possession?: PossessionStatus;
     availabilityDate?: Date | null;
     leaseDuration?: string | null;
     noticePeriod?: string | null;
     description?: string | null;
+    customLocalityDisplay?: string | null;
+    customProjectDisplay?: string | null;
     listingPartyType: ListingPartyType;
     ownerName?: string | null;
     ownerPhone?: string | null;
@@ -627,7 +634,14 @@ export class RentalService {
       throw new ValidationError('Security deposit cannot be negative.');
     }
 
-    if (data.bedroomCount === undefined || data.bedroomCount < 0) {
+    const isPlot = data.propertyType === 'PLOT';
+    const isIndependentHouse = data.propertyType === 'INDEPENDENT_HOUSE';
+
+    if (isPlot) {
+      if (!data.plotArea || typeof data.plotArea !== 'number' || data.plotArea <= 0) {
+        throw new ValidationError('Plot area must be a positive number for Plot listings.');
+      }
+    } else if (data.bedroomCount === undefined || data.bedroomCount === null || data.bedroomCount < 0) {
       throw new ValidationError('Bedroom count must be a non-negative number.');
     }
 
@@ -637,7 +651,9 @@ export class RentalService {
       projectSlug,
       locationName,
       locationSlug,
-      bedroomCount: data.bedroomCount,
+      propertyType: data.propertyType,
+      bedroomCount: isPlot ? null : data.bedroomCount ?? null,
+      plotArea: data.plotArea ?? null,
       listingType: 'rental',
       checkExists: async (s) => Boolean(await this.repo.findBySlug(s)),
     });
@@ -649,22 +665,29 @@ export class RentalService {
       longitude: lngToSave,
       geometry: geomToSave,
       propertyType: data.propertyType,
-      configuration: data.configuration,
-      bedroomCount: data.bedroomCount,
-      carpetArea: data.carpetArea ?? null,
-      builtUpArea: data.builtUpArea ?? null,
-      superBuiltUpArea: data.superBuiltUpArea ?? null,
+      configuration: isPlot ? (data.configuration?.trim() || null) : (data.configuration ?? null),
+      bedroomCount: isPlot ? null : (data.bedroomCount ?? null),
+      carpetArea: isPlot ? null : (data.carpetArea ?? null),
+      builtUpArea: isPlot ? null : (data.builtUpArea ?? null),
+      superBuiltUpArea: isPlot ? null : (data.superBuiltUpArea ?? null),
+      plotArea: data.plotArea ?? null,
       monthlyRent: data.monthlyRent,
       maintenance: data.maintenance ?? null,
       securityDeposit: data.securityDeposit ?? null,
-      furnishing: data.furnishing || 'SEMI_FURNISHED',
+      furnishing: isPlot ? (data.furnishing ?? null) : (data.furnishing || 'SEMI_FURNISHED'),
       facing: data.facing ?? 'UNKNOWN',
-      floorCategory: data.floorCategory ?? 'MID_FLOOR',
+      floorCategory: isPlot
+        ? null
+        : isIndependentHouse
+        ? (data.floorCategory ?? null)
+        : (data.floorCategory ?? 'MID_FLOOR'),
       possession: data.possession ?? 'READY',
-      availabilityDate: data.availabilityDate ? new Date(data.availabilityDate) : null,
+      availabilityDate: parseListingDate(data.availabilityDate, 'Availability date', ValidationError),
       leaseDuration: data.leaseDuration ?? null,
       noticePeriod: data.noticePeriod ?? null,
       description: data.description ?? null,
+      customLocalityDisplay: data.customLocalityDisplay ?? null,
+      customProjectDisplay: data.customProjectDisplay ?? null,
       listingPartyType: data.listingPartyType,
       ownerName: data.ownerName ?? null,
       ownerPhone: data.ownerPhone ?? null,
@@ -700,7 +723,9 @@ export class RentalService {
           projectSlug,
           locationName,
           locationSlug,
-          bedroomCount: data.bedroomCount,
+          propertyType: data.propertyType,
+          bedroomCount: isPlot ? null : data.bedroomCount ?? null,
+          plotArea: data.plotArea ?? null,
           listingType: 'rental',
           checkExists: async (s) => Boolean(await this.repo.findBySlug(s)),
         });
@@ -783,11 +808,7 @@ export class RentalService {
 
     const normalizedAvailabilityDate =
       data.availabilityDate !== undefined
-        ? data.availabilityDate
-          ? data.availabilityDate instanceof Date
-            ? data.availabilityDate
-            : new Date(data.availabilityDate as any)
-          : null
+        ? parseListingDate(data.availabilityDate, 'Availability date', ValidationError)
         : existing.availabilityDate;
 
     const updated = await this.repo.update(id, {

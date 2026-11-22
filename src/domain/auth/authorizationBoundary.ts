@@ -61,40 +61,46 @@ function readSessionToken(request: Request): string | null {
 export async function verifyInternalStaff(request: Request): Promise<AuthResult> {
   // Synthetic staff authentication is ONLY permitted for local/CI test runners when
   // the test runner secret is established and matched via x-staff-test-token.
-  // External HTTP requests without the pre-shared secret are strictly rejected.
-  if (process.env.NODE_ENV !== 'production') {
+  // Strictly disabled on Production deployments across all platforms.
+  const { isProductionDeployment } = await import('@/src/lib/config');
+  if (process.env.NODE_ENV !== 'production' && !isProductionDeployment()) {
     const { getActiveTestRunnerSecret } = await import('@/src/lib/testIsolationContext');
     const activeSecret = getActiveTestRunnerSecret();
     if (activeSecret && activeSecret.length >= 32) {
-      const suppliedToken = request.headers.get('x-staff-test-token')?.trim();
-      if (suppliedToken && suppliedToken === activeSecret) {
-      const testRole = request.headers.get('x-staff-role')?.trim().toUpperCase();
-      const testDisabled = request.headers.get('x-staff-disabled') === 'true';
-      if (testRole) {
-        if (testDisabled) {
-          return { authorized: false, authenticated: false, statusCode: 401, status: 401, error: 'Staff account is disabled or this session has been invalidated.' };
-        }
-        if (!ALLOWED_STAFF_ROLES.includes(testRole as StaffRole)) {
-          return { authorized: false, authenticated: false, statusCode: 403, status: 403, error: 'Staff account has an invalid role.' };
-        }
-        const staffId = request.headers.get('x-staff-user')?.trim() || 'super-admin-user';
-        const email = request.headers.get('x-staff-email')?.trim() || 'superadmin@greathomes.in';
-        return {
-          authorized: true,
-          authenticated: true,
-          role: testRole as StaffRole,
-          staff: {
-            id: staffId,
-            email,
-            name: staffId,
+      const suppliedToken = request.headers.get('x-staff-test-token')?.trim() || '';
+      const expectedBuf = Buffer.from(activeSecret, 'utf8');
+      const suppliedBuf = Buffer.from(suppliedToken, 'utf8');
+      const secretMatches =
+        suppliedBuf.length === expectedBuf.length &&
+        timingSafeEqual(suppliedBuf, expectedBuf);
+      if (secretMatches) {
+        const testRole = request.headers.get('x-staff-role')?.trim().toUpperCase();
+        const testDisabled = request.headers.get('x-staff-disabled') === 'true';
+        if (testRole) {
+          if (testDisabled) {
+            return { authorized: false, authenticated: false, statusCode: 401, status: 401, error: 'Staff account is disabled or this session has been invalidated.' };
+          }
+          if (!ALLOWED_STAFF_ROLES.includes(testRole as StaffRole)) {
+            return { authorized: false, authenticated: false, statusCode: 403, status: 403, error: 'Staff account has an invalid role.' };
+          }
+          const staffId = request.headers.get('x-staff-user')?.trim() || 'super-admin-user';
+          const email = request.headers.get('x-staff-email')?.trim() || 'superadmin@greathomes.in';
+          return {
+            authorized: true,
+            authenticated: true,
             role: testRole as StaffRole,
-            enabled: true,
-            sessionVersion: 0,
-          },
-        };
+            staff: {
+              id: staffId,
+              email,
+              name: staffId,
+              role: testRole as StaffRole,
+              enabled: true,
+              sessionVersion: 0,
+            },
+          };
+        }
       }
     }
-  }
   }
   const token = readSessionToken(request);
   if (!token) return { authorized: false, authenticated: false, statusCode: 401, status: 401, error: 'Authentication required.' };

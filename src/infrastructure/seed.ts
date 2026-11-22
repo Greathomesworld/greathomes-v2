@@ -22,7 +22,7 @@ import {
 } from '../domain/customer/repositories/index';
 import { siteVisitRepository } from './repositories/postgres/siteVisitRepositoryPostgres';
 import { visitorIntelligenceRepository } from '../domain/visitorIntelligence/repositories/visitorIntelligenceRepository';
-import { getDb, ensureSchemaUpdates } from '../db/client';
+import { getDb } from '../db/client';
 import { LOCATION_MASTER_RECORDS, LocationMasterRecord } from './data/locations';
 import { locations } from '../db/schema';
 import { eq, inArray } from 'drizzle-orm';
@@ -75,9 +75,6 @@ export async function ensureSeedData(): Promise<void> {
   }
 
   const activeRun = (async () => {
-    if (db) {
-      await ensureSchemaUpdates(db);
-    }
     if (
       process.env.NODE_ENV === 'production' &&
       process.env.PERSISTENCE_PROVIDER !== 'memory' &&

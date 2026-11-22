@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyInternalStaff } from '@/src/lib/auth';
+import { verifyStaffCapability } from '@/src/domain/auth/capabilities';
 import { siteVisitService } from '@/src/domain/siteVisit/services/siteVisitService';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await verifyInternalStaff(req);
-  if (!auth.authorized && !auth.authenticated) {
-    return NextResponse.json({ error: 'Unauthorized staff access' }, { status: 401 });
+  const auth = await verifyStaffCapability(req, 'enquiry.read');
+  if (!auth.authorized) {
+    return NextResponse.json(
+      { error: auth.error || 'Forbidden' },
+      { status: auth.statusCode || auth.status || 401 }
+    );
   }
 
   try {
@@ -19,6 +22,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     response.headers.set('Cache-Control', 'no-store');
     return response;
   } catch (error: any) {
-    return NextResponse.json({ error: 'Failed to fetch site visit detail', details: error.message }, { status: 500 });
+    console.error('[Admin Site Visit Detail GET] Unexpected error:', error?.message || 'Unknown error');
+    return NextResponse.json({ error: 'Failed to fetch site visit detail' }, { status: 500 });
   }
 }

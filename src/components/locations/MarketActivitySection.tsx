@@ -72,6 +72,7 @@ function groupEventsByDate(events: PublicMarketEventDto[]) {
       day: 'numeric',
       month: 'long',
       year: 'numeric',
+      timeZone: 'Asia/Kolkata',
     });
     const key = d.toISOString().split('T')[0];
 

@@ -4,6 +4,8 @@ import React from 'react';
 import Link from 'next/link';
 import { PublicEditorialArticleDTO } from '@/src/domain/editorial/entities';
 import { BookOpen, Calendar, Clock, ChevronRight, Building2, MapPin, UserCheck, Share2, Tag } from 'lucide-react';
+import { safeJsonLd } from '@/src/lib/safeJsonLd';
+import { SafeEditorialBody } from './SafeEditorialBody';
 
 interface ArticleDetailViewProps {
   article: PublicEditorialArticleDTO;
@@ -38,7 +40,7 @@ export function ArticleDetailView({ article }: ArticleDetailViewProps) {
       {/* JSON-LD Structured Data */}
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }}
       />
 
       {/* Header Breadcrumbs & Banner */}
@@ -78,7 +80,7 @@ export function ArticleDetailView({ article }: ArticleDetailViewProps) {
             {article.publishedAt && (
               <div className="flex items-center gap-1">
                 <Calendar className="h-3.5 w-3.5 text-stone-400" />
-                <span>Published {new Date(article.publishedAt).toLocaleDateString('en-IN', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                <span>Published {new Date(article.publishedAt).toLocaleDateString('en-IN', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'Asia/Kolkata' })}</span>
               </div>
             )}
             <div className="flex items-center gap-1">
@@ -134,7 +136,7 @@ export function ArticleDetailView({ article }: ArticleDetailViewProps) {
 
         {/* Article Body */}
         <article className="prose prose-stone max-w-none bg-white p-8 sm:p-12 rounded-xl border border-stone-200 shadow-xs font-body text-base leading-relaxed text-[#111111]">
-          <div dangerouslySetInnerHTML={{ __html: article.body.replace(/\n\n/g, '<br/><br/>').replace(/## (.*?)\n/g, '<h2 class="font-editorial text-2xl font-bold text-[#111111] mt-8 mb-4">$1</h2>').replace(/### (.*?)\n/g, '<h3 class="font-editorial text-xl font-bold text-[#111111] mt-6 mb-3">$1</h3>') }} />
+          <SafeEditorialBody body={article.body} />
         </article>
 
         {/* Structured Sections */}

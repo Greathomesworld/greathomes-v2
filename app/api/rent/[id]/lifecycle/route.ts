@@ -3,6 +3,7 @@ import { rentalListingService } from '@/src/domain/projects/services/rentalServi
 import { verifyStaffCapability } from '@/src/domain/auth/capabilities';
 import { ensureSeedData } from '@/src/infrastructure/seed';
 import { revalidateRentalPaths } from '@/src/lib/revalidateListingPaths';
+import { isPersistenceUnavailableError } from '@/src/lib/persistenceGuard';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -37,6 +38,12 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     });
     return NextResponse.json({ success: true, listing, data: listing });
   } catch (err: any) {
+    if (isPersistenceUnavailableError(err)) {
+      return NextResponse.json(
+        { success: false, code: 'PERSISTENCE_UNAVAILABLE', error: err.message },
+        { status: 503 }
+      );
+    }
     const status = err.name === 'InvalidLifecycleTransitionError' ? 400 : err.name === 'NotFoundError' ? 404 : 500;
     return NextResponse.json({ success: false, error: err.message }, { status });
   }

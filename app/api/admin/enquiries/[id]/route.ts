@@ -3,6 +3,7 @@ import { verifyInternalStaff } from '@/src/domain/auth/authorizationBoundary';
 import { hasCapability } from '@/src/domain/auth/capabilities';
 import { enquiryService, EnquiryNotFoundError, EnquiryValidationError } from '@/src/domain/enquiry/services/enquiryService';
 import { ensureSeedData } from '@/src/infrastructure/seed';
+import { auditService } from '@/src/domain/audit/auditService';
 
 export async function GET(
   req: NextRequest,
@@ -39,8 +40,9 @@ export async function GET(
       data: enquiry,
     });
   } catch (error: any) {
+    console.error('[Admin Enquiry Detail GET] Unexpected error:', error?.message || 'Unknown error');
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch enquiry' },
+      { error: 'Failed to fetch enquiry' },
       { status: 500 }
     );
   }
@@ -58,22 +60,45 @@ export async function PATCH(
     );
   }
 
+  const canMutateAnyEnquiryField =
+    hasCapability(auth.role, 'enquiry.update') ||
+    hasCapability(auth.role, 'MANAGE_ENQUIRIES') ||
+    hasCapability(auth.role, 'enquiry.changeStatus') ||
+    hasCapability(auth.role, 'enquiry.assign') ||
+    hasCapability(auth.role, 'enquiry.manageNotes') ||
+    hasCapability(auth.role, 'enquiry.manageFollowUp') ||
+    hasCapability(auth.role, 'enquiry.manageSiteVisit');
+
+  if (!canMutateAnyEnquiryField) {
+    return NextResponse.json(
+      { error: `Forbidden: role '${auth.role}' does not have permission to update enquiries` },
+      { status: 403 }
+    );
+  }
+
   try {
     await ensureSeedData();
     const { id } = await params;
     const body = await req.json();
 
     // Check specific capability requirements based on payload
-    if (body.status && !hasCapability(auth.role, 'enquiry.changeStatus') && !hasCapability(auth.role, 'enquiry.update') && !hasCapability(auth.role, 'MANAGE_ENQUIRIES')) {
+    if (body.status !== undefined && !hasCapability(auth.role, 'enquiry.changeStatus') && !hasCapability(auth.role, 'enquiry.update') && !hasCapability(auth.role, 'MANAGE_ENQUIRIES')) {
       return NextResponse.json(
         { error: `Forbidden: role '${auth.role}' does not have capability 'enquiry.changeStatus'` },
         { status: 403 }
       );
     }
 
-    if (body.assignedTo !== undefined && !hasCapability(auth.role, 'enquiry.assign') && !hasCapability(auth.role, 'enquiry.update') && !hasCapability(auth.role, 'MANAGE_ENQUIRIES')) {
+    if ((body.assignedTo !== undefined || body.assignedToName !== undefined) && !hasCapability(auth.role, 'enquiry.assign') && !hasCapability(auth.role, 'MANAGE_ENQUIRIES')) {
       return NextResponse.json(
         { error: `Forbidden: role '${auth.role}' does not have capability 'enquiry.assign'` },
+        { status: 403 }
+      );
+    }
+
+    if (body.priority !== undefined && !hasCapability(auth.role, 'enquiry.update') && !hasCapability(auth.role, 'MANAGE_ENQUIRIES')) {
+      return NextResponse.json(
+        { error: `Forbidden: role '${auth.role}' does not have capability 'enquiry.update'` },
         { status: 403 }
       );
     }
@@ -100,6 +125,16 @@ export async function PATCH(
     }
 
     const updated = await enquiryService.updateEnquiry(id, body);
+    await auditService.record(req, auth.staff ? { id: auth.staff.id, role: auth.role } : null, {
+      action: 'UPDATE_ENQUIRY',
+      resourceType: 'ENQUIRY',
+      resourceId: id,
+      success: true,
+      metadata: {
+        updatedFields: Object.keys(body || {}),
+        status: body?.status,
+      },
+    });
     return NextResponse.json({
       success: true,
       data: updated,
@@ -117,8 +152,9 @@ export async function PATCH(
         { status: 404 }
       );
     }
+    console.error('[Admin Enquiry Detail PATCH] Unexpected error:', error?.message || 'Unknown error');
     return NextResponse.json(
-      { error: error.message || 'Failed to update enquiry' },
+      { error: 'Failed to update enquiry' },
       { status: 500 }
     );
   }
@@ -147,6 +183,12 @@ export async function DELETE(
     await ensureSeedData();
     const { id } = await params;
     const deleted = await enquiryService.deleteEnquiry(id);
+    await auditService.record(req, auth.staff ? { id: auth.staff.id, role: auth.role } : null, {
+      action: 'DELETE_ENQUIRY',
+      resourceType: 'ENQUIRY',
+      resourceId: id,
+      success: Boolean(deleted),
+    });
 
     return NextResponse.json({
       success: deleted,
@@ -158,8 +200,9 @@ export async function DELETE(
         { status: 404 }
       );
     }
+    console.error('[Admin Enquiry Detail DELETE] Unexpected error:', error?.message || 'Unknown error');
     return NextResponse.json(
-      { error: error.message || 'Failed to delete enquiry' },
+      { error: 'Failed to delete enquiry' },
       { status: 500 }
     );
   }

@@ -2,6 +2,7 @@ import React from 'react';
 import { PublicProjectDto } from '@/src/domain/projects/dto/projectDto';
 import { PublicResaleListingDto } from '@/src/domain/projects/dto/resaleDto';
 import { PublicRentalListingDto } from '@/src/domain/projects/dto/rentalDto';
+import { safeJsonLd } from '@/src/lib/safeJsonLd';
 
 const BASE_URL = 'https://www.greathomes.co.in';
 
@@ -96,11 +97,11 @@ export function ProjectInventoryStructuredData({
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(breadcrumbSchema) }}
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(collectionSchema) }}
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(collectionSchema) }}
       />
     </>
   );

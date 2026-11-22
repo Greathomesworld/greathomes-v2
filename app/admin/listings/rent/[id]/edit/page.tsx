@@ -8,6 +8,11 @@ import { AdminLoadingState } from '@/src/components/admin/AdminLoadingState';
 import { AdminErrorState } from '@/src/components/admin/AdminErrorState';
 import { getAdminHeaders } from '@/src/lib/adminAuth';
 import {
+  safeFetchJson,
+  getSafeApiErrorTitle,
+  type SafeApiErrorCategory,
+} from '@/src/lib/safeApiFetch';
+import {
   Building2,
   Home,
   IndianRupee,
@@ -26,6 +31,7 @@ export default function EditRentalListingPage() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorCategory, setErrorCategory] = useState<SafeApiErrorCategory | null>(null);
   const [projects, setProjects] = useState<any[]>([]);
   const [locations, setLocations] = useState<CanonicalLocationOption[]>([]);
 
@@ -76,25 +82,25 @@ export default function EditRentalListingPage() {
       try {
         setInitialLoading(true);
         const [listingRes, projRes, locRes] = await Promise.all([
-          fetch(`/api/rent/${id}`, { headers: getAdminHeaders() }),
-          fetch('/api/projects?limit=100', { headers: getAdminHeaders() }),
-          fetch('/api/locations', { headers: getAdminHeaders() }),
+          safeFetchJson<any>(`/api/rent/${id}`, { headers: getAdminHeaders() }),
+          safeFetchJson<any>('/api/projects?limit=100', { headers: getAdminHeaders() }),
+          safeFetchJson<any>('/api/locations', { headers: getAdminHeaders() }),
         ]);
 
-        if (!listingRes.ok) {
-          throw new Error('Failed to load rental listing for editing');
+        if (!listingRes.ok || !listingRes.data?.data) {
+          setErrorCategory(listingRes.errorCategory ?? 'server');
+          setError(listingRes.error || 'Failed to load rental listing for editing');
+          return;
         }
 
-        const lJson = await listingRes.json();
-        const l = lJson.data;
+        const l = listingRes.data.data;
 
-        if (projRes.ok) {
-          const pJson = await projRes.json();
-          setProjects(pJson.data || []);
+        if (projRes.ok && projRes.data) {
+          setProjects(projRes.data.data || []);
         }
 
-        if (locRes.ok) {
-          const locJson = await locRes.json();
+        if (locRes.ok && locRes.data) {
+          const locJson = locRes.data;
           setLocations(Array.isArray(locJson) ? locJson : locJson.data || []);
         }
 
@@ -137,6 +143,7 @@ export default function EditRentalListingPage() {
         setSource(l.source || '');
         setCrmId(l.crmId || '');
       } catch (err: any) {
+        setErrorCategory('network');
         setError(err.message || 'Error fetching rental details');
       } finally {
         setInitialLoading(false);
@@ -151,19 +158,23 @@ export default function EditRentalListingPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setErrorCategory(null);
 
     const rentNum = parseFloat(monthlyRent);
     if (isNaN(rentNum) || rentNum <= 0) {
+      setErrorCategory('validation');
       setError('A valid positive monthly rent is required.');
       return;
     }
 
     if (!isLinkedProject && !locationId) {
+      setErrorCategory('validation');
       setError('A canonical Location must be selected for standalone rental listings.');
       return;
     }
 
     if (!isLinkedProject && ((latitude !== null && longitude === null) || (latitude === null && longitude !== null))) {
+      setErrorCategory('validation');
       setError('Both latitude and longitude must be provided together.');
       return;
     }
@@ -189,7 +200,7 @@ export default function EditRentalListingPage() {
         facing,
         floorCategory,
         possession,
-        availabilityDate: availabilityDate ? new Date(availabilityDate) : null,
+        availabilityDate: availabilityDate || null,
         leaseDuration: leaseDuration.trim() || null,
         noticePeriod: noticePeriod.trim() || null,
         description: description.trim() || null,
@@ -207,19 +218,21 @@ export default function EditRentalListingPage() {
         crmId: crmId || null,
       };
 
-      const res = await fetch(`/api/rent/${id}`, {
+      const res = await safeFetchJson(`/api/rent/${id}`, {
         method: 'PATCH',
         headers: getAdminHeaders(),
         body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to update rental listing');
+        setErrorCategory(res.errorCategory ?? 'server');
+        setError(res.error || 'Failed to update rental listing');
+        return;
       }
 
       router.push(`/admin/listings/rent/${id}`);
     } catch (err: any) {
+      setErrorCategory('network');
       setError(err.message || 'Failed to save changes');
     } finally {
       setSaving(false);
@@ -257,7 +270,7 @@ export default function EditRentalListingPage() {
       <div className="max-w-4xl mx-auto px-6">
         {error && (
           <div className="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm font-body">
-            <strong className="font-semibold font-display">Update Error: </strong>
+            <strong className="font-semibold font-display">{getSafeApiErrorTitle(errorCategory)}: </strong>
             {error}
           </div>
         )}

@@ -69,8 +69,10 @@ export function GreatHomesAdvisoryCard({
   const hasBrochure = Boolean(project.hasBrochure || project.brochure?.available);
 
   const handleOpenEnquiry = (requestVisit = false) => {
+    const isLeadFirstProjectCta = isProjectMode && !requestVisit;
     openEnquiry({
       contextType: isRental ? 'RENTAL' : isResale ? 'RESALE' : 'PROJECT',
+      projectId: project.id,
       projectSlug: project.slug,
       projectName: project.name,
       locationName: project.location?.name,
@@ -84,6 +86,12 @@ export function GreatHomesAdvisoryCard({
         ? 'Schedule a guided property inspection visit'
         : 'Get latest price sheet, inventory availability & floor plans',
       requestSiteVisit: requestVisit,
+      ...(isLeadFirstProjectCta
+        ? {
+            flowMode: 'LEAD_FIRST_PROJECT' as const,
+            ctaSource: 'GET_PRICE_AVAILABILITY',
+          }
+        : {}),
     });
   };
 

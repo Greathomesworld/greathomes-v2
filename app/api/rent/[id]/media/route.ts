@@ -3,6 +3,7 @@ import { rentalListingService } from '@/src/domain/projects/services/rentalServi
 import { verifyStaffCapability } from '@/src/domain/auth/capabilities';
 import { ensureSeedData } from '@/src/infrastructure/seed';
 import { revalidateRentalPaths } from '@/src/lib/revalidateListingPaths';
+import { isPersistenceUnavailableError } from '@/src/lib/persistenceGuard';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -15,6 +16,12 @@ export async function GET(req: NextRequest, context: RouteContext) {
     const media = await rentalListingService.findMediaByListingId(id);
     return NextResponse.json({ success: true, data: media });
   } catch (error: any) {
+    if (isPersistenceUnavailableError(error)) {
+      return NextResponse.json(
+        { success: false, code: 'PERSISTENCE_UNAVAILABLE', error: error.message },
+        { status: 503 }
+      );
+    }
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -59,6 +66,12 @@ export async function POST(req: NextRequest, context: RouteContext) {
 
     return NextResponse.json({ success: true, data: media }, { status: 201 });
   } catch (error: any) {
+    if (isPersistenceUnavailableError(error)) {
+      return NextResponse.json(
+        { success: false, code: 'PERSISTENCE_UNAVAILABLE', error: error.message },
+        { status: 503 }
+      );
+    }
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -102,6 +115,12 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     return NextResponse.json({ success: true, data: updatedMedia });
   } catch (error: any) {
+    if (isPersistenceUnavailableError(error)) {
+      return NextResponse.json(
+        { success: false, code: 'PERSISTENCE_UNAVAILABLE', error: error.message },
+        { status: 503 }
+      );
+    }
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

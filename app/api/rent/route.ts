@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyStaffCapability } from '@/src/domain/auth/capabilities';
 import { rentalListingService } from '@/src/domain/projects/services/rentalService';
 import { ensureSeedData } from '@/src/infrastructure/seed';
+import { isPersistenceUnavailableError } from '@/src/lib/persistenceGuard';
+import { auditService } from '@/src/domain/audit/auditService';
 
 export async function GET(req: NextRequest) {
   try {
@@ -45,8 +47,15 @@ export async function GET(req: NextRequest) {
     const publicListings = await rentalListingService.listPublicListings(filter);
     return NextResponse.json({ success: true, data: publicListings, total: publicListings.length });
   } catch (error: any) {
+    if (isPersistenceUnavailableError(error)) {
+      return NextResponse.json(
+        { success: false, code: 'PERSISTENCE_UNAVAILABLE', error: 'Rental listing service is temporarily unavailable.' },
+        { status: 503 }
+      );
+    }
+    console.error('[Rent GET] Unexpected error:', error?.message || 'Unknown error');
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to retrieve rental listings' },
+      { success: false, error: 'Failed to retrieve rental listings' },
       { status: 500 }
     );
   }
@@ -66,11 +75,29 @@ export async function POST(req: NextRequest) {
     await ensureSeedData();
     const body = await req.json();
     const listing = await rentalListingService.createListing(body);
+    const staffActor = authCreate.authorized ? authCreate.staff : authManage.staff;
+    await auditService.record(req, staffActor ? { id: staffActor.id, role: staffActor.role } : null, {
+      action: 'CREATE_RENTAL_LISTING',
+      resourceType: 'RENTAL_LISTING',
+      resourceId: listing.id,
+      success: true,
+      metadata: { slug: listing.slug, projectId: listing.projectId },
+    });
     return NextResponse.json({ success: true, data: listing }, { status: 201 });
   } catch (error: any) {
+    if (isPersistenceUnavailableError(error)) {
+      return NextResponse.json(
+        { success: false, code: 'PERSISTENCE_UNAVAILABLE', error: 'Rental listing service is temporarily unavailable.' },
+        { status: 503 }
+      );
+    }
+    if (error?.name === 'ValidationError') {
+      return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+    }
+    console.error('[Rent POST] Unexpected error:', error?.message || 'Unknown error');
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to create rental listing' },
-      { status: error.name === 'ValidationError' ? 400 : 500 }
+      { success: false, error: 'Failed to create rental listing' },
+      { status: 500 }
     );
   }
 }

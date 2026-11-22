@@ -39,17 +39,7 @@ console.log('===================================================================
 console.log('GREAT HOMES V2 — LIVE POSTGRESQL INTEGRATION TEST SUITE');
 console.log('================================================================================\n');
 
-let testDatabaseUrl = process.env.TEST_DATABASE_URL?.trim();
-try {
-  const fsSync = await import('node:fs');
-  if (fsSync.existsSync('/app/.dev.env.json')) {
-    const devEnv = JSON.parse(fsSync.readFileSync('/app/.dev.env.json', 'utf8'));
-    if (devEnv.TEST_DATABASE_URL) {
-      testDatabaseUrl = devEnv.TEST_DATABASE_URL.trim();
-      process.env.TEST_DATABASE_URL = testDatabaseUrl;
-    }
-  }
-} catch {}
+const testDatabaseUrl = process.env.TEST_DATABASE_URL?.trim();
 
 const currentDatabaseUrl = process.env.DATABASE_URL?.trim();
 const allowDisposableTests = process.env.ALLOW_DISPOSABLE_DB_TESTS?.trim();
@@ -240,38 +230,16 @@ async function runLivePostgresSuite() {
     }
 
     // =========================================================================
-    // GROUP 2: PG-SCHEMA-1 — Runtime Schema Idempotency
+    // GROUP 2: PG-SCHEMA-1 — Migrated Schema Verification
     // =========================================================================
-    console.log('\n--- GROUP 2: PG-SCHEMA-1 — Schema Idempotency Verification ---');
+    console.log('\n--- GROUP 2: PG-SCHEMA-1 — Schema Verification ---');
 
-    const { getDbReady, resetSchemaInitializationStateForTesting, ensureSchemaUpdates } = await import(
-      '../src/db/client.ts'
-    );
-
+    const { getDbReady } = await import('../src/db/client.ts');
     const db = await getDbReady();
     check(db !== null, 'PG-SCHEMA-1.1', 'PostgreSQL database client initialized via getDbReady()');
 
-    // Run 1: ensureSchemaUpdates
-    resetSchemaInitializationStateForTesting();
-    let schemaRun1Ok = false;
-    try {
-      await ensureSchemaUpdates(db);
-      schemaRun1Ok = true;
-    } catch (e) {
-      console.error('Schema run 1 error:', e);
-    }
-    check(schemaRun1Ok, 'PG-SCHEMA-1.2', 'First explicit ensureSchemaUpdates() completes without error');
-
-    // Run 2: ensureSchemaUpdates (idempotency check)
-    resetSchemaInitializationStateForTesting();
-    let schemaRun2Ok = false;
-    try {
-      await ensureSchemaUpdates(db);
-      schemaRun2Ok = true;
-    } catch (e) {
-      console.error('Schema run 2 error:', e);
-    }
-    check(schemaRun2Ok, 'PG-SCHEMA-1.3', 'Second consecutive ensureSchemaUpdates() runs cleanly and idempotently');
+    const migrationCheck = await pool.query(`SELECT to_regclass('public.property_submissions') AS sub_tbl, to_regclass('public.site_visits') AS sv_tbl`);
+    check(Boolean(migrationCheck.rows[0]?.sub_tbl && migrationCheck.rows[0]?.sv_tbl), 'PG-SCHEMA-1.2', 'Migrated schema tables exist without runtime DDL');
 
     // =========================================================================
     // GROUP 3: PG-ENQ-FK-1 — Enquiry Attribution & Foreign Key Safety

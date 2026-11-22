@@ -15,6 +15,7 @@ export function AdminTopbar({ onOpenMobileMenu }: AdminTopbarProps) {
   const roleLabels: Record<StaffRole, string> = {
     SUPER_ADMIN: 'Super Admin',
     ADMIN: 'Operations Admin',
+    VERIFICATION_EXECUTIVE: 'Verification Executive',
     SALES_MANAGER: 'Sales Manager',
     SALES_EXECUTIVE: 'Sales Executive',
     TELECALLER: 'Telecaller',

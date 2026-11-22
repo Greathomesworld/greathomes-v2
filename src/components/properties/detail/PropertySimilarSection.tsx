@@ -16,7 +16,11 @@ import {
   RentDiscoveryCardDto,
   ProjectDiscoveryCardDto,
 } from '@/src/domain/projects/dto/discoveryDto';
-import { formatIndianPrice, formatArea } from '@/src/components/discovery/formatters';
+import {
+  formatIndianPrice,
+  formatAreaDetails,
+  formatListingDisplayTitle,
+} from '@/src/components/discovery/formatters';
 import { SaveButton } from '@/src/components/customer/SaveButton';
 
 interface PropertySimilarSectionProps {
@@ -116,9 +120,28 @@ export function PropertySimilarSection({
                 {isResale
                   ? similarResale.map(item => {
                       const href = `/buy/${item.slug || item.id}`;
-                      const areaText = item.carpetArea ? formatArea(item.carpetArea) : null;
+                      const areaInfo = formatAreaDetails(
+                        item.carpetArea,
+                        null,
+                        null,
+                        item.plotArea,
+                        item.propertyType
+                      );
                       const subtitle =
-                        item.project?.name || item.location?.name || 'Kolkata';
+                        item.project?.name ||
+                        item.customProjectDisplay ||
+                        item.location?.name ||
+                        item.customLocalityDisplay ||
+                        'Kolkata';
+                      const displayTitle = formatListingDisplayTitle({
+                        configuration: item.configuration,
+                        bedroomCount: item.bedroomCount,
+                        propertyType: item.propertyType,
+                        furnishing: item.furnishing,
+                        plotArea: item.plotArea,
+                        mode: 'RESALE',
+                        projectName: item.project?.name || item.customProjectDisplay,
+                      });
                       const hasValidImg = Boolean(
                         item.featuredImageUrl && !failedUrls[item.featuredImageUrl]
                       );
@@ -133,7 +156,7 @@ export function PropertySimilarSection({
                             {hasValidImg ? (
                               <img
                                 src={item.featuredImageUrl!}
-                                alt={`${item.configuration} in ${subtitle}`}
+                                alt={`${displayTitle.title} in ${subtitle}`}
                                 referrerPolicy="no-referrer"
                                 onError={() => markUrlFailed(item.featuredImageUrl)}
                                 className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
@@ -144,7 +167,7 @@ export function PropertySimilarSection({
                                   <Building2 className="w-4 h-4" />
                                 </div>
                                 <span className="text-[10px] font-display font-semibold text-[#111111]/65 truncate max-w-full">
-                                  {item.bedroomCount} BHK Residence
+                                  {displayTitle.bhkBadge}
                                 </span>
                               </div>
                             )}
@@ -162,10 +185,12 @@ export function PropertySimilarSection({
 
                           <div className="p-3 space-y-1">
                             <p className="text-xs font-display font-bold text-[#111111] truncate">
-                              {item.bedroomCount} BHK
-                              {areaText ? ` · ${areaText}` : ''}
+                              {displayTitle.bhkBadge}
+                              {areaInfo.primaryValue && !displayTitle.bhkBadge.includes('sq.ft.')
+                                ? ` · ${areaInfo.primaryValue}`
+                                : ''}
                             </p>
-                            <p className="text-sm font-display font-bold text-[#111111]">
+                            <p className="text-sm font-display font-bold text-[#111111] tabular-nums">
                               {formatIndianPrice(item.askingPrice)}
                             </p>
                             <div className="flex items-center gap-1.5 text-[11px] font-body text-[#111111]/65 pt-0.5">
@@ -183,9 +208,28 @@ export function PropertySimilarSection({
                     })
                   : similarRental.map(item => {
                       const href = `/rent/${item.slug || item.id}`;
-                      const areaText = item.carpetArea ? formatArea(item.carpetArea) : null;
+                      const areaInfo = formatAreaDetails(
+                        item.carpetArea,
+                        null,
+                        null,
+                        item.plotArea,
+                        item.propertyType
+                      );
                       const subtitle =
-                        item.project?.name || item.location?.name || 'Kolkata';
+                        item.project?.name ||
+                        item.customProjectDisplay ||
+                        item.location?.name ||
+                        item.customLocalityDisplay ||
+                        'Kolkata';
+                      const displayTitle = formatListingDisplayTitle({
+                        configuration: item.configuration,
+                        bedroomCount: item.bedroomCount,
+                        propertyType: item.propertyType,
+                        furnishing: item.furnishing,
+                        plotArea: item.plotArea,
+                        mode: 'RENTAL',
+                        projectName: item.project?.name || item.customProjectDisplay,
+                      });
                       const hasValidImg = Boolean(
                         item.featuredImageUrl && !failedUrls[item.featuredImageUrl]
                       );
@@ -200,7 +244,7 @@ export function PropertySimilarSection({
                             {hasValidImg ? (
                               <img
                                 src={item.featuredImageUrl!}
-                                alt={`${item.configuration} rental in ${subtitle}`}
+                                alt={`${displayTitle.title} rental in ${subtitle}`}
                                 referrerPolicy="no-referrer"
                                 onError={() => markUrlFailed(item.featuredImageUrl)}
                                 className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
@@ -211,7 +255,7 @@ export function PropertySimilarSection({
                                   <Building2 className="w-4 h-4" />
                                 </div>
                                 <span className="text-[10px] font-display font-semibold text-[#111111]/65 truncate max-w-full">
-                                  {item.bedroomCount} BHK Rental
+                                  {displayTitle.bhkBadge} Rental
                                 </span>
                               </div>
                             )}
@@ -229,10 +273,12 @@ export function PropertySimilarSection({
 
                           <div className="p-3 space-y-1">
                             <p className="text-xs font-display font-bold text-[#111111] truncate">
-                              {item.bedroomCount} BHK
-                              {areaText ? ` · ${areaText}` : ''}
+                              {displayTitle.bhkBadge}
+                              {areaInfo.primaryValue && !displayTitle.bhkBadge.includes('sq.ft.')
+                                ? ` · ${areaInfo.primaryValue}`
+                                : ''}
                             </p>
-                            <p className="text-sm font-display font-bold text-[#111111]">
+                            <p className="text-sm font-display font-bold text-[#111111] tabular-nums">
                               {formatIndianPrice(item.monthlyRent)} / mo
                             </p>
                             <div className="flex items-center gap-1.5 text-[11px] font-body text-[#111111]/65 pt-0.5">
