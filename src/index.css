@@ -57,6 +57,31 @@
   }
 }
 
+@keyframes gh-free-badge-sheen {
+  0% {
+    transform: translateX(-160%) skewX(-20deg);
+  }
+  20% {
+    transform: translateX(260%) skewX(-20deg);
+  }
+  100% {
+    transform: translateX(260%) skewX(-20deg);
+  }
+}
+
+.gh-free-badge-sheen {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .gh-free-badge-sheen {
+    opacity: 0.9;
+    animation: gh-free-badge-sheen 4.2s ease-in-out infinite;
+    will-change: transform;
+  }
+}
+
+
 /* Prevent Next.js floating dev indicator badge from overlapping MobileBottomNav Home tab */
 nextjs-portal {
   display: none !important;

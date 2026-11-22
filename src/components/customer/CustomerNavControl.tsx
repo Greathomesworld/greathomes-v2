@@ -5,20 +5,62 @@ import Link from 'next/link';
 import { User, Bookmark, History, Sliders, LogOut, ChevronDown, Building2 } from 'lucide-react';
 import { useCustomerAuth } from './CustomerAuthContext';
 
-export function CustomerNavControl() {
+export interface CustomerNavControlProps {
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  onSignInClick?: () => void;
+}
+
+export function CustomerNavControl({
+  isOpen: controlledOpen,
+  onOpenChange,
+  onSignInClick,
+}: CustomerNavControlProps = {}) {
   const { customer, loading, openAuthModal, logout } = useCustomerAuth();
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  const isControlled = controlledOpen !== undefined && typeof onOpenChange === 'function';
+  const isOpen = isControlled ? controlledOpen : internalOpen;
+
+  const setMenuOpen = (next: boolean) => {
+    if (isControlled) {
+      onOpenChange(next);
+    } else {
+      setInternalOpen(next);
+    }
+  };
+
+  // Close Account Menu if customer becomes unauthenticated or session is cleared
   useEffect(() => {
+    if (!customer && isOpen) {
+      if (isControlled) {
+        onOpenChange(false);
+      } else {
+        setInternalOpen(false);
+      }
+    }
+  }, [customer, isOpen, isControlled, onOpenChange]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
     function handleClickOutside(event: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
+        if (isControlled) {
+          onOpenChange(false);
+        } else {
+          setInternalOpen(false);
+        }
       }
     }
     function handleEscape(event: KeyboardEvent) {
       if (event.key === 'Escape') {
-        setIsOpen(false);
+        if (isControlled) {
+          onOpenChange(false);
+        } else {
+          setInternalOpen(false);
+        }
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -27,7 +69,7 @@ export function CustomerNavControl() {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleEscape);
     };
-  }, []);
+  }, [isOpen, isControlled, onOpenChange]);
 
   if (loading) {
     return (
@@ -38,7 +80,11 @@ export function CustomerNavControl() {
   if (!customer) {
     return (
       <button
-        onClick={() => openAuthModal('login')}
+        type="button"
+        onClick={() => {
+          onSignInClick?.();
+          openAuthModal('login');
+        }}
         className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-slate-800 hover:text-slate-950 bg-white hover:bg-slate-50 border border-slate-300 hover:border-slate-400 rounded-xl transition-all shadow-2xs font-display shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E85D3F]"
       >
         <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-600" />
@@ -61,7 +107,8 @@ export function CustomerNavControl() {
   return (
     <div className="relative" ref={menuRef}>
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        type="button"
+        onClick={() => setMenuOpen(!isOpen)}
         className="flex items-center gap-2 p-1 sm:p-1.5 rounded-xl border border-transparent hover:border-slate-200 hover:bg-slate-50 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E85D3F] cursor-pointer"
         aria-expanded={isOpen}
         aria-haspopup="true"
@@ -70,7 +117,7 @@ export function CustomerNavControl() {
         <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-semibold font-display shadow-2xs">
           {initials}
         </div>
-        <span className="text-xs sm:text-sm font-semibold text-slate-800 hidden sm:inline-block font-display max-w-[100px] truncate">
+        <span className="text-xs sm:text-sm font-semibold text-slate-800 hidden sm:inline-block font-display max-w-[80px] xl:max-w-[100px] truncate">
           {firstName}
         </span>
         <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
@@ -79,31 +126,27 @@ export function CustomerNavControl() {
       {isOpen && (
         <div
           role="menu"
-          className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 shadow-2xl rounded-2xl py-2 z-50 animate-fade-in"
+          className="absolute right-0 mt-2 w-64 max-w-[calc(100vw-2rem)] bg-white border border-slate-200 shadow-2xl rounded-2xl py-2 z-50 animate-fade-in"
         >
           <div className="px-4 py-2.5 border-b border-slate-100">
             <p className="text-sm font-semibold text-slate-900 font-display truncate">
               {customer.name || 'Valued Customer'}
             </p>
-            <p className="text-xs text-slate-500 font-body truncate mt-0.5">
-              {customer.email || 'Verified Kolkata Explorer'}
-            </p>
+            {customer.email ? (
+              <p className="text-xs text-slate-500 font-body truncate mt-0.5">
+                {customer.email}
+              </p>
+            ) : (
+              <p className="text-xs text-slate-500 font-body truncate mt-0.5">
+                Great Homes Account
+              </p>
+            )}
           </div>
 
           <div className="py-1">
             <Link
-              href="/post-property"
-              onClick={() => setIsOpen(false)}
-              role="menuitem"
-              className="flex items-center gap-3 px-4 py-2.5 text-xs sm:text-sm font-medium text-slate-800 hover:text-[#E85D3F] hover:bg-slate-50 transition-colors font-body"
-            >
-              <Building2 className="w-4 h-4 text-[#E85D3F]" />
-              <span>Post Property</span>
-            </Link>
-
-            <Link
               href="/my-properties"
-              onClick={() => setIsOpen(false)}
+              onClick={() => setMenuOpen(false)}
               role="menuitem"
               className="flex items-center gap-3 px-4 py-2.5 text-xs sm:text-sm font-medium text-slate-800 hover:text-[#E85D3F] hover:bg-slate-50 transition-colors font-body"
             >
@@ -113,7 +156,7 @@ export function CustomerNavControl() {
 
             <Link
               href="/account/saved"
-              onClick={() => setIsOpen(false)}
+              onClick={() => setMenuOpen(false)}
               role="menuitem"
               className="flex items-center gap-3 px-4 py-2.5 text-xs sm:text-sm text-slate-700 hover:text-[#E85D3F] hover:bg-slate-50 transition-colors font-body"
             >
@@ -123,7 +166,7 @@ export function CustomerNavControl() {
 
             <Link
               href="/account/recently-viewed"
-              onClick={() => setIsOpen(false)}
+              onClick={() => setMenuOpen(false)}
               role="menuitem"
               className="flex items-center gap-3 px-4 py-2.5 text-xs sm:text-sm text-slate-700 hover:text-[#E85D3F] hover:bg-slate-50 transition-colors font-body"
             >
@@ -133,7 +176,7 @@ export function CustomerNavControl() {
 
             <Link
               href="/account/preferences"
-              onClick={() => setIsOpen(false)}
+              onClick={() => setMenuOpen(false)}
               role="menuitem"
               className="flex items-center gap-3 px-4 py-2.5 text-xs sm:text-sm text-slate-700 hover:text-[#E85D3F] hover:bg-slate-50 transition-colors font-body"
             >
@@ -143,7 +186,7 @@ export function CustomerNavControl() {
 
             <Link
               href="/account/profile"
-              onClick={() => setIsOpen(false)}
+              onClick={() => setMenuOpen(false)}
               role="menuitem"
               className="flex items-center gap-3 px-4 py-2.5 text-xs sm:text-sm text-slate-700 hover:text-[#E85D3F] hover:bg-slate-50 transition-colors font-body"
             >
@@ -154,8 +197,9 @@ export function CustomerNavControl() {
 
           <div className="border-t border-slate-100 pt-1 mt-1">
             <button
+              type="button"
               onClick={() => {
-                setIsOpen(false);
+                setMenuOpen(false);
                 logout();
               }}
               role="menuitem"
@@ -170,3 +214,4 @@ export function CustomerNavControl() {
     </div>
   );
 }
+
