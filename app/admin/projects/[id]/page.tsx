@@ -2372,7 +2372,7 @@ export default function ProjectDetailPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-neutral-500 mb-1">Canonical URL tag Override</label>
-                  <input type="url" value={seoCanonicalUrl} onChange={(e) => setSeoCanonicalUrl(e.target.value)} placeholder="https://greathomes.co.in/projects/merlin-rise" className="w-full text-sm bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 focus:outline-hidden font-mono" />
+                  <input type="url" value={seoCanonicalUrl} onChange={(e) => setSeoCanonicalUrl(e.target.value)} placeholder="https://www.greathomes.co.in/projects/merlin-rise" className="w-full text-sm bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 focus:outline-hidden font-mono" />
                 </div>
               </div>
 

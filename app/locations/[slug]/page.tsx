@@ -1,13 +1,15 @@
 import React, { cache } from 'react';
 import { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import Link from 'next/link';
+import { notFound, permanentRedirect } from 'next/navigation';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 300;
 
 import { locationService, LOCATION_ALIASES } from '@/src/domain/locations/services/locationService';
 import { locationSeoService } from '@/src/domain/locations/services/locationSeoService';
 import { locationIntelligenceService } from '@/src/domain/marketIntelligence/services/locationIntelligenceService';
 import { propertyDiscoveryService } from '@/src/domain/projects/services/propertyDiscoveryService';
+import { bhkLandingService } from '@/src/domain/projects/services/bhkLandingService';
 import { safeJsonLd } from '@/src/lib/safeJsonLd';
 import { ensureSeedData } from '@/src/infrastructure/seed';
 import { getDb } from '@/src/db/client';
@@ -94,7 +96,8 @@ export async function generateMetadata(
   const rawSearchParams = props.searchParams ? await props.searchParams : {};
   const normalizedSlug = slug.toLowerCase().trim();
   const scopeParam = rawSearchParams.scope === 'DIRECT' ? 'DIRECT' : 'DESCENDANT';
-  const isAlias = LOCATION_ALIASES[normalizedSlug] !== undefined;
+  const aliasTarget = LOCATION_ALIASES[normalizedSlug];
+  const isAlias = Boolean(aliasTarget && aliasTarget !== normalizedSlug);
 
   const location = await getCachedLocationBySlug(normalizedSlug);
 
@@ -122,6 +125,15 @@ export async function generateMetadata(
     isAlias,
   });
 
+  // Parameterized ?scope=DIRECT views must remain non-indexed while preserving canonical to clean URL
+  if (rawSearchParams.scope === 'DIRECT') {
+    return locationSeoService.buildMetadata({
+      ...eligibility,
+      index: false,
+      follow: true,
+    });
+  }
+
   return locationSeoService.buildMetadata(eligibility);
 }
 
@@ -133,6 +145,12 @@ export default async function LocationDetailPage(props: LocationPageProps) {
   const rawSearchParams = props.searchParams ? await props.searchParams : {};
   const normalizedSlug = slug.toLowerCase().trim();
   const scopeParam = rawSearchParams.scope === 'DIRECT' ? 'DIRECT' : 'DESCENDANT';
+
+  // Permanent redirect genuine location aliases (e.g. newtown -> new-town, rajarhat-chowmatha -> rajarhat)
+  const aliasTarget = LOCATION_ALIASES[normalizedSlug];
+  if (aliasTarget && aliasTarget !== normalizedSlug) {
+    permanentRedirect(`/locations/${aliasTarget}`);
+  }
 
   // 1. Resolve Location & Location Intelligence DTO (shared with generateMetadata via React.cache)
   const [location, intel] = await Promise.all([
@@ -149,7 +167,7 @@ export default async function LocationDetailPage(props: LocationPageProps) {
     getCachedChildLocations(location.id),
   ]);
 
-  const [history, projectsRes, resaleRes, rentalRes, siblings] = await Promise.all([
+  const [history, projectsRes, resaleRes, rentalRes, siblings, eligibleBhkLinks] = await Promise.all([
     locationIntelligenceService.getLocationHistory(intel.location.id, scopeParam, {
       hasChildLocations: childLocations.length > 0,
       liveSupply: intel.marketOverview,
@@ -158,6 +176,7 @@ export default async function LocationDetailPage(props: LocationPageProps) {
     propertyDiscoveryService.discoverBuy({ location: normalizedSlug, scope: scopeParam, inventoryType: 'RESALE' }, 1, 20),
     propertyDiscoveryService.discoverRent({ location: normalizedSlug, scope: scopeParam }, 1, 20),
     location.parentId ? getCachedChildLocations(location.parentId) : Promise.resolve([]),
+    bhkLandingService.getEligibleBhkLinksForLocality(location.slug).catch(() => []),
   ]);
 
   const projects = projectsRes.data;
@@ -373,6 +392,34 @@ export default async function LocationDetailPage(props: LocationPageProps) {
           locationSlug={intel.location.slug}
           configDistribution={intel.supply.projectConfigurationDistribution}
         />
+
+        {eligibleBhkLinks.length > 0 && (
+          <section
+            aria-label={`Popular BHK Searches in ${intel.location.name}`}
+            className="bg-white border border-[rgba(17,17,17,0.08)] rounded-xl p-5 sm:p-6"
+          >
+            <h2 className="text-base sm:text-lg font-display font-bold text-[#111111] mb-1">
+              Explore Flats by Configuration in {intel.location.name}
+            </h2>
+            <p className="text-xs sm:text-sm font-body text-[#6E6A65] mb-4">
+              Dedicated verified project portfolios curated by exact bedroom typology.
+            </p>
+            <div className="flex flex-wrap gap-2.5">
+              {eligibleBhkLinks.map((bhk) => (
+                <Link
+                  key={bhk.href}
+                  href={bhk.href}
+                  className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-[#FAFAF8] border border-[rgba(17,17,17,0.12)] hover:border-[#111111] text-xs font-display font-semibold text-[#111111] transition-colors"
+                >
+                  <span>{bhk.label}</span>
+                  <span className="text-[11px] font-normal text-[#6E6A65]">
+                    ({bhk.totalProjects} projects)
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* 7. Pricing & Rate Band Intelligence (#pricing) */}
         <PricingIntelligenceSection

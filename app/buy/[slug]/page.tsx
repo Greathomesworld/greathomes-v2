@@ -1,5 +1,5 @@
 import { cache } from 'react';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import { Metadata } from 'next';
 import { ensureSeedData } from '@/src/infrastructure/seed';
 import { resaleListingService } from '@/src/domain/projects/services/resaleService';
@@ -9,16 +9,27 @@ import { BhkLandingPageRenderer } from '@/src/components/discovery/BhkLandingPag
 import { RecentlyViewedTracker } from '@/src/components/customer/RecentlyViewedTracker';
 import { PropertyDetailLayout } from '@/src/components/properties/detail/PropertyDetailLayout';
 import { safeJsonLd } from '@/src/lib/safeJsonLd';
+import {
+  buildNoIndexMetadata,
+  buildPageMetadata,
+  formatLocationWithCity,
+  normalizeAbsoluteImageUrl,
+  sanitizeMetaDescription,
+  SITE_ORIGIN,
+} from '@/src/domain/seo/metadataBuilder';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
 }
 
-const BASE_URL = 'https://www.greathomes.co.in';
-
 const getResaleDetailCached = cache(async (slugOrId: string) => {
   await ensureSeedData();
   return resaleListingService.getPublicListingDetailBySlugOrId(slugOrId);
+});
+
+const getBhkLandingCached = cache(async (bedroomCount: number, localitySlug: string) => {
+  await ensureSeedData();
+  return bhkLandingService.resolveBhkLandingData(bedroomCount, localitySlug);
 });
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -29,7 +40,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (bhkMatch) {
     const bedroomCount = parseInt(bhkMatch[1], 10);
     const localitySlug = bhkMatch[2];
-    const data = await bhkLandingService.resolveBhkLandingData(bedroomCount, localitySlug);
+    const data = await getBhkLandingCached(bedroomCount, localitySlug);
     if (!data) {
       notFound();
     }
@@ -40,51 +51,47 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const listing = await getResaleDetailCached(slug);
 
   if (!listing || !listing.slug) {
-    return {
-      title: 'Property Not Found | Great Homes',
-      robots: {
-        index: false,
-        follow: false,
-      },
-    };
+    return buildNoIndexMetadata(
+      'Property Not Found',
+      'The requested resale property listing is no longer available on Great Homes.'
+    );
   }
 
+  const localityName = listing.location?.name || listing.customLocalityDisplay || 'Kolkata';
+  const locationWithCity = formatLocationWithCity(localityName, 'Kolkata');
   const locationContext = listing.project?.name
-    ? ` at ${listing.project.name}`
+    ? ` at ${listing.project.name}, ${locationWithCity}`
     : listing.customProjectDisplay
-    ? ` at ${listing.customProjectDisplay}`
-    : listing.location?.name
-    ? ` in ${listing.location.name}`
-    : listing.customLocalityDisplay
-    ? ` in ${listing.customLocalityDisplay}`
-    : '';
+    ? ` at ${listing.customProjectDisplay}, ${locationWithCity}`
+    : ` in ${locationWithCity}`;
 
-  const title = `${listing.title} · ${listing.formattedAskingPrice} | Great Homes`;
-  const description = listing.description
-    ? listing.description.slice(0, 155)
-    : `Explore this ${listing.isVerified ? 'verified ' : ''}${listing.propertyType === 'PLOT' ? 'residential plot' : `${listing.configuration || listing.propertyTypeDisplay} resale ${listing.propertyTypeDisplay.toLowerCase()}`}${locationContext}. Asking price: ${listing.formattedAskingPrice}.`;
+  const rawTitle = listing.formattedAskingPrice
+    ? `${listing.title} – ${listing.formattedAskingPrice}`
+    : listing.title;
 
-  const canonicalUrl = `${BASE_URL}/buy/${listing.slug}`;
+  const fallbackDescription = `Explore this ${listing.isVerified ? 'verified ' : ''}${
+    listing.propertyType === 'PLOT'
+      ? 'residential plot'
+      : `${listing.configuration || listing.propertyTypeDisplay} resale ${listing.propertyTypeDisplay.toLowerCase()}`
+  }${locationContext}. Asking price: ${listing.formattedAskingPrice}. View carpet area, photos & verified details on Great Homes.`;
 
-  return {
-    title,
+  const description = sanitizeMetaDescription(listing.description, fallbackDescription, {
+    minLength: 45,
+    maxLength: 158,
+  });
+
+  const primaryImage = listing.media.length > 0 ? listing.media[0].url : null;
+
+  return buildPageMetadata({
+    title: rawTitle,
     description,
-    alternates: {
-      canonical: canonicalUrl,
-    },
-    robots: {
-      index: Boolean(listing.isVerified),
-      follow: Boolean(listing.isVerified),
-    },
-    openGraph: {
-      title,
-      description,
-      url: canonicalUrl,
-      siteName: 'Great Homes',
-      type: 'website',
-      images: listing.media.length > 0 ? [{ url: listing.media[0].url }] : undefined,
-    },
-  };
+    canonicalPath: `/buy/${listing.slug}`,
+    index: Boolean(listing.isVerified),
+    follow: true,
+    ogType: 'website',
+    ogImage: primaryImage,
+    ogImageAlt: listing.title,
+  });
 }
 
 export default async function ResaleListingDetailPage({ params }: PageProps) {
@@ -95,12 +102,21 @@ export default async function ResaleListingDetailPage({ params }: PageProps) {
   if (bhkMatch) {
     const bedroomCount = parseInt(bhkMatch[1], 10);
     const localitySlug = bhkMatch[2];
-    const data = await bhkLandingService.resolveBhkLandingData(bedroomCount, localitySlug);
+    const data = await getBhkLandingCached(bedroomCount, localitySlug);
     if (!data) {
       notFound();
     }
-    const jsonLd = bhkLandingService.generateJsonLd(data);
-    return <BhkLandingPageRenderer data={data} jsonLd={jsonLd} />;
+    const [jsonLd, relatedBhkLinks] = await Promise.all([
+      Promise.resolve(bhkLandingService.generateJsonLd(data)),
+      bhkLandingService.getRelatedEligibleBhkLinks(data.bedroomCount, data.localitySlug),
+    ]);
+    return (
+      <BhkLandingPageRenderer
+        data={data}
+        jsonLd={jsonLd}
+        relatedBhkLinks={relatedBhkLinks}
+      />
+    );
   }
 
   // Stage 2: Fall through to verified Resale Listing Detail
@@ -108,6 +124,11 @@ export default async function ResaleListingDetailPage({ params }: PageProps) {
 
   if (!listing || !listing.slug) {
     notFound();
+  }
+
+  // Permanent redirect non-canonical UUID or case-mismatched URLs to canonical slug URL
+  if (slug !== listing.slug) {
+    permanentRedirect(`/buy/${listing.slug}`);
   }
 
   const discovery = await propertyDiscoveryService.getListingDetailDiscoveryBundle({
@@ -122,20 +143,20 @@ export default async function ResaleListingDetailPage({ params }: PageProps) {
     limit: 6,
   });
 
-  const canonicalUrl = `${BASE_URL}/buy/${listing.slug}`;
+  const canonicalUrl = `${SITE_ORIGIN}/buy/${listing.slug}`;
 
   const breadcrumbItems = [
     {
       '@type': 'ListItem',
       position: 1,
       name: 'Home',
-      item: `${BASE_URL}`,
+      item: SITE_ORIGIN,
     },
     {
       '@type': 'ListItem',
       position: 2,
       name: 'Buy',
-      item: `${BASE_URL}/buy`,
+      item: `${SITE_ORIGIN}/buy`,
     },
     ...(listing.location
       ? [
@@ -143,7 +164,7 @@ export default async function ResaleListingDetailPage({ params }: PageProps) {
             '@type': 'ListItem',
             position: 3,
             name: listing.location.name,
-            item: `${BASE_URL}${listing.location.url}`,
+            item: `${SITE_ORIGIN}${listing.location.url}`,
           },
         ]
       : []),
@@ -153,7 +174,7 @@ export default async function ResaleListingDetailPage({ params }: PageProps) {
             '@type': 'ListItem',
             position: listing.location ? 4 : 3,
             name: listing.project.name,
-            item: `${BASE_URL}${listing.project.url}`,
+            item: `${SITE_ORIGIN}${listing.project.url}`,
           },
         ]
       : []),
@@ -165,59 +186,93 @@ export default async function ResaleListingDetailPage({ params }: PageProps) {
     },
   ];
 
-  const areaNumeric =
-    listing.propertyType === 'PLOT'
-      ? listing.plotArea
-      : listing.carpetArea || listing.builtUpArea || listing.superBuiltUpArea || listing.plotArea;
+  const isPlot = listing.propertyType === 'PLOT';
+  const areaNumeric = isPlot
+    ? listing.plotArea
+    : listing.carpetArea || listing.builtUpArea || listing.superBuiltUpArea || listing.plotArea;
 
-  const schemaType =
-    listing.propertyType === 'PLOT'
-      ? 'Place'
-      : listing.propertyType === 'INDEPENDENT_HOUSE'
-      ? 'SingleFamilyResidence'
-      : 'Apartment';
+  const schemaType = isPlot
+    ? 'Place'
+    : listing.propertyType === 'INDEPENDENT_HOUSE'
+    ? 'SingleFamilyResidence'
+    : 'Apartment';
 
-  const structuredData = [
-    {
-      '@context': 'https://schema.org',
-      '@type': schemaType,
-      name: listing.title,
-      description:
-        listing.description ||
-        `${listing.title} in ${listing.locationDisplay}`,
-      url: canonicalUrl,
-      ...(listing.bedroomCount && listing.bedroomCount > 0
-        ? {
-            numberOfRooms: listing.bedroomCount,
-            numberOfBedrooms: listing.bedroomCount,
-          }
-        : {}),
-      floorSize: areaNumeric
-        ? {
+  const listingImages = listing.media
+    .map((m) => normalizeAbsoluteImageUrl(m.url))
+    .filter((u): u is string => Boolean(u));
+
+  const fallbackSchemaDesc = `${listing.title} in ${formatLocationWithCity(
+    listing.location?.name || listing.customLocalityDisplay,
+    'Kolkata'
+  )}`;
+  const cleanSchemaDesc = sanitizeMetaDescription(listing.description, fallbackSchemaDesc, {
+    minLength: 40,
+    maxLength: 260,
+  });
+
+  const propertyEntity: Record<string, any> = {
+    '@type': schemaType,
+    '@id': `${canonicalUrl}#property`,
+    name: listing.title,
+    description: cleanSchemaDesc,
+    url: canonicalUrl,
+    ...(listingImages.length > 0 ? { image: listingImages } : {}),
+    ...(!isPlot && listing.bedroomCount && listing.bedroomCount > 0
+      ? {
+          numberOfRooms: listing.bedroomCount,
+          numberOfBedrooms: listing.bedroomCount,
+        }
+      : {}),
+    ...(!isPlot && areaNumeric && areaNumeric > 0
+      ? {
+          floorSize: {
             '@type': 'QuantitativeValue',
             value: areaNumeric,
             unitCode: 'FTK',
-          }
-        : undefined,
-      address: {
-        '@type': 'PostalAddress',
-        addressLocality: listing.location?.name || listing.customLocalityDisplay || 'Kolkata',
-        addressRegion: 'West Bengal',
-        addressCountry: 'IN',
-      },
-      offers: {
-        '@type': 'Offer',
-        price: listing.askingPrice,
-        priceCurrency: 'INR',
-        availability: 'https://schema.org/InStock',
-      },
+          },
+        }
+      : {}),
+    address: {
+      '@type': 'PostalAddress',
+      addressLocality: listing.location?.name || listing.customLocalityDisplay || 'Kolkata',
+      addressRegion: 'West Bengal',
+      addressCountry: 'IN',
     },
-    {
-      '@context': 'https://schema.org',
-      '@type': 'BreadcrumbList',
-      itemListElement: breadcrumbItems,
-    },
-  ];
+  };
+
+  const realEstateListingNode: Record<string, any> = {
+    '@type': 'RealEstateListing',
+    '@id': `${canonicalUrl}#listing`,
+    name: listing.title,
+    description: cleanSchemaDesc,
+    url: canonicalUrl,
+    ...(listingImages.length > 0 ? { image: listingImages[0] } : {}),
+    about: { '@id': `${canonicalUrl}#property` },
+    ...(listing.askingPrice && listing.askingPrice > 0
+      ? {
+          offers: {
+            '@type': 'Offer',
+            price: listing.askingPrice,
+            priceCurrency: 'INR',
+            availability: 'https://schema.org/InStock',
+            url: canonicalUrl,
+          },
+        }
+      : {}),
+  };
+
+  const structuredData = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      realEstateListingNode,
+      propertyEntity,
+      {
+        '@type': 'BreadcrumbList',
+        '@id': `${canonicalUrl}#breadcrumbs`,
+        itemListElement: breadcrumbItems,
+      },
+    ],
+  };
 
   return (
     <>

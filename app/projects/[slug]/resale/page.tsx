@@ -26,7 +26,7 @@ import { NearbyListingsSection } from '@/src/components/projects/NearbyListingsS
 import { ProjectsYouMayAlsoLike } from '@/src/components/projects/ProjectsYouMayAlsoLike';
 import { GreatHomesAdvisoryCard } from '@/src/components/projects/GreatHomesAdvisoryCard';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 120;
 
 interface PageProps {
   params: Promise<{ slug: string }>;

@@ -88,6 +88,7 @@ export function HomeResaleSection({ listings = [] }: HomeResaleSectionProps) {
 
             <Link
               href="/buy?inventoryType=RESALE"
+              rel="nofollow"
               className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold text-[#E85D3F] hover:bg-[#FFF5EE] font-display transition-colors py-2 px-4 rounded-lg border border-[rgba(232,93,63,0.35)] group"
             >
               <span>View All Resale Homes</span>

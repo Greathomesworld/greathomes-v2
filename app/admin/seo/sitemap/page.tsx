@@ -26,15 +26,16 @@ interface SitemapCategorySummary {
 }
 
 const STATIC_SITEMAP_ROUTES = [
-  'https://greathomes.co.in',
-  'https://greathomes.co.in/projects',
-  'https://greathomes.co.in/buy',
-  'https://greathomes.co.in/rent',
-  'https://greathomes.co.in/developers',
-  'https://greathomes.co.in/locations',
-  'https://greathomes.co.in/market',
-  'https://greathomes.co.in/guides',
-  'https://greathomes.co.in/reviews',
+  'https://www.greathomes.co.in',
+  'https://www.greathomes.co.in/projects',
+  'https://www.greathomes.co.in/buy',
+  'https://www.greathomes.co.in/rent',
+  'https://www.greathomes.co.in/developers',
+  'https://www.greathomes.co.in/locations',
+  'https://www.greathomes.co.in/market',
+  'https://www.greathomes.co.in/guides',
+  'https://www.greathomes.co.in/reviews',
+  'https://www.greathomes.co.in/post-property',
 ];
 
 async function fetchAllProjectsForSitemapAudit(): Promise<any[]> {
@@ -165,11 +166,20 @@ export default function SitemapGovernancePage() {
     const nonPubRental = rentalListings.filter(r => r.lifecycleStatus !== 'PUBLISHED').length;
     const missingSlugRental = rentalListings.filter(r => !r.slug || !r.slug.trim()).length;
 
+    const projectIdsWithResale = new Set(
+      eligibleResale.map(r => r.projectId).filter(Boolean)
+    );
+    const projectIdsWithRental = new Set(
+      eligibleRental.map(r => r.projectId).filter(Boolean)
+    );
+    const eligibleProjectResalePages = eligibleProjects.filter(p => projectIdsWithResale.has(p.id));
+    const eligibleProjectRentalPages = eligibleProjects.filter(p => projectIdsWithRental.has(p.id));
+
     return [
       {
         category: 'Static & Core Intelligence Directories',
-        routePattern: '/, /projects, /buy, /rent, /developers, /locations, /market, /guides, /reviews',
-        eligibilityRule: 'Publicly accessible top-level discovery and editorial hubs',
+        routePattern: '/, /projects, /buy, /rent, /developers, /locations, /market, /guides, /reviews, /post-property',
+        eligibilityRule: 'Publicly accessible top-level discovery, listing submission, and editorial hubs',
         totalRecords: STATIC_SITEMAP_ROUTES.length,
         includedInSitemap: STATIC_SITEMAP_ROUTES.length,
         excludedFromSitemap: 0,
@@ -178,8 +188,8 @@ export default function SitemapGovernancePage() {
       },
       {
         category: 'Residential Projects',
-        routePattern: 'https://greathomes.co.in/projects/[slug]',
-        eligibilityRule: 'lifecycleStatus === PUBLISHED && non-empty slug (paginated without 50-record cap)',
+        routePattern: 'https://www.greathomes.co.in/projects/[slug]',
+        eligibilityRule: 'lifecycleStatus === PUBLISHED && non-empty slug (with validated absolute image URLs)',
         totalRecords: projects.length,
         includedInSitemap: eligibleProjects.length,
         excludedFromSitemap: projects.length - eligibleProjects.length,
@@ -187,55 +197,61 @@ export default function SitemapGovernancePage() {
           ...(draftProjects > 0 ? [`${draftProjects} DRAFT project(s)`] : []),
           ...(archivedProjects > 0 ? [`${archivedProjects} ARCHIVED project(s)`] : []),
         ],
-        sampleUrls: eligibleProjects.slice(0, 3).map(p => `https://greathomes.co.in/projects/${p.slug}`),
+        sampleUrls: eligibleProjects.slice(0, 3).map(p => `https://www.greathomes.co.in/projects/${p.slug}`),
       },
       {
         category: 'Project Resale Inventory Pages',
-        routePattern: 'https://greathomes.co.in/projects/[slug]/resale',
+        routePattern: 'https://www.greathomes.co.in/projects/[slug]/resale',
         eligibilityRule:
-          'lifecycleStatus === PUBLISHED && non-empty slug (indexable across all inventory tiers, including 0 listings)',
+          'lifecycleStatus === PUBLISHED && >= 1 eligible verified resale listing (prevents empty-inventory sitemap bloat)',
         totalRecords: projects.length,
-        includedInSitemap: eligibleProjects.length,
-        excludedFromSitemap: projects.length - eligibleProjects.length,
+        includedInSitemap: eligibleProjectResalePages.length,
+        excludedFromSitemap: projects.length - eligibleProjectResalePages.length,
         exclusionBreakdown: [
+          ...(eligibleProjects.length - eligibleProjectResalePages.length > 0
+            ? [`${eligibleProjects.length - eligibleProjectResalePages.length} project(s) with 0 active resale listings`]
+            : []),
           ...(draftProjects > 0 ? [`${draftProjects} DRAFT project resale route(s)`] : []),
           ...(archivedProjects > 0 ? [`${archivedProjects} ARCHIVED project resale route(s)`] : []),
         ],
-        sampleUrls: eligibleProjects
+        sampleUrls: eligibleProjectResalePages
           .slice(0, 3)
-          .map(p => `https://greathomes.co.in/projects/${p.slug}/resale`),
+          .map(p => `https://www.greathomes.co.in/projects/${p.slug}/resale`),
       },
       {
         category: 'Project Rental Inventory Pages',
-        routePattern: 'https://greathomes.co.in/projects/[slug]/rent',
+        routePattern: 'https://www.greathomes.co.in/projects/[slug]/rent',
         eligibilityRule:
-          'lifecycleStatus === PUBLISHED && non-empty slug (indexable across all inventory tiers, including 0 listings)',
+          'lifecycleStatus === PUBLISHED && >= 1 eligible verified rental listing (prevents empty-inventory sitemap bloat)',
         totalRecords: projects.length,
-        includedInSitemap: eligibleProjects.length,
-        excludedFromSitemap: projects.length - eligibleProjects.length,
+        includedInSitemap: eligibleProjectRentalPages.length,
+        excludedFromSitemap: projects.length - eligibleProjectRentalPages.length,
         exclusionBreakdown: [
+          ...(eligibleProjects.length - eligibleProjectRentalPages.length > 0
+            ? [`${eligibleProjects.length - eligibleProjectRentalPages.length} project(s) with 0 active rental listings`]
+            : []),
           ...(draftProjects > 0 ? [`${draftProjects} DRAFT project rental route(s)`] : []),
           ...(archivedProjects > 0 ? [`${archivedProjects} ARCHIVED project rental route(s)`] : []),
         ],
-        sampleUrls: eligibleProjects
+        sampleUrls: eligibleProjectRentalPages
           .slice(0, 3)
-          .map(p => `https://greathomes.co.in/projects/${p.slug}/rent`),
+          .map(p => `https://www.greathomes.co.in/projects/${p.slug}/rent`),
       },
       {
         category: 'Real Estate Developers',
-        routePattern: 'https://greathomes.co.in/developers/[slug]',
-        eligibilityRule: 'status === PUBLISHED && non-empty slug',
+        routePattern: 'https://www.greathomes.co.in/developers/[slug]',
+        eligibilityRule: 'status === PUBLISHED && non-empty canonical slug (excludes known test stubs)',
         totalRecords: developers.length,
         includedInSitemap: eligibleDevelopers.length,
         excludedFromSitemap: nonPubDevelopers,
         exclusionBreakdown: nonPubDevelopers > 0 ? [`${nonPubDevelopers} non-published developer(s)`] : [],
-        sampleUrls: eligibleDevelopers.slice(0, 3).map(d => `https://greathomes.co.in/developers/${d.slug}`),
+        sampleUrls: eligibleDevelopers.slice(0, 3).map(d => `https://www.greathomes.co.in/developers/${d.slug}`),
       },
       {
         category: 'Locations & Micro-Markets',
-        routePattern: 'https://greathomes.co.in/locations/[slug]',
+        routePattern: 'https://www.greathomes.co.in/locations/[slug]',
         eligibilityRule:
-          'status === PUBLISHED && (publishedProjects > 0 || publishedChildren > 0 || description >= 20 chars)',
+          'status === PUBLISHED && canonical non-alias slug && (publishedProjects > 0 || publishedChildren > 0 || description >= 20 chars)',
         totalRecords: locations.length,
         includedInSitemap: eligibleLocations.length,
         excludedFromSitemap: locations.length - eligibleLocations.length,
@@ -243,14 +259,14 @@ export default function SitemapGovernancePage() {
           ...(draftLocations > 0 ? [`${draftLocations} DRAFT location(s)`] : []),
           ...(archivedLocations > 0 ? [`${archivedLocations} ARCHIVED location(s)`] : []),
           ...(thinPublishedLocations > 0
-            ? [`${thinPublishedLocations} thin PUBLISHED locality/localities (noindex, follow)`]
+            ? [`${thinPublishedLocations} thin/alias PUBLISHED locality/localities (excluded)`]
             : []),
         ],
-        sampleUrls: eligibleLocations.slice(0, 3).map(l => `https://greathomes.co.in/locations/${l.slug}`),
+        sampleUrls: eligibleLocations.slice(0, 3).map(l => `https://www.greathomes.co.in/locations/${l.slug}`),
       },
       {
         category: 'Resale Listings',
-        routePattern: 'https://greathomes.co.in/buy/[slug]',
+        routePattern: 'https://www.greathomes.co.in/buy/[slug]',
         eligibilityRule: 'lifecycleStatus === PUBLISHED && verificationStatus === VERIFIED && non-empty slug',
         totalRecords: resaleListings.length,
         includedInSitemap: eligibleResale.length,
@@ -262,11 +278,11 @@ export default function SitemapGovernancePage() {
           ...(nonPubResale > 0 ? [`${nonPubResale} non-published listing(s)`] : []),
           ...(missingSlugResale > 0 ? [`${missingSlugResale} listing(s) missing slug`] : []),
         ],
-        sampleUrls: eligibleResale.slice(0, 3).map(r => `https://greathomes.co.in/buy/${r.slug}`),
+        sampleUrls: eligibleResale.slice(0, 3).map(r => `https://www.greathomes.co.in/buy/${r.slug}`),
       },
       {
         category: 'Rental Listings',
-        routePattern: 'https://greathomes.co.in/rent/[slug]',
+        routePattern: 'https://www.greathomes.co.in/rent/[slug]',
         eligibilityRule: 'lifecycleStatus === PUBLISHED && verificationStatus === VERIFIED && non-empty slug',
         totalRecords: rentalListings.length,
         includedInSitemap: eligibleRental.length,
@@ -278,7 +294,7 @@ export default function SitemapGovernancePage() {
           ...(nonPubRental > 0 ? [`${nonPubRental} non-published listing(s)`] : []),
           ...(missingSlugRental > 0 ? [`${missingSlugRental} listing(s) missing slug`] : []),
         ],
-        sampleUrls: eligibleRental.slice(0, 3).map(r => `https://greathomes.co.in/rent/${r.slug}`),
+        sampleUrls: eligibleRental.slice(0, 3).map(r => `https://www.greathomes.co.in/rent/${r.slug}`),
       },
     ];
   }, [projects, developers, locations, resaleListings, rentalListings]);
@@ -345,7 +361,7 @@ export default function SitemapGovernancePage() {
             Sitemap Inclusion vs. Live Google Indexation
           </div>
           <p>
-            Inclusion in <code className="font-mono">https://greathomes.co.in/sitemap.xml</code> reflects{' '}
+            Inclusion in <code className="font-mono">https://www.greathomes.co.in/sitemap.xml</code> reflects{' '}
             <strong>Great Homes publication & verification eligibility</strong> (e.g., <code className="font-mono">PUBLISHED</code> lifecycle, <code className="font-mono">VERIFIED</code> listing status, non-empty canonical slug, and minimum location content depth). Sitemap inclusion does not guarantee immediate Google indexing, which is determined asynchronously by Googlebot crawl scheduling.
           </p>
         </div>
@@ -368,7 +384,7 @@ export default function SitemapGovernancePage() {
             {loading ? '...' : totalIncluded}
           </div>
           <span className="text-[11px] text-neutral-500 mt-1 block font-sans">
-            Canonical, deduplicated https://greathomes.co.in URLs
+            Canonical, deduplicated https://www.greathomes.co.in URLs
           </span>
         </div>
 
@@ -392,9 +408,12 @@ export default function SitemapGovernancePage() {
             <span className="px-2 py-0.5 rounded bg-neutral-100 border border-neutral-200">/api/</span>
             <span className="px-2 py-0.5 rounded bg-neutral-100 border border-neutral-200">/admin/</span>
             <span className="px-2 py-0.5 rounded bg-neutral-100 border border-neutral-200">/account/</span>
+            <span className="px-2 py-0.5 rounded bg-neutral-100 border border-neutral-200">/my-properties</span>
+            <span className="px-2 py-0.5 rounded bg-neutral-100 border border-neutral-200">/post-property/new</span>
+            <span className="px-2 py-0.5 rounded bg-neutral-100 border border-neutral-200">/compare</span>
           </div>
           <span className="text-[11px] text-neutral-500 mt-1.5 block font-sans">
-            Private staff & customer routes blocked from crawlers
+            Private staff, customer & utility routes blocked from crawlers
           </span>
         </div>
       </div>

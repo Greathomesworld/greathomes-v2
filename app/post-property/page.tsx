@@ -21,14 +21,16 @@ import { PostPropertyFaqAccordion } from '@/src/components/post-property/PostPro
 import { POST_PROPERTY_FAQS } from '@/src/components/post-property/postPropertyFaqData';
 import { RecentListingThumbnail } from '@/src/components/post-property/RecentListingThumbnail';
 import { PostPropertyQuickPurposeButtons } from '@/src/components/post-property/PostPropertyQuickPurposeButtons';
+import { buildPageMetadata } from '@/src/domain/seo/metadataBuilder';
 
 export const revalidate = 60;
 
-export const metadata: Metadata = {
-  title: 'Post Property in Kolkata | Sell or Rent Verified Homes | Great Homes',
+export const metadata: Metadata = buildPageMetadata({
+  title: 'Post Property in Kolkata Free – Sell or Rent Verified Homes',
   description:
-    'Sell or rent your Kolkata apartment, independent house, or residential plot on Great Homes with guided submission, verified listings, and complete contact privacy.',
-};
+    'Sell or rent your Kolkata apartment, independent house, or residential plot for free on Great Homes with guided submission, verification & contact privacy.',
+  canonicalPath: '/post-property',
+});
 
 const SIMPLE_STEPS = [
   {
@@ -91,7 +93,15 @@ const WIZARD_WORKFLOW_STEPS = [
 ];
 
 export default async function PostPropertyEntryPage() {
-  const { locationOptions, stats, recentListings } = await getPostPropertyPage1Data();
+  const { locationOptions, stats, recentListings } = await getPostPropertyPage1Data().catch(() => ({
+    locationOptions: [],
+    stats: {
+      publishedProjects: 0,
+      verifiedListings: 0,
+      locationsCovered: 0,
+    },
+    recentListings: [],
+  }));
 
   const showStats =
     Boolean(stats) &&

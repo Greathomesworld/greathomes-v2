@@ -1,5 +1,5 @@
 import { cache } from 'react';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import { Metadata } from 'next';
 import { ensureSeedData } from '@/src/infrastructure/seed';
 import { rentalService } from '@/src/domain/projects/services/rentalService';
@@ -7,6 +7,14 @@ import { propertyDiscoveryService } from '@/src/domain/projects/services/propert
 import { RecentlyViewedTracker } from '@/src/components/customer/RecentlyViewedTracker';
 import { PropertyDetailLayout } from '@/src/components/properties/detail/PropertyDetailLayout';
 import { safeJsonLd } from '@/src/lib/safeJsonLd';
+import {
+  buildNoIndexMetadata,
+  buildPageMetadata,
+  formatLocationWithCity,
+  normalizeAbsoluteImageUrl,
+  sanitizeMetaDescription,
+  SITE_ORIGIN,
+} from '@/src/domain/seo/metadataBuilder';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -22,51 +30,49 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const listing = await getRentalDetailCached(slug);
 
   if (!listing || !listing.slug) {
-    return {
-      title: 'Property Not Found | Great Homes',
-      robots: {
-        index: false,
-        follow: false,
-      },
-    };
+    return buildNoIndexMetadata(
+      'Property Not Found',
+      'The requested rental property listing is no longer available on Great Homes.'
+    );
   }
 
+  const localityName = listing.location?.name || listing.customLocalityDisplay || 'Kolkata';
+  const locationWithCity = formatLocationWithCity(localityName, 'Kolkata');
   const locationContext = listing.project?.name
-    ? ` at ${listing.project.name}`
+    ? ` at ${listing.project.name}, ${locationWithCity}`
     : listing.customProjectDisplay
-    ? ` at ${listing.customProjectDisplay}`
-    : listing.location?.name
-    ? ` in ${listing.location.name}`
-    : listing.customLocalityDisplay
-    ? ` in ${listing.customLocalityDisplay}`
-    : '';
+    ? ` at ${listing.customProjectDisplay}, ${locationWithCity}`
+    : ` in ${locationWithCity}`;
 
-  const title = `${listing.title} For Rent · ${listing.formattedMonthlyRent} | Great Homes`;
-  const description = listing.description
-    ? listing.description.slice(0, 155)
-    : `Explore this ${listing.isVerified ? 'verified ' : ''}${listing.propertyType === 'PLOT' ? 'residential plot' : `${listing.configuration || listing.propertyTypeDisplay} rental ${listing.propertyTypeDisplay.toLowerCase()}`}${locationContext}. Monthly rent: ${listing.formattedMonthlyRent}.`;
+  const alreadyHasRentPhrase = /\bfor\s+rent\b|\brental\b/i.test(listing.title);
+  const titleCore = alreadyHasRentPhrase ? listing.title : `${listing.title} for Rent`;
+  const rawTitle = listing.formattedMonthlyRent
+    ? `${titleCore} – ${listing.formattedMonthlyRent}`
+    : titleCore;
 
-  const canonicalUrl = `https://www.greathomes.co.in/rent/${listing.slug}`;
+  const fallbackDescription = `Explore this ${listing.isVerified ? 'verified ' : ''}${
+    listing.propertyType === 'PLOT'
+      ? 'residential plot'
+      : `${listing.configuration || listing.propertyTypeDisplay} rental ${listing.propertyTypeDisplay.toLowerCase()}`
+  }${locationContext}. Monthly rent: ${listing.formattedMonthlyRent}. View photos, furnishing & lease details on Great Homes.`;
 
-  return {
-    title,
+  const description = sanitizeMetaDescription(listing.description, fallbackDescription, {
+    minLength: 45,
+    maxLength: 158,
+  });
+
+  const primaryImage = listing.media.length > 0 ? listing.media[0].url : null;
+
+  return buildPageMetadata({
+    title: rawTitle,
     description,
-    alternates: {
-      canonical: canonicalUrl,
-    },
-    robots: {
-      index: Boolean(listing.isVerified),
-      follow: Boolean(listing.isVerified),
-    },
-    openGraph: {
-      title,
-      description,
-      url: canonicalUrl,
-      siteName: 'Great Homes',
-      type: 'website',
-      images: listing.media.length > 0 ? [{ url: listing.media[0].url }] : undefined,
-    },
-  };
+    canonicalPath: `/rent/${listing.slug}`,
+    index: Boolean(listing.isVerified),
+    follow: true,
+    ogType: 'website',
+    ogImage: primaryImage,
+    ogImageAlt: listing.title,
+  });
 }
 
 export default async function RentalListingDetailPage({ params }: PageProps) {
@@ -75,6 +81,11 @@ export default async function RentalListingDetailPage({ params }: PageProps) {
 
   if (!listing || !listing.slug) {
     notFound();
+  }
+
+  // Permanent redirect non-canonical UUID or case-mismatched URLs to canonical slug URL
+  if (slug !== listing.slug) {
+    permanentRedirect(`/rent/${listing.slug}`);
   }
 
   const discovery = await propertyDiscoveryService.getListingDetailDiscoveryBundle({
@@ -89,20 +100,20 @@ export default async function RentalListingDetailPage({ params }: PageProps) {
     limit: 6,
   });
 
-  const canonicalUrl = `https://www.greathomes.co.in/rent/${listing.slug}`;
+  const canonicalUrl = `${SITE_ORIGIN}/rent/${listing.slug}`;
 
   const breadcrumbItems = [
     {
       '@type': 'ListItem',
       position: 1,
       name: 'Home',
-      item: 'https://www.greathomes.co.in',
+      item: SITE_ORIGIN,
     },
     {
       '@type': 'ListItem',
       position: 2,
       name: 'Rent',
-      item: 'https://www.greathomes.co.in/rent',
+      item: `${SITE_ORIGIN}/rent`,
     },
     ...(listing.location
       ? [
@@ -110,7 +121,7 @@ export default async function RentalListingDetailPage({ params }: PageProps) {
             '@type': 'ListItem',
             position: 3,
             name: listing.location.name,
-            item: `https://www.greathomes.co.in${listing.location.url}`,
+            item: `${SITE_ORIGIN}${listing.location.url}`,
           },
         ]
       : []),
@@ -120,73 +131,106 @@ export default async function RentalListingDetailPage({ params }: PageProps) {
             '@type': 'ListItem',
             position: listing.location ? 4 : 3,
             name: listing.project.name,
-            item: `https://www.greathomes.co.in${listing.project.url}`,
+            item: `${SITE_ORIGIN}${listing.project.url}`,
           },
         ]
       : []),
     {
       '@type': 'ListItem',
-      position:
-        3 + (listing.location ? 1 : 0) + (listing.project ? 1 : 0),
+      position: 3 + (listing.location ? 1 : 0) + (listing.project ? 1 : 0),
       name: listing.title,
       item: canonicalUrl,
     },
   ];
 
-  const areaNumeric =
-    listing.propertyType === 'PLOT'
-      ? listing.plotArea
-      : listing.carpetArea || listing.builtUpArea || listing.superBuiltUpArea || listing.plotArea;
+  const isPlot = listing.propertyType === 'PLOT';
+  const areaNumeric = isPlot
+    ? listing.plotArea
+    : listing.carpetArea || listing.builtUpArea || listing.superBuiltUpArea || listing.plotArea;
 
-  const schemaType =
-    listing.propertyType === 'PLOT'
-      ? 'Place'
-      : listing.propertyType === 'INDEPENDENT_HOUSE'
-      ? 'SingleFamilyResidence'
-      : 'Apartment';
+  const schemaType = isPlot
+    ? 'Place'
+    : listing.propertyType === 'INDEPENDENT_HOUSE'
+    ? 'SingleFamilyResidence'
+    : 'Apartment';
 
-  const structuredData = [
-    {
-      '@context': 'https://schema.org',
-      '@type': schemaType,
-      name: listing.title,
-      description:
-        listing.description ||
-        `${listing.title} in ${listing.locationDisplay}`,
-      url: canonicalUrl,
-      ...(listing.bedroomCount && listing.bedroomCount > 0
-        ? {
-            numberOfRooms: listing.bedroomCount,
-            numberOfBedrooms: listing.bedroomCount,
-          }
-        : {}),
-      floorSize: areaNumeric
-        ? {
+  const listingImages = listing.media
+    .map((m) => normalizeAbsoluteImageUrl(m.url))
+    .filter((u): u is string => Boolean(u));
+
+  const fallbackSchemaDesc = `${listing.title} for rent in ${formatLocationWithCity(
+    listing.location?.name || listing.customLocalityDisplay,
+    'Kolkata'
+  )}`;
+  const cleanSchemaDesc = sanitizeMetaDescription(listing.description, fallbackSchemaDesc, {
+    minLength: 40,
+    maxLength: 260,
+  });
+
+  const propertyEntity: Record<string, any> = {
+    '@type': schemaType,
+    '@id': `${canonicalUrl}#property`,
+    name: listing.title,
+    description: cleanSchemaDesc,
+    url: canonicalUrl,
+    ...(listingImages.length > 0 ? { image: listingImages } : {}),
+    ...(!isPlot && listing.bedroomCount && listing.bedroomCount > 0
+      ? {
+          numberOfRooms: listing.bedroomCount,
+          numberOfBedrooms: listing.bedroomCount,
+        }
+      : {}),
+    ...(!isPlot && areaNumeric && areaNumeric > 0
+      ? {
+          floorSize: {
             '@type': 'QuantitativeValue',
             value: areaNumeric,
             unitCode: 'FTK',
-          }
-        : undefined,
-      address: {
-        '@type': 'PostalAddress',
-        addressLocality: listing.location?.name || listing.customLocalityDisplay || 'Kolkata',
-        addressRegion: 'West Bengal',
-        addressCountry: 'IN',
-      },
-      offers: {
-        '@type': 'Offer',
-        price: listing.monthlyRent,
-        priceCurrency: 'INR',
-        businessFunction: 'http://purl.org/goodrelations/v1#LeaseOut',
-        availability: 'https://schema.org/InStock',
-      },
+          },
+        }
+      : {}),
+    address: {
+      '@type': 'PostalAddress',
+      addressLocality: listing.location?.name || listing.customLocalityDisplay || 'Kolkata',
+      addressRegion: 'West Bengal',
+      addressCountry: 'IN',
     },
-    {
-      '@context': 'https://schema.org',
-      '@type': 'BreadcrumbList',
-      itemListElement: breadcrumbItems,
-    },
-  ];
+  };
+
+  const realEstateListingNode: Record<string, any> = {
+    '@type': 'RealEstateListing',
+    '@id': `${canonicalUrl}#listing`,
+    name: listing.title,
+    description: cleanSchemaDesc,
+    url: canonicalUrl,
+    ...(listingImages.length > 0 ? { image: listingImages[0] } : {}),
+    about: { '@id': `${canonicalUrl}#property` },
+    ...(listing.monthlyRent && listing.monthlyRent > 0
+      ? {
+          offers: {
+            '@type': 'Offer',
+            price: listing.monthlyRent,
+            priceCurrency: 'INR',
+            businessFunction: 'http://purl.org/goodrelations/v1#LeaseOut',
+            availability: 'https://schema.org/InStock',
+            url: canonicalUrl,
+          },
+        }
+      : {}),
+  };
+
+  const structuredData = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      realEstateListingNode,
+      propertyEntity,
+      {
+        '@type': 'BreadcrumbList',
+        '@id': `${canonicalUrl}#breadcrumbs`,
+        itemListElement: breadcrumbItems,
+      },
+    ],
+  };
 
   return (
     <>

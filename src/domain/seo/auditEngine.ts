@@ -1,3 +1,9 @@
+import {
+  DEFAULT_OG_IMAGE,
+  SITE_ORIGIN,
+  normalizeAbsoluteImageUrl,
+} from './metadataBuilder';
+
 export type SeoCheckSeverity = 'PASS' | 'WARNING' | 'CRITICAL';
 
 export type SeoEntityType =
@@ -260,7 +266,7 @@ export function evaluateEntitySeo(input: SeoEntityInput): SeoAuditResult {
       field: 'canonical',
       severity: 'CRITICAL',
       message: canonicalCheck.reason || 'Invalid canonical URL.',
-      recommendation: 'Ensure canonical URL points to https://greathomes.co.in/<route>/<slug>.',
+      recommendation: 'Ensure canonical URL points to https://www.greathomes.co.in/<route>/<slug>.',
     });
   } else {
     qualityScore += 20;
@@ -333,11 +339,12 @@ export function buildDeveloperJsonLd(
   },
   projects?: Array<{ name: string; slug: string }>
 ) {
-  const canonicalUrl = `https://www.greathomes.co.in/developers/${developer.slug}`;
+  const canonicalUrl = `${SITE_ORIGIN}/developers/${developer.slug}`;
   const description =
     developer.shortDescription ||
     developer.description ||
     `Verified real estate developer profile and residential project portfolio for ${developer.name} on Great Homes.`;
+  const normalizedLogo = normalizeAbsoluteImageUrl(developer.logoUrl);
 
   const graph: any[] = [
     {
@@ -346,7 +353,8 @@ export function buildDeveloperJsonLd(
       name: developer.name,
       url: canonicalUrl,
       description,
-      ...(developer.logoUrl ? { logo: developer.logoUrl, image: developer.logoUrl } : {}),
+      image: normalizedLogo || DEFAULT_OG_IMAGE,
+      ...(normalizedLogo ? { logo: normalizedLogo } : {}),
       ...(developer.websiteUrl ? { sameAs: [developer.websiteUrl] } : {}),
       ...(developer.locations && developer.locations.length > 0
         ? {
@@ -364,13 +372,13 @@ export function buildDeveloperJsonLd(
           '@type': 'ListItem',
           position: 1,
           name: 'Home',
-          item: 'https://www.greathomes.co.in',
+          item: SITE_ORIGIN,
         },
         {
           '@type': 'ListItem',
           position: 2,
           name: 'Developers',
-          item: 'https://www.greathomes.co.in/developers',
+          item: `${SITE_ORIGIN}/developers`,
         },
         {
           '@type': 'ListItem',
@@ -391,7 +399,7 @@ export function buildDeveloperJsonLd(
         '@type': 'ListItem',
         position: idx + 1,
         name: p.name,
-        url: `https://www.greathomes.co.in/projects/${p.slug}`,
+        url: `${SITE_ORIGIN}/projects/${p.slug}`,
       })),
     });
   }

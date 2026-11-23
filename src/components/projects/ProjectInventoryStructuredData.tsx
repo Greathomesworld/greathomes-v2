@@ -3,8 +3,12 @@ import { PublicProjectDto } from '@/src/domain/projects/dto/projectDto';
 import { PublicResaleListingDto } from '@/src/domain/projects/dto/resaleDto';
 import { PublicRentalListingDto } from '@/src/domain/projects/dto/rentalDto';
 import { safeJsonLd } from '@/src/lib/safeJsonLd';
+import {
+  formatLocationWithCity,
+  SITE_ORIGIN,
+} from '@/src/domain/seo/metadataBuilder';
 
-const BASE_URL = 'https://www.greathomes.co.in';
+const BASE_URL = SITE_ORIGIN;
 
 interface ProjectInventoryStructuredDataProps {
   project: PublicProjectDto;
@@ -23,6 +27,7 @@ export function ProjectInventoryStructuredData({
   const pageUrl = `${BASE_URL}/projects/${project.slug}/${isResale ? 'resale' : 'rent'}`;
   const projectUrl = `${BASE_URL}/projects/${project.slug}`;
   const localityName = project.location?.name?.trim() || 'Kolkata';
+  const locationWithCity = formatLocationWithCity(localityName, 'Kolkata');
   const localitySlug = project.location?.slug?.trim() || null;
 
   const rawCrumbs: Array<{ name: string; item: string }> = [
@@ -35,9 +40,9 @@ export function ProjectInventoryStructuredData({
     { name: isResale ? 'Resale Apartments' : 'Apartments for Rent', item: pageUrl },
   ];
 
-  const breadcrumbSchema = {
-    '@context': 'https://schema.org',
+  const breadcrumbNode = {
     '@type': 'BreadcrumbList',
+    '@id': `${pageUrl}#breadcrumbs`,
     itemListElement: rawCrumbs.map((crumb, index) => ({
       '@type': 'ListItem',
       position: index + 1,
@@ -47,34 +52,47 @@ export function ProjectInventoryStructuredData({
   };
 
   const itemListElements = isResale
-    ? resaleListings.map((listing, idx) => ({
-        '@type': 'ListItem',
-        position: idx + 1,
-        url: listing.slug ? `${BASE_URL}/buy/${listing.slug}` : pageUrl,
-        name: `${listing.configuration} Resale Apartment in ${project.name}`,
-      }))
-    : rentalListings.map((listing, idx) => ({
-        '@type': 'ListItem',
-        position: idx + 1,
-        url: listing.slug ? `${BASE_URL}/rent/${listing.slug}` : pageUrl,
-        name: `${listing.bedroomCount} BHK Rental Apartment in ${project.name}`,
-      }));
+    ? resaleListings.map((listing, idx) => {
+        const configLabel = listing.configuration?.trim()
+          ? `${listing.configuration.trim()} `
+          : listing.bedroomCount && listing.bedroomCount > 0
+          ? `${listing.bedroomCount} BHK `
+          : '';
+        return {
+          '@type': 'ListItem',
+          position: idx + 1,
+          url: listing.slug ? `${BASE_URL}/buy/${listing.slug}` : pageUrl,
+          name: `${configLabel}Resale Apartment in ${project.name}`,
+        };
+      })
+    : rentalListings.map((listing, idx) => {
+        const bhkLabel =
+          listing.bedroomCount && listing.bedroomCount > 0
+            ? `${listing.bedroomCount} BHK `
+            : '';
+        return {
+          '@type': 'ListItem',
+          position: idx + 1,
+          url: listing.slug ? `${BASE_URL}/rent/${listing.slug}` : pageUrl,
+          name: `${bhkLabel}Rental Apartment in ${project.name}`,
+        };
+      });
 
   const hasEligibleListings = itemListElements.length > 0;
 
-  const collectionSchema: Record<string, unknown> = {
-    '@context': 'https://schema.org',
+  const collectionNode: Record<string, unknown> = {
     '@type': 'CollectionPage',
+    '@id': `${pageUrl}#collection`,
     name: isResale
       ? `Resale Apartments in ${project.name}, ${localityName}`
       : `Apartments for Rent in ${project.name}, ${localityName}`,
     description: hasEligibleListings
       ? isResale
-        ? `Browse resale apartments available for purchase in ${project.name}, ${localityName}, Kolkata.`
-        : `Browse apartments available for rent in ${project.name}, ${localityName}, Kolkata.`
+        ? `Browse resale apartments available for purchase in ${project.name}, ${locationWithCity}.`
+        : `Browse apartments available for rent in ${project.name}, ${locationWithCity}.`
       : isResale
-        ? `Resale apartment information, master project configurations, and availability alerts for ${project.name} in ${localityName}, Kolkata.`
-        : `Rental apartment information, master project configurations, and availability alerts for ${project.name} in ${localityName}, Kolkata.`,
+        ? `Resale apartment information, master project configurations, and availability alerts for ${project.name} in ${locationWithCity}.`
+        : `Rental apartment information, master project configurations, and availability alerts for ${project.name} in ${locationWithCity}.`,
     url: pageUrl,
     isPartOf: {
       '@type': 'WebPage',
@@ -93,17 +111,15 @@ export function ProjectInventoryStructuredData({
       : {}),
   };
 
+  const graphData = {
+    '@context': 'https://schema.org',
+    '@graph': [collectionNode, breadcrumbNode],
+  };
+
   return (
-    <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: safeJsonLd(breadcrumbSchema) }}
-      />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: safeJsonLd(collectionSchema) }}
-      />
-    </>
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: safeJsonLd(graphData) }}
+    />
   );
 }
-

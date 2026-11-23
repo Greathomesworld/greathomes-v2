@@ -1,6 +1,13 @@
 import React from 'react';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Home, Search, Building2 } from 'lucide-react';
+import { buildNoIndexMetadata } from '@/src/domain/seo/metadataBuilder';
+
+export const metadata: Metadata = buildNoIndexMetadata(
+  'Page Not Found',
+  'The property page or link you are looking for does not exist or may have been moved on Great Homes.'
+);
 
 export default function NotFound() {
   return (

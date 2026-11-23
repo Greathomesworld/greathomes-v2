@@ -33,7 +33,7 @@ const SIMULATION_NOTICE =
   'SIMULATED / PREVIEW MODE: No live Google Search Console OAuth client or API credentials are connected. Results below are local structural previews, not live Google index confirmations.';
 
 export class SearchConsoleService {
-  private defaultProperty = process.env.GOOGLE_SEARCH_CONSOLE_PROPERTY || 'https://greathomes.co.in';
+  private defaultProperty = process.env.GOOGLE_SEARCH_CONSOLE_PROPERTY || 'https://www.greathomes.co.in';
 
   /**
    * Simulates URL inspection structure adhering to Google Search Console URL Inspection API v1.
@@ -55,7 +55,11 @@ export class SearchConsoleService {
     const isBlockedByRobots =
       trimmedUrl.includes('/admin') ||
       trimmedUrl.includes('/api/') ||
-      trimmedUrl.includes('/account');
+      trimmedUrl.includes('/account') ||
+      trimmedUrl.includes('/my-properties') ||
+      trimmedUrl.includes('/post-property/new') ||
+      trimmedUrl.includes('/compression-gallery') ||
+      trimmedUrl.includes('/compare');
 
     const canonicalCheck = validateCanonicalUrl(trimmedUrl);
     const isEligibleRoute = !isBlockedByRobots && canonicalCheck.valid;

@@ -62,14 +62,20 @@ export function HomeHero({ popularLocations }: HomeHeroProps = {}) {
     };
   }, [setIsStickyVisible]);
 
-  // Preserve active discovery mode, BHK, and budget filters when clicking popular location tags
+  // Link directly to canonical /locations/[slug] pages by default; preserve query filters when user actively filters
   const getLocationHref = (slug: string) => {
+    const budget = currentBudgetOptions[selectedBudgetIndex];
+    const hasCustomFilters = Boolean(selectedBhk || budget?.min || budget?.max);
+
+    if (activeMode === 'PROJECTS' && !hasCustomFilters) {
+      return `/locations/${encodeURIComponent(slug)}`;
+    }
+
     const params = new URLSearchParams();
     params.append('location', slug);
     if (selectedBhk) {
       params.append('bhk', selectedBhk);
     }
-    const budget = currentBudgetOptions[selectedBudgetIndex];
     if (budget?.min) {
       params.append('minPrice', budget.min);
     }
@@ -161,15 +167,19 @@ export function HomeHero({ popularLocations }: HomeHeroProps = {}) {
             <span className="text-neutral-700 font-display font-semibold mr-1 text-xs">
               Popular Locations:
             </span>
-            {locationsToDisplay.map((loc) => (
-              <Link
-                key={loc.slug}
-                href={getLocationHref(loc.slug)}
-                className="px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full bg-white/90 hover:bg-white text-neutral-800 hover:text-[#E85D3F] border border-neutral-300/80 hover:border-[#E85D3F] text-[11px] sm:text-xs font-display font-medium shadow-2xs transition-all duration-150 active:scale-95"
-              >
-                {loc.name}
-              </Link>
-            ))}
+            {locationsToDisplay.map((loc) => {
+              const href = getLocationHref(loc.slug);
+              return (
+                <Link
+                  key={loc.slug}
+                  href={href}
+                  rel={href.includes('?') ? 'nofollow' : undefined}
+                  className="px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full bg-white/90 hover:bg-white text-neutral-800 hover:text-[#E85D3F] border border-neutral-300/80 hover:border-[#E85D3F] text-[11px] sm:text-xs font-display font-medium shadow-2xs transition-all duration-150 active:scale-95"
+                >
+                  {loc.name}
+                </Link>
+              );
+            })}
           </motion.div>
         </div>
       </div>

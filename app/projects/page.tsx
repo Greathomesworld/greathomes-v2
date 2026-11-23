@@ -7,6 +7,7 @@ import { DiscoveryPagination } from '@/src/components/discovery/DiscoveryPaginat
 import { DiscoveryEmptyState } from '@/src/components/discovery/DiscoveryEmptyState';
 
 import { Metadata } from 'next';
+import { buildPageMetadata } from '@/src/domain/seo/metadataBuilder';
 
 export const revalidate = 60;
 
@@ -21,26 +22,14 @@ export async function generateMetadata({
   );
   const isCleanPage1 = activeParams.length === 0;
 
-  return {
-    title: 'Discover Projects in Kolkata | Luxury Residential Developments – Great Homes',
+  return buildPageMetadata({
+    title: 'Kolkata Residential Projects – New & Ready',
     description:
-      'Explore premier residential developments, master plans, and landmark communities across Kolkata with verified floor plans, amenities, and pricing intelligence.',
-    alternates: {
-      canonical: 'https://www.greathomes.co.in/projects',
-    },
-    robots: {
-      index: isCleanPage1,
-      follow: true,
-    },
-    openGraph: {
-      title: 'Discover Projects in Kolkata | Great Homes',
-      description:
-        'Explore premier residential developments across Kolkata with verified floor plans and pricing.',
-      url: 'https://www.greathomes.co.in/projects',
-      siteName: 'Great Homes',
-      type: 'website',
-    },
-  };
+      'Explore verified residential projects and landmark communities across Kolkata with floor plans, amenities, WBRERA details & pricing intelligence.',
+    canonicalPath: '/projects',
+    index: isCleanPage1,
+    follow: true,
+  });
 }
 
 export default async function ProjectsPage({
@@ -48,19 +37,27 @@ export default async function ProjectsPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  await ensureSeedData();
+  try {
+    await ensureSeedData();
+  } catch (seedError) {
+    console.warn('ProjectsPage ensureSeedData warning:', seedError instanceof Error ? seedError.message : seedError);
+  }
 
   const params = await searchParams;
   const qParam = typeof params.q === 'string' ? params.q : typeof params.query === 'string' ? params.query : undefined;
   const location = typeof params.location === 'string' ? params.location : undefined;
   const bhkParam = typeof params.bedroomCount === 'string' ? params.bedroomCount : typeof params.bhk === 'string' ? params.bhk : undefined;
-  const bedroomCount = bhkParam ? parseInt(bhkParam, 10) : undefined;
+  const bhkParsed = bhkParam ? parseInt(bhkParam, 10) : NaN;
+  const bedroomCount = Number.isFinite(bhkParsed) ? bhkParsed : undefined;
   const propertyType = typeof params.propertyType === 'string' ? params.propertyType : undefined;
-  const minPrice = typeof params.minPrice === 'string' ? parseInt(params.minPrice, 10) : undefined;
-  const maxPrice = typeof params.maxPrice === 'string' ? parseInt(params.maxPrice, 10) : undefined;
+  const minPriceParsed = typeof params.minPrice === 'string' ? parseInt(params.minPrice, 10) : NaN;
+  const maxPriceParsed = typeof params.maxPrice === 'string' ? parseInt(params.maxPrice, 10) : NaN;
+  const minPrice = Number.isFinite(minPriceParsed) ? minPriceParsed : undefined;
+  const maxPrice = Number.isFinite(maxPriceParsed) ? maxPriceParsed : undefined;
   const sort = typeof params.sort === 'string' ? params.sort : undefined;
   const stageParam = typeof params.stage === 'string' ? params.stage : typeof params.status === 'string' ? params.status : undefined;
-  const page = typeof params.page === 'string' ? parseInt(params.page, 10) : 1;
+  const pageParsed = typeof params.page === 'string' ? parseInt(params.page, 10) : 1;
+  const page = Number.isFinite(pageParsed) && pageParsed > 0 ? pageParsed : 1;
   const pageSize = 12;
 
   const filters = {
@@ -74,10 +71,24 @@ export default async function ProjectsPage({
     query: qParam,
   };
 
-  const [filterOptions, discoveryResult] = await Promise.all([
-    propertyDiscoveryService.getFilterOptions(),
-    propertyDiscoveryService.discoverProjects(filters, page, pageSize),
-  ]);
+  let dataUnavailable = false;
+  let filterOptions: Awaited<ReturnType<typeof propertyDiscoveryService.getFilterOptions>> = {
+    locations: [],
+  };
+  let discoveryResult: Awaited<ReturnType<typeof propertyDiscoveryService.discoverProjects>> = {
+    data: [],
+    pagination: { page, pageSize, total: 0, totalCount: 0, totalPages: 0 },
+  };
+
+  try {
+    [filterOptions, discoveryResult] = await Promise.all([
+      propertyDiscoveryService.getFilterOptions(),
+      propertyDiscoveryService.discoverProjects(filters, page, pageSize),
+    ]);
+  } catch (err) {
+    dataUnavailable = true;
+    console.warn('ProjectsPage data unavailable:', err instanceof Error ? err.message : 'Database unavailable');
+  }
 
   const { data: projects, pagination } = discoveryResult;
 
@@ -112,9 +123,11 @@ export default async function ProjectsPage({
         {/* Results Grid or Empty State */}
         {projects.length === 0 ? (
           <DiscoveryEmptyState
-            title="No projects found"
+            title={dataUnavailable ? "Projects temporarily unavailable" : "No projects found"}
             description={
-              activeStageLabel
+              dataUnavailable
+                ? "We are having trouble loading live project inventory right now. Please refresh shortly."
+                : activeStageLabel
                 ? `We currently have 0 published developments matching the "${activeStageLabel}" stage in our verified portfolio. Check other stages or clear your filters.`
                 : "We could not find developments matching your current search parameters. Try choosing all locations, adjusting your budget range, or clearing filters."
             }

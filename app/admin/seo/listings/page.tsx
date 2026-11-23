@@ -138,7 +138,7 @@ export default function ListingsSeoAuditPage() {
 
     return source.map(item => {
       const slug = (item.slug || '').trim();
-      const canonicalUrl = slug ? `https://greathomes.co.in${routePrefix}/${slug}` : '';
+      const canonicalUrl = slug ? `https://www.greathomes.co.in${routePrefix}/${slug}` : '';
       const lifecycle = (item.lifecycleStatus || 'DRAFT').toUpperCase();
       const verification = (
         item.verificationStatus || (item.isVerified ? 'VERIFIED' : 'UNVERIFIED')

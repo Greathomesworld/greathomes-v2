@@ -15,7 +15,7 @@ export default function GlobalError({
         <div className="max-w-md w-full text-center space-y-5">
           <h1 className="text-2xl font-bold">Something went wrong</h1>
           <p className="text-xs text-neutral-600">
-            {error?.message || 'An unexpected application error occurred.'}
+            An unexpected application error occurred. Please try again shortly.
           </p>
           <button
             type="button"

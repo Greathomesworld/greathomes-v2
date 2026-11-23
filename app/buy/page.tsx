@@ -7,6 +7,7 @@ import { DiscoveryPagination } from '@/src/components/discovery/DiscoveryPaginat
 import { DiscoveryEmptyState } from '@/src/components/discovery/DiscoveryEmptyState';
 
 import { Metadata } from 'next';
+import { buildPageMetadata } from '@/src/domain/seo/metadataBuilder';
 
 export const revalidate = 60;
 
@@ -21,26 +22,14 @@ export async function generateMetadata({
   );
   const isCleanPage1 = activeParams.length === 0;
 
-  return {
-    title: 'Buy Properties in Kolkata – Verified New & Resale Homes | Great Homes',
+  return buildPageMetadata({
+    title: 'Buy Properties in Kolkata – New & Resale',
     description:
-      'Explore curated residential homes across verified new bookings and verified resale inventory in Kolkata with transparent pricing intelligence.',
-    alternates: {
-      canonical: 'https://www.greathomes.co.in/buy',
-    },
-    robots: {
-      index: isCleanPage1,
-      follow: true,
-    },
-    openGraph: {
-      title: 'Buy Properties in Kolkata | Great Homes',
-      description:
-        'Explore curated residential homes across verified new bookings and resale inventory in Kolkata.',
-      url: 'https://www.greathomes.co.in/buy',
-      siteName: 'Great Homes',
-      type: 'website',
-    },
-  };
+      'Explore curated residential flats, resale apartments, and new bookings across Kolkata with transparent pricing intelligence and verified details.',
+    canonicalPath: '/buy',
+    index: isCleanPage1,
+    follow: true,
+  });
 }
 
 export default async function BuyPage({
@@ -82,10 +71,25 @@ export default async function BuyPage({
     query: qParam,
   };
 
-  const [filterOptions, discoveryResult] = await Promise.all([
-    propertyDiscoveryService.getFilterOptions(),
-    propertyDiscoveryService.discoverBuy(filters, page, pageSize),
-  ]);
+  let dataUnavailable = false;
+  let filterOptions: Awaited<ReturnType<typeof propertyDiscoveryService.getFilterOptions>> = {
+    locations: [],
+  };
+  let discoveryResult: Awaited<ReturnType<typeof propertyDiscoveryService.discoverBuy>> = {
+    data: [],
+    pagination: { page, pageSize, total: 0, totalCount: 0, totalPages: 0 },
+    countsByType: { newBooking: 0, resale: 0 },
+  };
+
+  try {
+    [filterOptions, discoveryResult] = await Promise.all([
+      propertyDiscoveryService.getFilterOptions(),
+      propertyDiscoveryService.discoverBuy(filters, page, pageSize),
+    ]);
+  } catch (err) {
+    dataUnavailable = true;
+    console.warn('BuyPage data unavailable:', err instanceof Error ? err.message : 'Database unavailable');
+  }
 
   const { data: properties, pagination, countsByType } = discoveryResult;
 
@@ -127,8 +131,12 @@ export default async function BuyPage({
         {/* Results Grid or Empty State */}
         {properties.length === 0 ? (
           <DiscoveryEmptyState
-            title="No homes found"
-            description="No homes matched your current search filters. Try clearing or expanding your budget, location, or bedroom configuration."
+            title={dataUnavailable ? "Listings temporarily unavailable" : "No homes found"}
+            description={
+              dataUnavailable
+                ? "We are having trouble loading live property listings right now. Please refresh shortly."
+                : "No homes matched your current search filters. Try clearing or expanding your budget, location, or bedroom configuration."
+            }
           />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">

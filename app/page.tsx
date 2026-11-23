@@ -31,24 +31,15 @@ import { HomeTrustCredibility } from '@/src/components/home/HomeTrustCredibility
 import { HomeExpertAssistance } from '@/src/components/home/HomeExpertAssistance';
 import { HomeIntelligenceGuides } from '@/src/components/home/HomeIntelligenceGuides';
 import { HomeAssistanceCta } from '@/src/components/home/HomeAssistanceCta';
+import { buildPageMetadata } from '@/src/domain/seo/metadataBuilder';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = buildPageMetadata({
   title: 'Great Homes | Verified Residential Property Discovery in Kolkata',
+  includeBrand: false,
   description:
-    'Discover verified projects, resale homes and rentals across Kolkata — with the property intelligence and assistance you need to make a confident decision.',
-  alternates: {
-    canonical: '/',
-  },
-  openGraph: {
-    title: 'Great Homes | Verified Residential Property Discovery in Kolkata',
-    description:
-      'Discover verified projects, resale homes and rentals across Kolkata with Great Homes property intelligence.',
-    url: '/',
-    siteName: 'Great Homes',
-    locale: 'en_IN',
-    type: 'website',
-  },
-};
+    'Discover verified residential projects, resale homes and rentals across Kolkata with pricing intelligence, floor plans and RERA verification on Great Homes.',
+  canonicalPath: '/',
+});
 
 function formatIndianPrice(amount?: number | null): string | undefined {
   if (amount === undefined || amount === null || isNaN(amount) || amount <= 0) return undefined;

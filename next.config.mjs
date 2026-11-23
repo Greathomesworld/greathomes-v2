@@ -8,7 +8,17 @@ export default function (phase) {
     distDir: isDev ? '.next-dev' : '.next',
     reactStrictMode: true,
     devIndicators: false,
+    // Ensure search engine, AI, and social crawlers receive blocking <head> metadata instead of streamed <body> tags
+    htmlLimitedBots:
+      /Googlebot|Google-InspectionTool|Storebot-Google|AdsBot-Google|Mediapartners-Google|Bingbot|Slurp|DuckDuckBot|Baiduspider|YandexBot|Applebot|GPTBot|ClaudeBot|PerplexityBot|OAI-SearchBot|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|WhatsApp|Discordbot|TelegramBot/i,
     async headers() {
+      const noIndexHeader = [
+        {
+          key: 'X-Robots-Tag',
+          value: 'noindex, nofollow',
+        },
+      ];
+
       return [
         {
           source: '/(.*)',
@@ -31,6 +41,13 @@ export default function (phase) {
             },
           ],
         },
+        { source: '/api/:path*', headers: noIndexHeader },
+        { source: '/admin/:path*', headers: noIndexHeader },
+        { source: '/account/:path*', headers: noIndexHeader },
+        { source: '/my-properties/:path*', headers: noIndexHeader },
+        { source: '/compare/:path*', headers: noIndexHeader },
+        { source: '/post-property/new/:path*', headers: noIndexHeader },
+        { source: '/compression-gallery/:path*', headers: noIndexHeader },
       ];
     },
     async redirects() {
@@ -38,6 +55,36 @@ export default function (phase) {
         {
           source: '/resale/:slug',
           destination: '/buy/:slug',
+          permanent: true,
+        },
+        {
+          source: '/locations/newtown',
+          destination: '/locations/new-town',
+          permanent: true,
+        },
+        {
+          source: '/locations/new-town-kolkata',
+          destination: '/locations/new-town',
+          permanent: true,
+        },
+        {
+          source: '/locations/rajarhat-main-road',
+          destination: '/locations/rajarhat',
+          permanent: true,
+        },
+        {
+          source: '/locations/rajarhat-chowmatha',
+          destination: '/locations/rajarhat',
+          permanent: true,
+        },
+        {
+          source: '/locations/calcutta',
+          destination: '/locations/kolkata',
+          permanent: true,
+        },
+        {
+          source: '/locations/greater-kolkata',
+          destination: '/locations/kolkata',
           permanent: true,
         },
       ];

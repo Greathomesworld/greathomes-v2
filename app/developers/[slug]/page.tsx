@@ -4,12 +4,17 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 300;
 
 import { developerService } from '@/src/domain/developers/services/developerService';
 import { PublicDeveloperDto, PublicProjectDto } from '@/src/domain/developers/dto/developerDto';
 import { safeJsonLd } from '@/src/lib/safeJsonLd';
 import { buildDeveloperJsonLd } from '@/src/domain/seo/auditEngine';
+import {
+  buildPageMetadata,
+  formatBrandTitle,
+  stripBrandSuffix,
+} from '@/src/domain/seo/metadataBuilder';
 import { ensureSeedData } from '@/src/infrastructure/seed';
 import { RecentlyViewedTracker } from '@/src/components/customer/RecentlyViewedTracker';
 import { DeveloperProfileSectionNav } from '@/src/components/developers/DeveloperProfileSectionNav';
@@ -186,9 +191,9 @@ function truncateCleanly(text: string, maxLength: number): string {
  * 4. "[Developer Name] | Great Homes" (bounded fallback <= 60 chars)
  */
 function buildDeveloperSeoTitle(developer: PublicDeveloperDto): string {
-  const customTitle = developer.seo?.metaTitle?.trim();
-  if (customTitle && customTitle.length > 0 && customTitle.length <= 60) {
-    return customTitle;
+  const cleanCustom = stripBrandSuffix(developer.seo?.metaTitle);
+  if (cleanCustom && cleanCustom.length >= 10) {
+    return formatBrandTitle(cleanCustom, { maxLength: 65 });
   }
 
   const hasKolkataLocationEvidence = Array.isArray(developer.locations) && developer.locations.length > 0;
@@ -224,21 +229,25 @@ function buildDeveloperSeoDescription(
   projects: PublicProjectDto[]
 ): string {
   const customDesc = developer.seo?.metaDescription?.trim();
-  if (customDesc && customDesc.length > 0 && customDesc.length <= 160) {
+  if (customDesc && customDesc.length >= 45 && customDesc.length <= 160) {
     return customDesc;
   }
 
   const shortDesc = developer.shortDescription?.trim();
-  if (shortDesc && shortDesc.length > 0) {
-    return truncateCleanly(shortDesc, 160);
+  if (shortDesc && shortDesc.length >= 45) {
+    return truncateCleanly(shortDesc, 158);
   }
 
   if (projects.length > 0) {
     const categoryLabel = deriveDeveloperPortfolioCategory(projects).toLowerCase();
-    const locNames = developer.locations.map(l => l.name).filter(Boolean);
+    const locNames = developer.locations
+      .map(l => l.name)
+      .filter((name): name is string => Boolean(name && name.trim()));
     const locSnippet =
       locNames.length === 1
-        ? ` in ${locNames[0]}, Kolkata`
+        ? locNames[0].toLowerCase() === 'kolkata'
+          ? ' in Kolkata'
+          : ` in ${locNames[0]}, Kolkata`
         : locNames.length === 2
         ? ` in ${locNames[0]} and ${locNames[1]}, Kolkata`
         : locNames.length > 2
@@ -246,31 +255,13 @@ function buildDeveloperSeoDescription(
         : '';
 
     const factual = `Explore ${projects.length} published project${projects.length === 1 ? '' : 's'} (${categoryLabel}) by ${developer.name}${locSnippet} on Great Homes.`;
-    return truncateCleanly(factual, 160);
+    return truncateCleanly(factual, 158);
   }
 
   return truncateCleanly(
-    `View the official developer profile and published real estate portfolio for ${developer.name} on Great Homes.`,
-    160
+    `View the official developer profile and published residential real estate portfolio for ${developer.name} in Kolkata on Great Homes.`,
+    158
   );
-}
-
-/**
- * Resolves a safe, normalized canonical URL on https://greathomes.co.in/developers/[slug].
- */
-function resolveDeveloperCanonicalUrl(developer: PublicDeveloperDto): string {
-  const defaultCanonical = `https://www.greathomes.co.in/developers/${developer.slug}`;
-  if (!developer.seo?.canonicalUrl) {
-    return defaultCanonical;
-  }
-  try {
-    return (
-      developerService.validateAndNormalizeCanonicalUrl(developer.seo.canonicalUrl) ||
-      defaultCanonical
-    );
-  } catch {
-    return defaultCanonical;
-  }
 }
 
 export async function generateMetadata(
@@ -286,29 +277,18 @@ export async function generateMetadata(
   const { developer, projects } = bundle;
   const title = buildDeveloperSeoTitle(developer);
   const description = buildDeveloperSeoDescription(developer, projects);
-  const canonicalUrl = resolveDeveloperCanonicalUrl(developer);
 
-  return {
+  return buildPageMetadata({
     title,
+    includeBrand: false,
     description,
-    alternates: {
-      canonical: canonicalUrl,
-    },
-    openGraph: {
-      title,
-      description,
-      url: canonicalUrl,
-      siteName: 'Great Homes',
-      type: 'profile',
-      images: developer.logoUrl ? [{ url: developer.logoUrl, alt: `${developer.name} logo` }] : undefined,
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title,
-      description,
-      images: developer.logoUrl ? [developer.logoUrl] : undefined,
-    },
-  };
+    canonicalPath: `/developers/${developer.slug}`,
+    canonicalUrl: developer.seo?.canonicalUrl,
+    allowedCanonicalPrefix: '/developers/',
+    ogType: 'profile',
+    ogImage: developer.logoUrl,
+    ogImageAlt: `${developer.name} logo`,
+  });
 }
 
 function formatPrice(price?: number): string | null {

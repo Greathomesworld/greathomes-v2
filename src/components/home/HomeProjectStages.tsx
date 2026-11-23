@@ -91,27 +91,37 @@ export function HomeProjectStages({ stageCounts }: HomeProjectStagesProps) {
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
-        <div className="max-w-3xl mb-12">
-          {/* Eyebrow matching reference: EXPLORE BY PROJECT STAGE ─── */}
-          <div className="flex items-center gap-2.5 mb-2">
-            <span className="text-xs uppercase tracking-widest text-[#E85D3F] font-bold font-display">
-              EXPLORE BY PROJECT STAGE
-            </span>
-            <span className="w-8 h-0.5 bg-[#E85D3F] inline-block rounded-full" aria-hidden="true" />
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-12">
+          <div className="max-w-3xl">
+            {/* Eyebrow matching reference: EXPLORE BY PROJECT STAGE ─── */}
+            <div className="flex items-center gap-2.5 mb-2">
+              <span className="text-xs uppercase tracking-widest text-[#E85D3F] font-bold font-display">
+                EXPLORE BY PROJECT STAGE
+              </span>
+              <span className="w-8 h-0.5 bg-[#E85D3F] inline-block rounded-full" aria-hidden="true" />
+            </div>
+
+            {/* Heading matching reference: Find Projects at Every Stage */}
+            <h2 
+              id="project-stages-heading"
+              className="text-3xl sm:text-4xl lg:text-5xl font-display font-extrabold text-[#111111] tracking-tight mt-1"
+            >
+              Find Projects at <span className="text-[#E85D3F]">Every Stage</span>
+            </h2>
+
+            {/* Supporting Copy */}
+            <p className="text-sm sm:text-base text-neutral-600 font-body mt-2.5 max-w-2xl leading-relaxed">
+              From upcoming developments to ready-to-move homes, explore residential projects in Kolkata based on their current stage of construction.
+            </p>
           </div>
 
-          {/* Heading matching reference: Find Projects at Every Stage */}
-          <h2 
-            id="project-stages-heading"
-            className="text-3xl sm:text-4xl lg:text-5xl font-display font-extrabold text-[#111111] tracking-tight mt-1"
+          <Link
+            href="/projects"
+            className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold text-[#E85D3F] hover:bg-[#FFF5EE] font-display transition-colors py-2 px-4 rounded-lg border border-[rgba(232,93,63,0.35)] shrink-0 self-start sm:self-end group"
           >
-            Find Projects at <span className="text-[#E85D3F]">Every Stage</span>
-          </h2>
-
-          {/* Supporting Copy */}
-          <p className="text-sm sm:text-base text-neutral-600 font-body mt-2.5 max-w-2xl leading-relaxed">
-            From upcoming developments to ready-to-move homes, explore residential projects in Kolkata based on their current stage of construction.
-          </p>
+            <span>View All Projects</span>
+            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" aria-hidden="true" />
+          </Link>
         </div>
 
         {/* Four-Column Stage Discovery Grid */}
@@ -124,6 +134,7 @@ export function HomeProjectStages({ stageCounts }: HomeProjectStagesProps) {
               <Link
                 key={stage.id}
                 href={stage.href}
+                rel="nofollow"
                 aria-label={`${stage.title}: ${countLabel}`}
                 className={`group relative rounded-2xl border ${stage.cardBg} ${stage.borderClass} p-6 flex flex-col justify-between shadow-xs hover:shadow-lg transition-all duration-300 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 motion-reduce:transition-none overflow-hidden`}
               >

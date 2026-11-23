@@ -70,6 +70,7 @@ export const KNOWN_TEST_DEVELOPER_SLUGS = new Set([
   'neon-dev-1792051200677',
   'neon-dev-1792052686285',
   'neon-dev-1792052286779',
+  'discovery-developer',
 ]);
 
 export function isKnownTestDeveloperSlug(slug?: string | null): boolean {

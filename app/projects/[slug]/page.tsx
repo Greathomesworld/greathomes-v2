@@ -1,9 +1,9 @@
-import { Suspense } from 'react';
+import { Suspense, cache } from 'react';
 import { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
-export const revalidate = 60;
+export const revalidate = 300;
 
 import { ChevronRight } from 'lucide-react';
 import { projectIntelligenceService } from '@/src/domain/projects/services/projectIntelligenceService';
@@ -15,6 +15,11 @@ import { developerService } from '@/src/domain/developers/services/developerServ
 import { ensureSeedData } from '@/src/infrastructure/seed';
 import { formatProjectLocationShortLabel } from '@/src/domain/projects/viewModels/projectLocationViewModel';
 import { formatIndianPrice } from '@/src/components/discovery/formatters';
+import {
+  buildLockedProjectTitle,
+  buildPageMetadata,
+  buildProjectMetaDescription,
+} from '@/src/domain/seo/metadataBuilder';
 
 import { ProjectHero } from '@/src/components/projects/ProjectHero';
 import { GreatHomesAdvisoryCard } from '@/src/components/projects/GreatHomesAdvisoryCard';
@@ -60,70 +65,92 @@ import { SaveButton } from '@/src/components/customer/SaveButton';
 import { AddToCompareButton } from '@/src/components/comparison/AddToCompareButton';
 import { parseVideoUrl } from '@/src/lib/videoUtils';
 
+const getCachedProjectBySlug = cache(async (slug: string) => {
+  await ensureSeedData();
+  return projectIntelligenceService.getProjectBySlug(slug);
+});
+
+const getCachedProjectSeo = cache(async (projectId: string) => {
+  try {
+    return await projectIntelligenceService.getSeoByProjectId(projectId);
+  } catch {
+    return null;
+  }
+});
+
 export async function generateMetadata(
   props: any
 ): Promise<Metadata> {
-  await ensureSeedData();
   const { slug } = await props.params;
-  const project = await projectIntelligenceService.getProjectBySlug(slug);
+  const project = await getCachedProjectBySlug(slug);
 
   if (!project) {
     notFound();
   }
 
+  const seoOverride = await getCachedProjectSeo(project.id);
   const locationLabel = formatProjectLocationShortLabel(project.location);
-  const devName = project.developer?.name ? ` by ${project.developer.name}` : '';
-  const bhkSummary = project.configurationsSummary || (project.configurations?.length ? project.configurations.map(c => c.name).join(', ') : 'Luxury Flats');
-
-  // Compact title formula (aiming <= 62 chars)
-  let title = `${project.name} — ${bhkSummary} in ${locationLabel}, Kolkata | Great Homes`;
-  if (title.length > 65) {
-    title = `${project.name} in ${locationLabel}, Kolkata | Great Homes`;
-  }
 
   // Price on Request complete boundary check: never leak price if priceOnRequest is true or price <= 0
-  const hasPublicPrice = !project.pricing?.priceOnRequest && Boolean(project.pricing?.startingPrice && project.pricing.startingPrice > 0);
-  const priceStr = hasPublicPrice ? ` starting from ${formatIndianPrice(project.pricing.startingPrice!)}` : '';
-  const reraStr = project.rera?.registrationNumber ? ` (RERA: ${project.rera.registrationNumber})` : '';
+  const hasPublicPrice =
+    !project.pricing?.priceOnRequest &&
+    Boolean(project.pricing?.startingPrice && project.pricing.startingPrice > 0);
+  const startingPriceFormatted = hasPublicPrice
+    ? formatIndianPrice(project.pricing.startingPrice!)
+    : null;
 
-  // Use shortDescription only if substantial (>= 100 chars), else synthetic fallback
-  const hasSubstantialShortDesc = Boolean(project.shortDescription && project.shortDescription.trim().length >= 100);
-  const description = hasSubstantialShortDesc
-    ? project.shortDescription!.trim()
-    : `Explore ${project.name}${devName} in ${locationLabel}, Kolkata${priceStr}. Discover verified configurations${bhkSummary ? ` (${bhkSummary})` : ''}, floor plans, amenities, pricing intelligence, and location details${reraStr} on Great Homes.`;
+  const hasFloorPlans = Boolean(
+    project.configurations?.some((c) => Boolean(c.floorPlans && c.floorPlans.length > 0)) ||
+      project.media?.some((m) => m.category === 'FLOOR_PLAN') ||
+      (project.configurations?.length ?? 0) > 0
+  );
 
-  const canonicalUrl = `https://www.greathomes.co.in/projects/${project.slug}`;
-  const heroMedia = project.media?.find(m => m.isFeatured) || project.media?.[0];
+  const projectPropertyTypes = project.propertyType ? [project.propertyType] : undefined;
 
-  return {
+  // Section 4 Locked Project Title Strategy + validated project_seo override precedence
+  const title = buildLockedProjectTitle({
+    name: project.name,
+    locationName: locationLabel,
+    configurations: project.configurations,
+    propertyTypes: projectPropertyTypes,
+    hasPricing: hasPublicPrice,
+    hasFloorPlans,
+    overrideTitle: seoOverride?.metaTitle,
+  });
+
+  const description = buildProjectMetaDescription({
+    name: project.name,
+    locationName: locationLabel,
+    cityName: 'Kolkata',
+    developerName: project.developer?.name,
+    configurations: project.configurations,
+    propertyTypes: projectPropertyTypes,
+    startingPriceFormatted,
+    hasVerifiedRera: Boolean(project.hasVerifiedReraBadge || project.rera?.registrationNumber),
+    shortDescription: project.shortDescription,
+    overrideDescription: seoOverride?.metaDescription,
+  });
+
+  const heroMedia = project.media?.find((m) => m.isFeatured) || project.media?.[0];
+
+  return buildPageMetadata({
     title,
+    includeBrand: false, // buildLockedProjectTitle already appends `| Great Homes` once
     description,
-    alternates: {
-      canonical: canonicalUrl,
-    },
-    openGraph: {
-      title,
-      description,
-      url: canonicalUrl,
-      siteName: 'Great Homes',
-      type: 'website',
-      images: heroMedia?.url ? [{ url: heroMedia.url, alt: heroMedia.altText || `${project.name} Flagship View` }] : undefined,
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title,
-      description,
-      images: heroMedia?.url ? [heroMedia.url] : undefined,
-    },
-  };
+    canonicalPath: `/projects/${project.slug}`,
+    canonicalUrl: seoOverride?.canonicalUrl,
+    allowedCanonicalPrefix: '/projects/',
+    ogType: 'website',
+    ogImage: heroMedia?.url,
+    ogImageAlt: heroMedia?.altText || `${project.name} in ${locationLabel}`,
+  });
 }
 
 export default async function ProjectDetailPage(
   props: any
 ) {
-  await ensureSeedData();
   const { slug } = await props.params;
-  const project = await projectIntelligenceService.getProjectBySlug(slug);
+  const project = await getCachedProjectBySlug(slug);
 
   if (!project) {
     notFound();

@@ -109,7 +109,11 @@ export function HomeProjectSpotlight({ project }: HomeProjectSpotlightProps) {
             </Link>
 
             <Link
-              href={`/projects?location=${encodeURIComponent(project.locationSlug || 'kolkata')}`}
+              href={
+                project.locationSlug
+                  ? `/locations/${encodeURIComponent(project.locationSlug)}`
+                  : '/locations'
+              }
               className="inline-flex items-center gap-1.5 px-5 py-3.5 bg-transparent hover:bg-white/10 text-neutral-300 hover:text-white border border-white/20 hover:border-white/40 rounded-md font-display font-semibold transition-colors text-xs uppercase tracking-wider"
             >
               <span>Browse Area Projects</span>

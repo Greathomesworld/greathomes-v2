@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
           resourceLabel: parsed.pathname || trimmedUrl,
           metadata: {
             url: trimmedUrl,
-            property: siteUrl || 'https://greathomes.co.in',
+            property: siteUrl || 'https://www.greathomes.co.in',
             verdict: inspectionResult.inspectionResult.indexStatusResult.verdict,
             coverageState: inspectionResult.inspectionResult.indexStatusResult.coverageState,
             indexingState: inspectionResult.inspectionResult.indexStatusResult.indexingState,

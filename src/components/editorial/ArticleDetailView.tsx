@@ -6,33 +6,80 @@ import { PublicEditorialArticleDTO } from '@/src/domain/editorial/entities';
 import { BookOpen, Calendar, Clock, ChevronRight, Building2, MapPin, UserCheck, Share2, Tag } from 'lucide-react';
 import { safeJsonLd } from '@/src/lib/safeJsonLd';
 import { SafeEditorialBody } from './SafeEditorialBody';
+import {
+  DEFAULT_OG_IMAGE,
+  normalizeAbsoluteImageUrl,
+  normalizeCanonicalUrl,
+  SITE_NAME,
+  SITE_ORIGIN,
+  stripBrandSuffix,
+} from '@/src/domain/seo/metadataBuilder';
 
 interface ArticleDetailViewProps {
   article: PublicEditorialArticleDTO;
 }
 
 export function ArticleDetailView({ article }: ArticleDetailViewProps) {
-  const canonicalUrl = article.canonicalUrl?.startsWith('http')
-    ? article.canonicalUrl
-    : `https://www.greathomes.co.in/guides/${article.slug}`;
+  const canonicalUrl = normalizeCanonicalUrl(
+    article.canonicalUrl,
+    `/guides/${article.slug}`
+  );
+  const articleImage = normalizeAbsoluteImageUrl(article.featuredImage) || DEFAULT_OG_IMAGE;
 
   const jsonLd = {
     '@context': 'https://schema.org',
-    '@type': 'Article',
-    headline: article.seoTitle || article.title,
-    description: article.seoDescription || article.excerpt,
-    datePublished: article.publishedAt,
-    dateModified: article.updatedAt,
-    author: {
-      '@type': 'Organization',
-      name: article.authorName,
-    },
-    publisher: {
-      '@type': 'Organization',
-      name: 'Great Homes',
-      url: 'https://www.greathomes.co.in',
-    },
-    mainEntityOfPage: canonicalUrl,
+    '@graph': [
+      {
+        '@type': 'Article',
+        '@id': `${canonicalUrl}#article`,
+        headline: stripBrandSuffix(article.seoTitle || article.title),
+        description: article.seoDescription || article.excerpt,
+        image: articleImage,
+        ...(article.publishedAt ? { datePublished: article.publishedAt } : {}),
+        ...(article.updatedAt ? { dateModified: article.updatedAt } : {}),
+        author: {
+          '@type': 'Organization',
+          name: article.authorName || SITE_NAME,
+        },
+        publisher: {
+          '@type': 'Organization',
+          name: SITE_NAME,
+          url: SITE_ORIGIN,
+          logo: {
+            '@type': 'ImageObject',
+            url: DEFAULT_OG_IMAGE,
+          },
+        },
+        mainEntityOfPage: {
+          '@type': 'WebPage',
+          '@id': canonicalUrl,
+        },
+      },
+      {
+        '@type': 'BreadcrumbList',
+        '@id': `${canonicalUrl}#breadcrumbs`,
+        itemListElement: [
+          {
+            '@type': 'ListItem',
+            position: 1,
+            name: 'Home',
+            item: SITE_ORIGIN,
+          },
+          {
+            '@type': 'ListItem',
+            position: 2,
+            name: 'Guides',
+            item: `${SITE_ORIGIN}/guides`,
+          },
+          {
+            '@type': 'ListItem',
+            position: 3,
+            name: article.title,
+            item: canonicalUrl,
+          },
+        ],
+      },
+    ],
   };
 
   return (

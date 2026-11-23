@@ -125,7 +125,7 @@ export default function ProjectSeoAuditPage() {
 
   const auditedProjects = useMemo<AuditedProject[]>(() => {
     return projects.map(p => {
-      const canonicalUrl = p.slug ? `https://greathomes.co.in/projects/${p.slug}` : '';
+      const canonicalUrl = p.slug ? `https://www.greathomes.co.in/projects/${p.slug}` : '';
       const computedTitle = p.name
         ? `${p.name} in ${p.location?.name || 'Kolkata'} — Real Estate Intelligence | Great Homes`
         : '';

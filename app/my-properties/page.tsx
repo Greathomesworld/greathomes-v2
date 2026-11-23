@@ -1,12 +1,12 @@
 import React, { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { MyPropertiesDashboard } from '@/src/components/post-property/MyPropertiesDashboard';
+import { buildNoIndexMetadata } from '@/src/domain/seo/metadataBuilder';
 
-export const metadata: Metadata = {
-  title: 'My Property Submissions | Great Homes Kolkata',
-  description:
-    'Manage your saved property drafts, review verification feedback, and track your Kolkata resale and rental submissions on Great Homes.',
-};
+export const metadata: Metadata = buildNoIndexMetadata(
+  'My Property Submissions',
+  'Manage your saved property drafts, review verification feedback, and track your Kolkata resale and rental submissions on Great Homes.'
+);
 
 export default function MyPropertiesPage() {
   return (

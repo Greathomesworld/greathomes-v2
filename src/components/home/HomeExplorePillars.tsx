@@ -97,6 +97,7 @@ export function HomeExplorePillars() {
                 <div key={card.id} className="h-full">
                   <Link
                     href={card.href}
+                    rel={card.href.includes('?') ? 'nofollow' : undefined}
                     className="group relative flex flex-col justify-between h-full min-h-[160px] p-6 rounded-2xl bg-gradient-to-br from-[#E85D3F] via-[#DF5234] to-[#C94326] text-white shadow-md hover:shadow-xl hover:-translate-y-1 active:scale-[0.98] transition-all duration-200 overflow-hidden motion-reduce:transform-none"
                   >
                     {/* Subtle decorative architectural backdrop graphic */}
@@ -132,6 +133,7 @@ export function HomeExplorePillars() {
               <div key={card.id} className="h-full">
                 <Link
                   href={card.href}
+                  rel={card.href.includes('?') ? 'nofollow' : undefined}
                   className="group relative flex flex-col justify-between h-full min-h-[160px] p-6 rounded-2xl bg-white border border-neutral-200/90 hover:border-neutral-300 text-neutral-900 shadow-xs hover:shadow-md hover:-translate-y-1 active:scale-[0.98] transition-all duration-200 motion-reduce:transform-none"
                 >
                   <div className="space-y-4">

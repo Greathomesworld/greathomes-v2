@@ -1,46 +1,61 @@
-import React from 'react';
+import React, { cache } from 'react';
 import { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import { editorialService } from '@/src/domain/editorial/services/editorialService';
 import { ArticleDetailView } from '@/src/components/editorial/ArticleDetailView';
+import { buildPageMetadata } from '@/src/domain/seo/metadataBuilder';
 
-export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+export const revalidate = 300;
+
+const getCachedGuideArticle = cache(async (slug: string) => {
+  return editorialService.getPublicArticleBySlug(slug);
+});
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
   const { slug } = await params;
-  const article = await editorialService.getPublicArticleBySlug(slug);
+  const article = await getCachedGuideArticle(slug);
   if (!article) {
     notFound();
   }
 
-  const canonicalUrl = article.canonicalUrl?.startsWith('http')
-    ? article.canonicalUrl
-    : `https://www.greathomes.co.in/guides/${article.slug}`;
+  const canonicalPath =
+    article.type === 'PROJECT_REVIEW'
+      ? `/reviews/${article.slug}`
+      : `/guides/${article.slug}`;
 
-  return {
-    title: `${article.seoTitle || article.title} | Great Homes`,
-    description: article.seoDescription || article.excerpt,
-    alternates: {
-      canonical: canonicalUrl,
-    },
-    openGraph: {
-      title: article.seoTitle || article.title,
-      description: article.seoDescription || article.excerpt,
-      url: canonicalUrl,
-      siteName: 'Great Homes',
-      type: 'article',
-      publishedTime: article.publishedAt || undefined,
-      modifiedTime: article.updatedAt,
-      authors: [article.authorName],
-      images: article.featuredImage ? [{ url: article.featuredImage }] : undefined,
-    },
-  };
+  return buildPageMetadata({
+    title: article.seoTitle || article.title,
+    description: article.seoDescription || article.excerpt || article.title,
+    canonicalPath,
+    canonicalUrl: article.canonicalUrl,
+    ogType: 'article',
+    ogImage: article.featuredImage,
+    ogImageAlt: article.title,
+    publishedTime: article.publishedAt || undefined,
+    modifiedTime: article.updatedAt,
+    authors: article.authorName ? [article.authorName] : undefined,
+  });
 }
 
-export default async function GuideDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function GuideDetailPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
   const { slug } = await params;
-  const article = await editorialService.getPublicArticleBySlug(slug);
+  const article = await getCachedGuideArticle(slug);
 
   if (!article) {
     notFound();
+  }
+
+  // Consolidate cross-route duplicates: project reviews live canonically under /reviews/[slug]
+  if (article.type === 'PROJECT_REVIEW') {
+    permanentRedirect(`/reviews/${article.slug}`);
   }
 
   return <ArticleDetailView article={article} />;

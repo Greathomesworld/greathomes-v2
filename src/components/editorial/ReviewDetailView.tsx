@@ -6,33 +6,89 @@ import { PublicEditorialArticleDTO } from '@/src/domain/editorial/entities';
 import { ShieldCheck, Calendar, Clock, ChevronRight, Building2, MapPin, CheckCircle, AlertTriangle } from 'lucide-react';
 import { safeJsonLd } from '@/src/lib/safeJsonLd';
 import { SafeEditorialBody } from './SafeEditorialBody';
+import {
+  DEFAULT_OG_IMAGE,
+  normalizeAbsoluteImageUrl,
+  normalizeCanonicalUrl,
+  SITE_NAME,
+  SITE_ORIGIN,
+  stripBrandSuffix,
+} from '@/src/domain/seo/metadataBuilder';
 
 interface ReviewDetailViewProps {
   review: PublicEditorialArticleDTO;
 }
 
 export function ReviewDetailView({ review }: ReviewDetailViewProps) {
-  const canonicalUrl = review.canonicalUrl?.startsWith('http')
-    ? review.canonicalUrl
-    : `https://www.greathomes.co.in/reviews/${review.slug}`;
+  const canonicalUrl = normalizeCanonicalUrl(
+    review.canonicalUrl,
+    `/reviews/${review.slug}`
+  );
+  const reviewImage = normalizeAbsoluteImageUrl(review.featuredImage) || DEFAULT_OG_IMAGE;
 
   const jsonLd = {
     '@context': 'https://schema.org',
-    '@type': 'Article',
-    headline: review.seoTitle || review.title,
-    description: review.seoDescription || review.excerpt,
-    datePublished: review.publishedAt,
-    dateModified: review.updatedAt,
-    author: {
-      '@type': 'Organization',
-      name: review.authorName,
-    },
-    publisher: {
-      '@type': 'Organization',
-      name: 'Great Homes',
-      url: 'https://www.greathomes.co.in',
-    },
-    mainEntityOfPage: canonicalUrl,
+    '@graph': [
+      {
+        '@type': 'Article',
+        '@id': `${canonicalUrl}#article`,
+        headline: stripBrandSuffix(review.seoTitle || review.title),
+        description: review.seoDescription || review.excerpt,
+        image: reviewImage,
+        ...(review.publishedAt ? { datePublished: review.publishedAt } : {}),
+        ...(review.updatedAt ? { dateModified: review.updatedAt } : {}),
+        author: {
+          '@type': 'Organization',
+          name: review.authorName || SITE_NAME,
+        },
+        publisher: {
+          '@type': 'Organization',
+          name: SITE_NAME,
+          url: SITE_ORIGIN,
+          logo: {
+            '@type': 'ImageObject',
+            url: DEFAULT_OG_IMAGE,
+          },
+        },
+        mainEntityOfPage: {
+          '@type': 'WebPage',
+          '@id': canonicalUrl,
+        },
+        ...(review.project
+          ? {
+              about: {
+                '@type': 'ApartmentComplex',
+                name: review.project.name,
+                url: `${SITE_ORIGIN}/projects/${review.project.slug}`,
+              },
+            }
+          : {}),
+      },
+      {
+        '@type': 'BreadcrumbList',
+        '@id': `${canonicalUrl}#breadcrumbs`,
+        itemListElement: [
+          {
+            '@type': 'ListItem',
+            position: 1,
+            name: 'Home',
+            item: SITE_ORIGIN,
+          },
+          {
+            '@type': 'ListItem',
+            position: 2,
+            name: 'Project Reviews',
+            item: `${SITE_ORIGIN}/reviews`,
+          },
+          {
+            '@type': 'ListItem',
+            position: 3,
+            name: review.title,
+            item: canonicalUrl,
+          },
+        ],
+      },
+    ],
   };
 
   return (

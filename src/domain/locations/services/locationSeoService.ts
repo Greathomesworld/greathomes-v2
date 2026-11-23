@@ -10,6 +10,12 @@ import {
   getLocationFullDescription,
   getLocationVisualTheme,
 } from '../locationRegionMapper';
+import {
+  buildPageMetadata,
+  formatLocationWithCity,
+  sanitizeMetaDescription,
+  SITE_ORIGIN,
+} from '../../seo/metadataBuilder';
 
 export type LocationSeoIneligibilityReason =
   | 'SUFFICIENT_CONTENT'
@@ -125,7 +131,7 @@ export class LocationSeoService {
 
     let description: string;
     if (curated) {
-      description = curated.description;
+      description = sanitizeMetaDescription(curated.description, curated.description, { maxLength: 158 });
     } else {
       const rawTagline = (getLocationEditorialTagline(location) || '').trim();
       const tagline = rawTagline
@@ -135,11 +141,10 @@ export class LocationSeoService {
         : '';
       const contextName =
         location.type === 'NEIGHBOURHOOD' && areaAncestor
-          ? `${location.name} (${areaAncestor.name}, ${cityName})`
-          : nameIncludesCity
-            ? location.name
-            : `${location.name}, ${cityName}`;
-      description = `${tagline ? `${tagline} ` : ''}Explore residential projects, resale homes, rental listings and connectivity in ${contextName} with Great Homes.`.slice(0, 300);
+          ? `${location.name} (${formatLocationWithCity(areaAncestor.name, cityName)})`
+          : formatLocationWithCity(location.name, cityName);
+      const rawDesc = `${tagline ? `${tagline} ` : ''}Explore residential projects, resale homes, rental listings and connectivity in ${contextName} with Great Homes.`;
+      description = sanitizeMetaDescription(rawDesc, rawDesc, { maxLength: 158 });
     }
 
     const visualTheme = getLocationVisualTheme(cleanSlug, Boolean(location.featured));
@@ -265,42 +270,18 @@ export class LocationSeoService {
    * Constructs standard Next.js App Router Metadata for a canonical location page.
    */
   buildMetadata(eligibility: LocationSeoEligibility): Metadata {
-    const socialImages = eligibility.imageUrl
-      ? [
-          {
-            url: eligibility.imageUrl,
-            width: 1200,
-            height: 630,
-            alt: eligibility.title,
-          },
-        ]
-      : undefined;
-
-    return {
+    const cleanPath = eligibility.canonicalUrl.replace(SITE_ORIGIN, '') || '/locations';
+    return buildPageMetadata({
       title: eligibility.title,
       description: eligibility.description,
-      alternates: {
-        canonical: eligibility.canonicalUrl,
-      },
-      robots: {
-        index: eligibility.index,
-        follow: eligibility.follow,
-      },
-      openGraph: {
-        title: eligibility.title,
-        description: eligibility.description,
-        url: eligibility.canonicalUrl,
-        siteName: 'Great Homes',
-        type: 'website',
-        ...(socialImages ? { images: socialImages } : {}),
-      },
-      twitter: {
-        card: socialImages ? 'summary_large_image' : 'summary',
-        title: eligibility.title,
-        description: eligibility.description,
-        ...(eligibility.imageUrl ? { images: [eligibility.imageUrl] } : {}),
-      },
-    };
+      canonicalPath: cleanPath,
+      canonicalUrl: eligibility.canonicalUrl,
+      index: eligibility.index,
+      follow: eligibility.follow,
+      ogType: 'website',
+      ogImage: eligibility.imageUrl,
+      ogImageAlt: eligibility.title,
+    });
   }
 
   /**
@@ -532,12 +513,16 @@ export class LocationSeoService {
       const childLocations = all.filter(c => c.parentId === loc.id && c.status === 'PUBLISHED');
       const projects = projectsByLocation.get(loc.id) || [];
 
+      const cleanLocSlug = (loc.slug || '').toLowerCase().trim();
+      const aliasTarget = LOCATION_ALIASES[cleanLocSlug];
+      const isAlias = Boolean(aliasTarget && aliasTarget !== cleanLocSlug);
+
       const seoEligibility = this.evaluateEligibility({
         location: loc,
         path,
         childLocations,
         projects,
-        isAlias: false,
+        isAlias,
       });
 
       return {

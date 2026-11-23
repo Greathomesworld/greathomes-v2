@@ -198,22 +198,33 @@ export class EditorialService {
     return dto;
   }
 
+  private isUuid(value: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.trim());
+  }
+
   /**
    * Retrieves the canonical Project Review for a project (by ID or slug).
    */
   async getProjectReview(projectIdOrSlug: string): Promise<PublicEditorialArticleDTO | null> {
+    const clean = (projectIdOrSlug || '').trim();
+    if (!clean) return null;
+
     const db = getDb();
     let projId: string | null = null;
     if (db) {
+      const condition = this.isUuid(clean)
+        ? or(eq(projects.id, clean), eq(projects.slug, clean))
+        : eq(projects.slug, clean);
       const [proj] = await db
         .select({ id: projects.id, slug: projects.slug })
         .from(projects)
-        .where(or(eq(projects.id, projectIdOrSlug), eq(projects.slug, projectIdOrSlug)))
+        .where(condition)
         .limit(1);
       if (proj) projId = proj.id;
     } else {
       await ensureSeedData();
-      const proj = (await projectRepository.findBySlug(projectIdOrSlug)) || (await projectRepository.findById(projectIdOrSlug));
+      const proj =
+        (await projectRepository.findBySlug(clean)) || (await projectRepository.findById(clean));
       if (proj) projId = proj.id;
     }
 
@@ -234,18 +245,25 @@ export class EditorialService {
    * Retrieves the canonical Location Guide for a location (by ID or slug).
    */
   async getLocationGuide(locationIdOrSlug: string): Promise<PublicEditorialArticleDTO | null> {
+    const clean = (locationIdOrSlug || '').trim();
+    if (!clean) return null;
+
     const db = getDb();
     let locId: string | null = null;
     if (db) {
+      const condition = this.isUuid(clean)
+        ? or(eq(locations.id, clean), eq(locations.slug, clean))
+        : eq(locations.slug, clean);
       const [loc] = await db
         .select({ id: locations.id, slug: locations.slug })
         .from(locations)
-        .where(or(eq(locations.id, locationIdOrSlug), eq(locations.slug, locationIdOrSlug)))
+        .where(condition)
         .limit(1);
       if (loc) locId = loc.id;
     } else {
       await ensureSeedData();
-      const loc = (await locationRepository.findBySlug(locationIdOrSlug)) || (await locationRepository.findById(locationIdOrSlug));
+      const loc =
+        (await locationRepository.findBySlug(clean)) || (await locationRepository.findById(clean));
       if (loc) locId = loc.id;
     }
 
@@ -266,18 +284,25 @@ export class EditorialService {
    * Retrieves Developer Stories for a developer (by ID or slug).
    */
   async getDeveloperStories(developerIdOrSlug: string): Promise<PublicEditorialArticleDTO[]> {
+    const clean = (developerIdOrSlug || '').trim();
+    if (!clean) return [];
+
     const db = getDb();
     let devId: string | null = null;
     if (db) {
+      const condition = this.isUuid(clean)
+        ? or(eq(developers.id, clean), eq(developers.slug, clean))
+        : eq(developers.slug, clean);
       const [dev] = await db
         .select({ id: developers.id, slug: developers.slug })
         .from(developers)
-        .where(or(eq(developers.id, developerIdOrSlug), eq(developers.slug, developerIdOrSlug)))
+        .where(condition)
         .limit(1);
       if (dev) devId = dev.id;
     } else {
       await ensureSeedData();
-      const dev = (await developerRepository.findBySlug(developerIdOrSlug)) || (await developerRepository.findById(developerIdOrSlug));
+      const dev =
+        (await developerRepository.findBySlug(clean)) || (await developerRepository.findById(clean));
       if (dev) devId = dev.id;
     }
 

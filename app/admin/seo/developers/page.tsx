@@ -114,7 +114,7 @@ export default function DeveloperSeoAuditPage() {
 
   const auditedDevelopers = useMemo<AuditedDeveloper[]>(() => {
     return developers.map(d => {
-      const canonicalUrl = d.slug ? `https://greathomes.co.in/developers/${d.slug}` : '';
+      const canonicalUrl = d.slug ? `https://www.greathomes.co.in/developers/${d.slug}` : '';
       const computedTitle = d.name
         ? `${d.name} — Real Estate Projects & Intelligence | Great Homes`
         : '';

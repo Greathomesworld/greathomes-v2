@@ -14,7 +14,13 @@ export function MobileBottomNav() {
     return null;
   }
 
-  const navItems = [
+  const navItems: Array<{
+    label: string;
+    href: string | null;
+    icon: typeof Home;
+    isActive: boolean;
+    onClick?: () => void;
+  }> = [
     {
       label: 'Home',
       href: '/',
@@ -29,27 +35,17 @@ export function MobileBottomNav() {
     },
     {
       label: 'Saved',
-      href: customer ? '/account/saved' : '#',
+      href: customer ? '/account/saved' : null,
       icon: Bookmark,
       isActive: pathname.startsWith('/account/saved'),
-      onClick: (e: React.MouseEvent) => {
-        if (!customer) {
-          e.preventDefault();
-          openAuthModal('login');
-        }
-      },
+      onClick: !customer ? () => openAuthModal('login') : undefined,
     },
     {
       label: 'Account',
-      href: customer ? '/account/profile' : '#',
+      href: customer ? '/account/profile' : null,
       icon: User,
       isActive: pathname.startsWith('/account') && !pathname.startsWith('/account/saved'),
-      onClick: (e: React.MouseEvent) => {
-        if (!customer) {
-          e.preventDefault();
-          openAuthModal('login');
-        }
-      },
+      onClick: !customer ? () => openAuthModal('login') : undefined,
     },
   ];
 
@@ -60,16 +56,31 @@ export function MobileBottomNav() {
     >
       {navItems.map((item) => {
         const Icon = item.icon;
+        const itemClassName = `flex flex-col items-center justify-center min-w-[64px] min-h-[48px] py-1 px-2 rounded-md transition-colors ${
+          item.isActive
+            ? 'text-[#E85D3F] font-semibold'
+            : 'text-slate-600 hover:text-slate-900'
+        }`;
+
+        if (!item.href) {
+          return (
+            <button
+              key={item.label}
+              type="button"
+              onClick={item.onClick}
+              className={`${itemClassName} cursor-pointer`}
+            >
+              <Icon className="w-5 h-5 mb-0.5" />
+              <span className="text-[10px] font-display">{item.label}</span>
+            </button>
+          );
+        }
+
         return (
           <Link
             key={item.label}
             href={item.href}
-            onClick={item.onClick}
-            className={`flex flex-col items-center justify-center min-w-[64px] min-h-[48px] py-1 px-2 rounded-md transition-colors ${
-              item.isActive
-                ? 'text-[#E85D3F] font-semibold'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
+            className={itemClassName}
           >
             <Icon className="w-5 h-5 mb-0.5" />
             <span className="text-[10px] font-display">{item.label}</span>

@@ -5,12 +5,12 @@ import {
   getProjectOptionsForLocation,
 } from '@/src/domain/postProperty/page1Data';
 import { PostPropertyWizard } from '@/src/components/post-property/PostPropertyWizard';
+import { buildNoIndexMetadata } from '@/src/domain/seo/metadataBuilder';
 
-export const metadata: Metadata = {
-  title: 'Submit Your Property | Five-Step Verification Wizard | Great Homes Kolkata',
-  description:
-    'Complete the Great Homes five-step residential property submission wizard for resale and rental properties in Kolkata.',
-};
+export const metadata: Metadata = buildNoIndexMetadata(
+  'Submit Your Property – Verification Wizard',
+  'Complete the Great Homes five-step residential property submission wizard for resale and rental properties in Kolkata.'
+);
 
 interface PostPropertyWizardPageProps {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;

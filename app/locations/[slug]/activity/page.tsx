@@ -8,6 +8,7 @@ import { locationIntelligenceService } from '@/src/domain/marketIntelligence/ser
 import { ensureSeedData } from '@/src/infrastructure/seed';
 import { Breadcrumbs, BreadcrumbItem } from '@/src/components/navigation/Breadcrumbs';
 import { MarketActivitySection } from '@/src/components/locations/MarketActivitySection';
+import { buildNoIndexMetadata } from '@/src/domain/seo/metadataBuilder';
 
 interface LocationActivityPageProps {
   params: Promise<{ slug: string }>;
@@ -22,20 +23,18 @@ export async function generateMetadata(
   const location = await locationService.resolveLocationBySlug(normalizedSlug, { publishedOnly: true });
 
   if (!location || location.status !== 'PUBLISHED') {
-    return {
-      title: 'Market Activity | Great Homes',
-      robots: { index: false, follow: true },
-    };
+    return buildNoIndexMetadata(
+      'Market Activity',
+      'Factual chronological record of residential property publications and verified updates in Kolkata.',
+      { follow: true }
+    );
   }
 
-  return {
-    title: `Market Activity & Timeline — ${location.name} | Great Homes`,
-    description: `Factual chronological record of property publications, RERA confirmations, and market updates in ${location.name}.`,
-    robots: {
-      index: false,
-      follow: true,
-    },
-  };
+  return buildNoIndexMetadata(
+    `Market Activity & Timeline – ${location.name}`,
+    `Factual chronological record of property publications, RERA confirmations, and market updates in ${location.name}, Kolkata.`,
+    { follow: true }
+  );
 }
 
 export default async function LocationActivityPage(props: LocationActivityPageProps) {

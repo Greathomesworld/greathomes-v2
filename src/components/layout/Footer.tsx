@@ -28,34 +28,23 @@ export function Footer() {
             </h4>
             <ul className="space-y-2.5 text-xs sm:text-sm font-body text-white/80">
               <li>
-                <Link
-                  href="/projects?stage=NEW_LAUNCH"
-                  className="hover:text-white transition-colors"
-                >
-                  New Launch
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/buy?inventoryType=RESALE"
-                  className="hover:text-white transition-colors"
-                >
-                  Buy Resale
-                </Link>
-              </li>
-              <li>
-                <Link href="/rent" className="hover:text-white transition-colors">
-                  Rent
-                </Link>
-              </li>
-              <li>
                 <Link href="/projects" className="hover:text-white transition-colors">
                   All Projects
                 </Link>
               </li>
               <li>
+                <Link href="/buy" className="hover:text-white transition-colors">
+                  Buy &amp; Resale Homes
+                </Link>
+              </li>
+              <li>
+                <Link href="/rent" className="hover:text-white transition-colors">
+                  Rentals in Kolkata
+                </Link>
+              </li>
+              <li>
                 <Link href="/post-property" className="hover:text-white transition-colors">
-                  Post Property
+                  Post Property Free
                 </Link>
               </li>
             </ul>
@@ -68,13 +57,23 @@ export function Footer() {
             </h4>
             <ul className="space-y-2.5 text-xs sm:text-sm font-body text-white/80">
               <li>
-                <Link href="/developers" className="hover:text-white transition-colors">
-                  Developers
+                <Link href="/locations" className="hover:text-white transition-colors">
+                  Kolkata Locations
                 </Link>
               </li>
               <li>
-                <Link href="/locations" className="hover:text-white transition-colors">
-                  Locations
+                <Link href="/developers" className="hover:text-white transition-colors">
+                  Verified Developers
+                </Link>
+              </li>
+              <li>
+                <Link href="/reviews" className="hover:text-white transition-colors">
+                  Project Reviews
+                </Link>
+              </li>
+              <li>
+                <Link href="/guides" className="hover:text-white transition-colors">
+                  Homebuyer Guides
                 </Link>
               </li>
               <li>
@@ -82,15 +81,44 @@ export function Footer() {
                   Market Intelligence
                 </Link>
               </li>
+            </ul>
+          </div>
+
+          {/* Column 3: POPULAR SEARCHES (Curated Canonical BHK Landing Pages) */}
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-widest text-white/50 font-display mb-4">
+              Popular Searches
+            </h4>
+            <ul className="space-y-2.5 text-xs sm:text-sm font-body text-white/80">
               <li>
-                <Link href="/guides" className="hover:text-white transition-colors">
-                  Guides
+                <Link href="/buy/2-bhk-flats-in-kolkata" className="hover:text-white transition-colors">
+                  2 BHK Flats in Kolkata
+                </Link>
+              </li>
+              <li>
+                <Link href="/buy/3-bhk-flats-in-kolkata" className="hover:text-white transition-colors">
+                  3 BHK Flats in Kolkata
+                </Link>
+              </li>
+              <li>
+                <Link href="/buy/3-bhk-flats-in-rajarhat" className="hover:text-white transition-colors">
+                  3 BHK Flats in Rajarhat
+                </Link>
+              </li>
+              <li>
+                <Link href="/buy/3-bhk-flats-in-new-town" className="hover:text-white transition-colors">
+                  3 BHK Flats in New Town
+                </Link>
+              </li>
+              <li>
+                <Link href="/buy/3-bhk-flats-in-em-bypass" className="hover:text-white transition-colors">
+                  3 BHK Flats in EM Bypass
                 </Link>
               </li>
             </ul>
           </div>
 
-          {/* Column 3: GREAT HOMES */}
+          {/* Column 4: GREAT HOMES & ACCOUNT */}
           <div>
             <h4 className="text-xs font-semibold uppercase tracking-widest text-white/50 font-display mb-4">
               Great Homes
@@ -98,14 +126,41 @@ export function Footer() {
             <ul className="space-y-2.5 text-xs sm:text-sm font-body text-white/80">
               <li>
                 <Link href="/#why-great-homes" className="hover:text-white transition-colors">
-                  About
+                  About Great Homes
                 </Link>
               </li>
-              <li>
-                <Link href="/projects" className="hover:text-white transition-colors">
-                  Property Discovery
-                </Link>
-              </li>
+              {customer ? (
+                <>
+                  <li>
+                    <Link href="/account/profile" className="hover:text-white transition-colors">
+                      My Account ({customer.name.split(' ')[0]})
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="/account/saved" className="hover:text-white transition-colors">
+                      Saved Homes
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="/account/recently-viewed"
+                      className="hover:text-white transition-colors"
+                    >
+                      Recently Viewed
+                    </Link>
+                  </li>
+                </>
+              ) : (
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => openAuthModal('login')}
+                    className="hover:text-white transition-colors text-left font-body cursor-pointer"
+                  >
+                    Sign In / Saved Homes
+                  </button>
+                </li>
+              )}
               <li>
                 <button
                   type="button"
@@ -115,48 +170,6 @@ export function Footer() {
                 >
                   {optedOut ? 'Discovery Analytics: Off' : 'Discovery Analytics: On'}
                 </button>
-              </li>
-            </ul>
-          </div>
-
-          {/* Column 4: ACCOUNT */}
-          <div>
-            <h4 className="text-xs font-semibold uppercase tracking-widest text-white/50 font-display mb-4">
-              Account
-            </h4>
-            <ul className="space-y-2.5 text-xs sm:text-sm font-body text-white/80">
-              <li>
-                {customer ? (
-                  <Link href="/account/profile" className="hover:text-white transition-colors">
-                    My Account ({customer.name.split(' ')[0]})
-                  </Link>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => openAuthModal('login')}
-                    className="hover:text-white transition-colors text-left font-body cursor-pointer"
-                  >
-                    Sign In
-                  </button>
-                )}
-              </li>
-              <li>
-                <Link href="/account/saved" className="hover:text-white transition-colors">
-                  Saved Homes
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/account/recently-viewed"
-                  className="hover:text-white transition-colors"
-                >
-                  Recently Viewed
-                </Link>
-              </li>
-              <li>
-                <Link href="/account/preferences" className="hover:text-white transition-colors">
-                  Preferences & Alerts
-                </Link>
               </li>
             </ul>
           </div>

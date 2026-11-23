@@ -473,8 +473,9 @@ async function runTests() {
       assert.strictEqual(data!.isIndexable, true, `Landing page ${lp.bhk} BHK in ${lp.loc} must be indexable`);
 
       const meta = bhkLandingService.generateSeoMetadata(data!);
-      assert.strictEqual(meta.robots.index, true);
-      assert.strictEqual(meta.alternates.canonical, `${BASE_URL}/buy/${lp.bhk}-bhk-flats-in-${lp.loc}`);
+      const robotsObj = typeof meta.robots === 'object' && meta.robots !== null ? meta.robots : null;
+      assert.strictEqual(robotsObj?.index, true);
+      assert.strictEqual(meta.alternates?.canonical, `${BASE_URL}/buy/${lp.bhk}-bhk-flats-in-${lp.loc}`);
 
       const jsonLd: any = bhkLandingService.generateJsonLd(data!);
       assert.strictEqual(jsonLd['@context'], 'https://schema.org');

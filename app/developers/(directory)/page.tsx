@@ -10,35 +10,40 @@ import {
   DeveloperLocationFilterItem,
 } from '@/src/components/developers/DevelopersDirectoryClient';
 import { safeJsonLd } from '@/src/lib/safeJsonLd';
+import { buildPageMetadata } from '@/src/domain/seo/metadataBuilder';
 
-export const metadata: Metadata = {
-  title: 'Real Estate Developers in Kolkata — Verified Builder Directory | Great Homes',
+export const revalidate = 300;
+
+export const metadata: Metadata = buildPageMetadata({
+  title: 'Real Estate Developers in Kolkata – Verified Builders',
   description:
-    "Explore Kolkata's leading real estate developers and builders. Discover active residential developments, project portfolios, and location footprints across Kolkata.",
-  alternates: {
-    canonical: 'https://www.greathomes.co.in/developers',
-  },
-  openGraph: {
-    title: 'Real Estate Developers in Kolkata | Great Homes',
-    description:
-      "Explore Kolkata's leading real estate developers and builders. Discover active residential developments, project portfolios, and location footprints.",
-    url: 'https://www.greathomes.co.in/developers',
-    type: 'website',
-  },
-};
+    "Explore Kolkata's leading real estate developers and builders. Compare active residential projects, WBRERA credentials, and location footprints on Great Homes.",
+  canonicalPath: '/developers',
+});
 
 export default async function DevelopersDirectoryPage() {
-  await ensureSeedData();
+  try {
+    await ensureSeedData();
+  } catch (seedError) {
+    console.warn('DevelopersDirectoryPage ensureSeedData warning:', seedError);
+  }
 
   // Fetch all eligible public developers & dynamic aggregate stats in parallel
   const [{ items: developers }, statistics, allProjects, allLocations] = await Promise.all([
-    developerService.listPublicDevelopers({
-      limit: 100,
-      sort: 'name:asc',
-    }),
-    developerService.getDirectoryStatistics(),
-    projectRepository.findAll(),
-    locationRepository.findAll(),
+    developerService
+      .listPublicDevelopers({
+        limit: 100,
+        sort: 'name:asc',
+      })
+      .catch(() => ({ items: [] as Awaited<ReturnType<typeof developerService.listPublicDevelopers>>['items'] })),
+    developerService.getDirectoryStatistics().catch(() => ({
+      totalDevelopers: 0,
+      activeDevelopers: 0,
+      totalProjects: 0,
+      totalLocations: 0,
+    })),
+    projectRepository.findAll().catch(() => []),
+    locationRepository.findAll().catch(() => []),
   ]);
 
   // Derive distinct canonical locations with published project counts

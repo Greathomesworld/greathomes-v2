@@ -115,7 +115,7 @@ export default function LocationSeoAuditPage() {
     return locations.map(loc => {
       const canonicalUrl =
         loc.seoEligibility?.canonicalUrl ||
-        (loc.slug ? `https://greathomes.co.in/locations/${loc.slug}` : '');
+        (loc.slug ? `https://www.greathomes.co.in/locations/${loc.slug}` : '');
       const computedTitle =
         loc.seoEligibility?.title ||
         (loc.name

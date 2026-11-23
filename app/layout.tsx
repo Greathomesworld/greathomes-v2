@@ -12,6 +12,13 @@ import { SearchProvider } from './../src/context/SearchContext';
 import { GlobalModalsHost } from './../src/components/layout/GlobalModalsHost';
 import { safeJsonLd } from './../src/lib/safeJsonLd';
 
+import {
+  DEFAULT_OG_IMAGE,
+  SITE_LOGO_URL,
+  SITE_NAME,
+  SITE_ORIGIN,
+} from './../src/domain/seo/metadataBuilder';
+
 const fjallaOne = Fjalla_One({
   weight: '400',
   subsets: ['latin'],
@@ -32,9 +39,10 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://www.greathomes.co.in'),
-  title: 'Great Homes | Verified Residential Property Discovery in Kolkata',
-  description: 'Discover verified projects, resale homes and rentals across Kolkata — with the property intelligence and assistance you need to make a confident decision.',
+  metadataBase: new URL(SITE_ORIGIN),
+  title: `${SITE_NAME} | Verified Residential Property Discovery in Kolkata`,
+  description:
+    'Discover verified projects, resale homes and rentals across Kolkata — with the property intelligence and assistance you need to make a confident decision.',
   icons: {
     icon: [
       { url: '/assets/aistudio/GH_siteicons_f43aa60c.png', type: 'image/png' },
@@ -42,19 +50,6 @@ export const metadata: Metadata = {
     ],
     shortcut: '/favicon.png',
     apple: '/apple-touch-icon.png',
-  },
-  openGraph: {
-    title: 'Great Homes | Verified Residential Property Discovery in Kolkata',
-    description: 'Discover verified projects, resale homes and rentals across Kolkata — with the property intelligence and assistance you need to make a confident decision.',
-    url: 'https://www.greathomes.co.in',
-    siteName: 'Great Homes',
-    locale: 'en_IN',
-    type: 'website',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Great Homes | Verified Residential Property Discovery in Kolkata',
-    description: 'Discover verified projects, resale homes and rentals across Kolkata in West Bengal.',
   },
 };
 
@@ -68,26 +63,29 @@ export default function RootLayout({
     '@graph': [
       {
         '@type': 'WebSite',
-        '@id': 'https://www.greathomes.co.in/#website',
-        url: 'https://www.greathomes.co.in',
-        name: 'Great Homes',
-        description: 'Verified residential property discovery and real estate intelligence in Kolkata',
+        '@id': `${SITE_ORIGIN}/#website`,
+        url: SITE_ORIGIN,
+        name: SITE_NAME,
+        description:
+          'Verified residential property discovery and real estate intelligence in Kolkata',
         publisher: {
-          '@id': 'https://www.greathomes.co.in/#organization',
+          '@id': `${SITE_ORIGIN}/#organization`,
         },
         potentialAction: {
           '@type': 'SearchAction',
-          target: 'https://www.greathomes.co.in/projects?q={search_term_string}',
+          target: `${SITE_ORIGIN}/projects?q={search_term_string}`,
           'query-input': 'required name=search_term_string',
         },
       },
       {
         '@type': 'RealEstateAgent',
-        '@id': 'https://www.greathomes.co.in/#organization',
-        name: 'Great Homes',
-        url: 'https://www.greathomes.co.in',
-        logo: 'https://www.greathomes.co.in/icon.png',
-        description: 'Residential property discovery and assisted home-buying web platform for Kolkata.',
+        '@id': `${SITE_ORIGIN}/#organization`,
+        name: SITE_NAME,
+        url: SITE_ORIGIN,
+        logo: SITE_LOGO_URL,
+        image: DEFAULT_OG_IMAGE,
+        description:
+          'Residential property discovery and assisted home-buying web platform for Kolkata.',
         areaServed: {
           '@type': 'City',
           name: 'Kolkata',

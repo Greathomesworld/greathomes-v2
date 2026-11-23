@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     // Empty body is acceptable if default sitemap URL is used
   }
 
-  const feedpath = body.feedpath || body.url || body.sitemapUrl || 'https://greathomes.co.in/sitemap.xml';
+  const feedpath = body.feedpath || body.url || body.sitemapUrl || 'https://www.greathomes.co.in/sitemap.xml';
   const siteUrl = body.siteUrl || body.property;
 
   try {
@@ -84,7 +84,7 @@ export async function DELETE(req: NextRequest) {
     };
   }
 
-  const feedpath = body.feedpath || body.url || 'https://greathomes.co.in/sitemap.xml';
+  const feedpath = body.feedpath || body.url || 'https://www.greathomes.co.in/sitemap.xml';
   const siteUrl = body.siteUrl || body.property;
 
   try {

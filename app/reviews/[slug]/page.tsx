@@ -1,43 +1,61 @@
-import React from 'react';
+import React, { cache } from 'react';
 import { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import { editorialService } from '@/src/domain/editorial/services/editorialService';
 import { ReviewDetailView } from '@/src/components/editorial/ReviewDetailView';
+import { buildPageMetadata } from '@/src/domain/seo/metadataBuilder';
 
-export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+export const revalidate = 300;
+
+const getCachedReviewArticle = cache(async (slug: string) => {
+  return editorialService.getPublicArticleBySlug(slug);
+});
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
   const { slug } = await params;
-  const review = await editorialService.getPublicArticleBySlug(slug);
+  const review = await getCachedReviewArticle(slug);
   if (!review) {
     notFound();
   }
 
-  const canonicalUrl = review.canonicalUrl?.startsWith('http')
-    ? review.canonicalUrl
-    : `https://www.greathomes.co.in/reviews/${review.slug}`;
+  const canonicalPath =
+    review.type === 'PROJECT_REVIEW'
+      ? `/reviews/${review.slug}`
+      : `/guides/${review.slug}`;
 
-  return {
-    title: `${review.seoTitle || review.title} | Great Homes Review`,
-    description: review.seoDescription || review.excerpt,
-    alternates: {
-      canonical: canonicalUrl,
-    },
-    openGraph: {
-      title: review.seoTitle || review.title,
-      description: review.seoDescription || review.excerpt,
-      url: canonicalUrl,
-      siteName: 'Great Homes',
-      type: 'article',
-      images: review.featuredImage ? [{ url: review.featuredImage }] : undefined,
-    },
-  };
+  return buildPageMetadata({
+    title: review.seoTitle || review.title,
+    description: review.seoDescription || review.excerpt || review.title,
+    canonicalPath,
+    canonicalUrl: review.canonicalUrl,
+    ogType: 'article',
+    ogImage: review.featuredImage,
+    ogImageAlt: review.title,
+    publishedTime: review.publishedAt || undefined,
+    modifiedTime: review.updatedAt,
+    authors: review.authorName ? [review.authorName] : undefined,
+  });
 }
 
-export default async function ReviewDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function ReviewDetailPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
   const { slug } = await params;
-  const review = await editorialService.getPublicArticleBySlug(slug);
+  const review = await getCachedReviewArticle(slug);
 
   if (!review) {
     notFound();
+  }
+
+  // Consolidate cross-route duplicates: non-review guides live canonically under /guides/[slug]
+  if (review.type !== 'PROJECT_REVIEW') {
+    permanentRedirect(`/guides/${review.slug}`);
   }
 
   return <ReviewDetailView review={review} />;

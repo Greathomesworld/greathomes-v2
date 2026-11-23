@@ -4,28 +4,31 @@ import { marketIntelligenceDashboardService } from '@/src/domain/marketIntellige
 import { MarketDashboardView } from '@/src/components/market/MarketDashboardView';
 import { AlertCircle } from 'lucide-react';
 import Link from 'next/link';
+import { buildPageMetadata } from '@/src/domain/seo/metadataBuilder';
 
-export const metadata: Metadata = {
-  title: 'Kolkata Residential Market Intelligence | Great Homes',
-  description: 'Explore residential projects, pricing, configurations, RERA coverage and market activity across Kolkata with Great Homes.',
-  robots: {
-    index: true,
-    follow: true,
-  },
-  alternates: {
-    canonical: 'https://www.greathomes.co.in/market',
-  },
-  openGraph: {
-    title: 'Kolkata Residential Market Intelligence | Great Homes',
-    description: 'Explore residential projects, pricing, configurations, RERA coverage and market activity across Kolkata with Great Homes.',
-    url: 'https://www.greathomes.co.in/market',
-    siteName: 'Great Homes',
-    type: 'website',
-  },
-};
+export const revalidate = 120;
 
 interface MarketPageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}
+
+export async function generateMetadata({
+  searchParams,
+}: MarketPageProps): Promise<Metadata> {
+  const params = await searchParams;
+  const hasFilterParams = Object.keys(params).some((k) => {
+    const val = params[k];
+    return val !== undefined && val !== '';
+  });
+
+  return buildPageMetadata({
+    title: 'Kolkata Residential Market Intelligence',
+    description:
+      'Explore residential projects, pricing trends, BHK configurations, WBRERA coverage and verified market activity across Kolkata on Great Homes.',
+    canonicalPath: '/market',
+    index: !hasFilterParams,
+    follow: true,
+  });
 }
 
 async function MarketPageContent({ searchParams }: MarketPageProps) {
@@ -43,8 +46,11 @@ async function MarketPageContent({ searchParams }: MarketPageProps) {
     });
 
     return <MarketDashboardView initialData={data} />;
-  } catch (error: any) {
-    console.error('Failed to load market intelligence dashboard:', error);
+  } catch (error: unknown) {
+    console.warn(
+      'Failed to load market intelligence dashboard:',
+      error instanceof Error ? error.message : 'Database unavailable'
+    );
     return (
       <div className="max-w-2xl mx-auto py-24 px-4 text-center">
         <div className="w-12 h-12 rounded-full bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto mb-4">
@@ -54,7 +60,7 @@ async function MarketPageContent({ searchParams }: MarketPageProps) {
           Market Intelligence Temporarily Unavailable
         </h1>
         <p className="text-sm text-stone-600 dark:text-stone-400 font-body mt-2">
-          {error.message || 'Unable to load residential market intelligence data.'}
+          We are unable to load live residential market intelligence right now. Please try again shortly.
         </p>
         <div className="mt-6">
           <Link

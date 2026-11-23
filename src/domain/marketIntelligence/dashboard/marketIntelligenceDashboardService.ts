@@ -1,6 +1,6 @@
 import { getDb } from '../../../db/client';
 import { locations, locationMarketSnapshots } from '../../../db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, inArray } from 'drizzle-orm';
 import { marketIntelligenceService } from '../services/marketIntelligenceService';
 import { marketEventService } from '../services/marketEventService';
 import { ensureSeedData } from '../../../infrastructure/seed';
@@ -81,17 +81,52 @@ export interface MarketDashboardDTO {
   };
 }
 
+const DASHBOARD_CACHE_TTL_MS = 60 * 1000;
+const dashboardCache = new Map<string, { data: MarketDashboardDTO; expiresAt: number }>();
+const inflightDashboardRequests = new Map<string, Promise<MarketDashboardDTO>>();
+
 export class MarketIntelligenceDashboardService {
   async getDashboardData(options?: {
     locationSlug?: string;
     scope?: 'DIRECT' | 'DESCENDANT';
     basis?: 'CARPET_AREA' | 'BUILT_UP_AREA' | 'SUPER_BUILT_UP_AREA';
   }): Promise<MarketDashboardDTO> {
-    await ensureSeedData();
-    const db = getDb();
     const scope = options?.scope || 'DESCENDANT';
     const basis = options?.basis || 'CARPET_AREA';
     const locationSlug = options?.locationSlug;
+    const cacheKey = `${locationSlug || 'kolkata'}:${scope}:${basis}`;
+
+    const cached = dashboardCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.data;
+    }
+
+    const inflight = inflightDashboardRequests.get(cacheKey);
+    if (inflight) {
+      return inflight;
+    }
+
+    const promise = this.computeDashboardData({ locationSlug, scope, basis })
+      .then((data) => {
+        dashboardCache.set(cacheKey, { data, expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS });
+        return data;
+      })
+      .finally(() => {
+        inflightDashboardRequests.delete(cacheKey);
+      });
+
+    inflightDashboardRequests.set(cacheKey, promise);
+    return promise;
+  }
+
+  private async computeDashboardData(options: {
+    locationSlug?: string;
+    scope: 'DIRECT' | 'DESCENDANT';
+    basis: 'CARPET_AREA' | 'BUILT_UP_AREA' | 'SUPER_BUILT_UP_AREA';
+  }): Promise<MarketDashboardDTO> {
+    await ensureSeedData();
+    const db = getDb();
+    const { scope, basis, locationSlug } = options;
 
     // 1. Resolve published locations from database or memory
     let allPublishedLocations: any[] = [];
@@ -125,12 +160,24 @@ export class MarketIntelligenceDashboardService {
     }
 
     const resolvedLocationId = targetLocation ? targetLocation.id : 'loc_kolkata';
-    const scopeIds = await marketIntelligenceService.resolveLocationScopeIds(resolvedLocationId, scope);
 
-    // 2. Fetch supply, RERA and pricing metrics
-    const supplyMetrics = await marketIntelligenceService.getSupplyMetrics(resolvedLocationId, scope);
-    const reraCoverageMetrics = await marketIntelligenceService.getReraCoverage(resolvedLocationId, scope);
-    const priceMetricsList = await marketIntelligenceService.getPriceMetrics(resolvedLocationId, scope);
+    // 2. Fetch scope, supply, RERA, pricing, and historical snapshots in parallel
+    const [scopeIds, supplyMetrics, reraCoverageMetrics, priceMetricsList, fetchedHistoricalSnapshots] =
+      await Promise.all([
+        marketIntelligenceService.resolveLocationScopeIds(resolvedLocationId, scope),
+        marketIntelligenceService.getSupplyMetrics(resolvedLocationId, scope),
+        marketIntelligenceService.getReraCoverage(resolvedLocationId, scope),
+        marketIntelligenceService.getPriceMetrics(resolvedLocationId, scope),
+        db
+          ? db
+              .select()
+              .from(locationMarketSnapshots)
+              .where(eq(locationMarketSnapshots.locationId, resolvedLocationId))
+              .orderBy(desc(locationMarketSnapshots.snapshotDate))
+              .limit(12)
+              .catch(() => [])
+          : Promise.resolve([]),
+      ]);
 
     const selectedPriceBasisMetrics = priceMetricsList.find(p => p.priceBasis === basis) || {
       minRatePerSqft: null,
@@ -146,59 +193,69 @@ export class MarketIntelligenceDashboardService {
       notProvided: reraCoverageMetrics.notProvidedProjects,
     };
 
-    // 3. Location breakdown grid
-    const locationGrid = [];
-    for (const loc of allPublishedLocations) {
-      if (['CITY', 'DISCOVERY_REGION', 'AREA', 'NEIGHBOURHOOD'].includes(loc.type)) {
-        const locScope = ['CITY', 'DISCOVERY_REGION'].includes(loc.type) ? 'DESCENDANT' : 'DIRECT';
-        const locSupply = await marketIntelligenceService.getSupplyMetrics(loc.id, locScope);
-        const locRera = await marketIntelligenceService.getReraCoverage(loc.id, locScope);
-        
-        let latestDate: string | null = null;
-        if (db) {
-          try {
-            const [snap] = await db
-              .select({ snapshotDate: locationMarketSnapshots.snapshotDate })
-              .from(locationMarketSnapshots)
-              .where(eq(locationMarketSnapshots.locationId, loc.id))
-              .orderBy(desc(locationMarketSnapshots.snapshotDate))
-              .limit(1);
-            if (snap && snap.snapshotDate) {
-              latestDate = new Date(snap.snapshotDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-            }
-          } catch (e) {
-            // ignore
+    // 3. Location breakdown grid — single batched snapshot query + bounded concurrent metrics
+    const gridLocations = allPublishedLocations.filter(loc =>
+      ['CITY', 'DISCOVERY_REGION', 'AREA', 'NEIGHBOURHOOD'].includes(loc.type)
+    );
+
+    const latestSnapshotDateByLoc = new Map<string, string>();
+    if (db && gridLocations.length > 0) {
+      try {
+        const snapRows = await db
+          .select({
+            locationId: locationMarketSnapshots.locationId,
+            snapshotDate: locationMarketSnapshots.snapshotDate,
+          })
+          .from(locationMarketSnapshots)
+          .where(inArray(locationMarketSnapshots.locationId, gridLocations.map(l => l.id)))
+          .orderBy(desc(locationMarketSnapshots.snapshotDate));
+
+        for (const row of snapRows) {
+          if (row.locationId && row.snapshotDate && !latestSnapshotDateByLoc.has(row.locationId)) {
+            latestSnapshotDateByLoc.set(
+              row.locationId,
+              new Date(row.snapshotDate).toLocaleDateString('en-IN', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+              })
+            );
           }
         }
-
-        locationGrid.push({
-          id: loc.id,
-          name: loc.name,
-          slug: loc.slug,
-          type: loc.type,
-          projectsCount: locSupply.publishedProjects,
-          resaleCount: locSupply.resaleListingsCount,
-          rentalCount: locSupply.rentalListingsCount,
-          reraVerifiedCount: locRera.verifiedProjects,
-          latestDataDate: latestDate || '7 Oct 2026',
-        });
+      } catch {
+        // ignore optional snapshot date errors
       }
+    }
+
+    const locationGrid: MarketDashboardDTO['locations'] = [];
+    const CHUNK_SIZE = 6;
+    for (let i = 0; i < gridLocations.length; i += CHUNK_SIZE) {
+      const chunk = gridLocations.slice(i, i + CHUNK_SIZE);
+      const chunkResults = await Promise.all(
+        chunk.map(async (loc) => {
+          const locScope = ['CITY', 'DISCOVERY_REGION'].includes(loc.type) ? 'DESCENDANT' : 'DIRECT';
+          const [locSupply, locRera] = await Promise.all([
+            marketIntelligenceService.getSupplyMetrics(loc.id, locScope),
+            marketIntelligenceService.getReraCoverage(loc.id, locScope),
+          ]);
+          return {
+            id: loc.id,
+            name: loc.name,
+            slug: loc.slug,
+            type: loc.type,
+            projectsCount: locSupply.publishedProjects,
+            resaleCount: locSupply.resaleListingsCount,
+            rentalCount: locSupply.rentalListingsCount,
+            reraVerifiedCount: locRera.verifiedProjects,
+            latestDataDate: latestSnapshotDateByLoc.get(loc.id) || '7 Oct 2026',
+          };
+        })
+      );
+      locationGrid.push(...chunkResults);
     }
 
     // 4. Historical Trends & History
-    let historicalSnapshots: any[] = [];
-    if (db) {
-      try {
-        historicalSnapshots = await db
-          .select()
-          .from(locationMarketSnapshots)
-          .where(eq(locationMarketSnapshots.locationId, resolvedLocationId))
-          .orderBy(desc(locationMarketSnapshots.snapshotDate))
-          .limit(12);
-      } catch (e) {
-        // ignore
-      }
-    }
+    let historicalSnapshots: any[] = fetchedHistoricalSnapshots;
 
     if (historicalSnapshots.length < 2) {
       const now = new Date();

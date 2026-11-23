@@ -2,24 +2,21 @@ import React, { Suspense } from 'react';
 import { Metadata } from 'next';
 import { editorialService } from '@/src/domain/editorial/services/editorialService';
 import { ReviewsDirectoryView } from '@/src/components/editorial/ReviewsDirectoryView';
+import { buildPageMetadata } from '@/src/domain/seo/metadataBuilder';
 
-export const metadata: Metadata = {
-  title: 'Independent Project Reviews & Assessments | Great Homes',
-  description: 'Independent, factual editorial assessments of residential projects across Kolkata. Factual breakdown of configurations, pricing, RERA verification, and location connectivity.',
-  alternates: {
-    canonical: 'https://www.greathomes.co.in/reviews',
-  },
-  openGraph: {
-    title: 'Independent Project Reviews | Great Homes',
-    description: 'Factual project reviews for Kolkata residential developments.',
-    url: 'https://www.greathomes.co.in/reviews',
-    siteName: 'Great Homes',
-    type: 'website',
-  },
-};
+export const revalidate = 300;
+
+export const metadata: Metadata = buildPageMetadata({
+  title: 'Independent Kolkata Project Reviews & Assessments',
+  description:
+    'Independent editorial assessments of Kolkata residential projects covering floor plans, pricing, WBRERA verification, and locality connectivity.',
+  canonicalPath: '/reviews',
+});
 
 export default async function ReviewsPage() {
-  const { items, total } = await editorialService.getPublicArticles({ type: 'PROJECT_REVIEW', limit: 50 });
+  const { items, total } = await editorialService
+    .getPublicArticles({ type: 'PROJECT_REVIEW', limit: 50 })
+    .catch(() => ({ items: [], total: 0 }));
 
   return (
     <Suspense fallback={<div className="p-12 text-center font-display text-stone-500">Loading project reviews...</div>}>

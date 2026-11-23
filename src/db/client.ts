@@ -56,7 +56,7 @@ export function getDb() {
   }
   const postgresRequired = isPostgresRequired();
   if (!dbInstance) {
-    let connectionString = process.env.DATABASE_URL;
+    let connectionString = process.env.DATABASE_URL?.trim().replace(/^["']|["']$/g, '');
     if (!connectionString) {
       if (postgresRequired) {
         throw new Error(
@@ -103,4 +103,14 @@ export async function getDbReady() {
 export function isPostgresConfigured(): boolean {
   if (process.env.PERSISTENCE_PROVIDER === 'memory') return false;
   return Boolean(process.env.DATABASE_URL && isPostgresRequired());
+}
+
+export function getConciseDatabaseErrorReason(err: unknown): string {
+  if (!err) return 'Database unavailable';
+  if (typeof err === 'string') return err;
+  if (err instanceof Error) return err.message || err.name;
+  if (typeof err === 'object' && 'message' in err && typeof (err as { message?: unknown }).message === 'string') {
+    return (err as { message: string }).message;
+  }
+  return 'Database unavailable';
 }

@@ -14,6 +14,8 @@ import {
   MapPin,
   Building2,
   BookOpen,
+  FileCheck2,
+  BarChart3,
 } from 'lucide-react';
 import { CustomerNavControl } from '../customer/CustomerNavControl';
 import { useCustomerAuth } from '../customer/CustomerAuthContext';
@@ -35,23 +37,24 @@ function FreeBadge({ className = '' }: { className?: string }) {
   );
 }
 
-export function Header() {
-  return (
-    <React.Suspense fallback={
-      <header className="sticky top-0 z-40 w-full border-b border-neutral-200/80 bg-white/95 backdrop-blur-md h-14 sm:h-[68px]" />
-    }>
-      <HeaderContent />
-    </React.Suspense>
-  );
+function HeaderSearchParamsWatcher({ onChange }: { onChange: (query: string) => void }) {
+  const searchParams = useSearchParams();
+  const searchKey = searchParams?.toString() ?? '';
+
+  useEffect(() => {
+    onChange(searchKey);
+  }, [searchKey, onChange]);
+
+  return null;
 }
 
-function HeaderContent() {
+export function Header() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const { isAuthModalOpen } = useCustomerAuth();
   const { openSearchModal, isSearchModalOpen } = useSearch();
 
   const [activeMenu, setActiveMenu] = useState<ActiveNavMenu>('none');
+  const [searchQuery, setSearchQuery] = useState('');
   const exploreRef = useRef<HTMLDivElement>(null);
 
   const exploreOpen = activeMenu === 'explore';
@@ -59,6 +62,11 @@ function HeaderContent() {
   const accountMenuOpen = activeMenu === 'account';
 
   const closeAllMenus = useCallback(() => {
+    setActiveMenu('none');
+  }, []);
+
+  const handleSearchParamsChange = useCallback((query: string) => {
+    setSearchQuery(query);
     setActiveMenu('none');
   }, []);
 
@@ -71,12 +79,10 @@ function HeaderContent() {
     openSearchModal();
   }, [openSearchModal]);
 
-  const searchKey = searchParams?.toString() ?? '';
-
-  // Close all navigation overlays whenever the route or query parameters change
+  // Close all navigation overlays whenever the route changes
   useEffect(() => {
     setActiveMenu('none');
-  }, [pathname, searchKey]);
+  }, [pathname]);
 
   // Close all navigation overlays when Search or Auth modal opens (e.g., via ⌘K, '/', or BottomNav)
   useEffect(() => {
@@ -134,6 +140,8 @@ function HeaderContent() {
     return null;
   }
 
+  const currentParams = new URLSearchParams(searchQuery);
+
   const isLinkActive = (href: string) => {
     if (!pathname) return false;
     const [basePath, queryStr] = href.split('?');
@@ -141,11 +149,11 @@ function HeaderContent() {
       if (pathname !== basePath) return false;
       const targetParams = new URLSearchParams(queryStr);
       for (const [key, value] of targetParams.entries()) {
-        if (searchParams?.get(key) !== value) return false;
+        if (currentParams.get(key) !== value) return false;
       }
       return true;
     }
-    if (basePath === '/projects' && pathname === '/projects' && searchParams?.get('stage') === 'NEW_LAUNCH') {
+    if (basePath === '/projects' && pathname === '/projects' && currentParams.get('stage') === 'NEW_LAUNCH') {
       return false;
     }
     return pathname === basePath || (basePath !== '/' && pathname.startsWith(`${basePath}/`));
@@ -155,7 +163,9 @@ function HeaderContent() {
     pathname?.startsWith('/locations') ||
     pathname?.startsWith('/developers') ||
     pathname?.startsWith('/guides') ||
-    (pathname === '/projects' && searchParams?.get('stage') === 'NEW_LAUNCH');
+    pathname?.startsWith('/reviews') ||
+    pathname?.startsWith('/market') ||
+    (pathname === '/projects' && currentParams.get('stage') === 'NEW_LAUNCH');
 
   const exploreItems = [
     {
@@ -164,6 +174,7 @@ function HeaderContent() {
       href: '/projects?stage=NEW_LAUNCH',
       icon: Sparkles,
       badge: 'Fresh',
+      nofollow: true,
     },
     {
       title: 'Locations & Micro-Markets',
@@ -178,15 +189,30 @@ function HeaderContent() {
       icon: Building2,
     },
     {
+      title: 'Project Reviews',
+      description: 'Independent assessments of Kolkata residential projects',
+      href: '/reviews',
+      icon: FileCheck2,
+    },
+    {
       title: 'Guides & Legal Advisory',
       description: 'Buyer checklists, stamp duty, legal verification',
       href: '/guides',
       icon: BookOpen,
     },
+    {
+      title: 'Market Intelligence',
+      description: 'Live Kolkata supply, pricing & WBRERA trends',
+      href: '/market',
+      icon: BarChart3,
+    },
   ];
 
   return (
     <>
+      <React.Suspense fallback={null}>
+        <HeaderSearchParamsWatcher onChange={handleSearchParamsChange} />
+      </React.Suspense>
       <header className="sticky top-0 z-40 w-full border-b border-neutral-200/80 bg-white/95 backdrop-blur-md transition-shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 xl:px-8 h-14 sm:h-[68px] flex items-center justify-between gap-2 sm:gap-3 xl:gap-4">
           {/* LEFT ZONE: Brand Logo & Kolkata Identity Badge */}
@@ -229,14 +255,14 @@ function HeaderContent() {
               </Link>
 
               <Link
-                href="/buy?inventoryType=RESALE"
+                href="/buy"
                 onClick={closeAllMenus}
                 className={`relative py-1 transition-colors whitespace-nowrap hover:text-[#E85D3F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E85D3F] rounded ${
-                  isLinkActive('/buy?inventoryType=RESALE') ? 'text-[#E85D3F] font-bold' : 'text-neutral-700'
+                  isLinkActive('/buy') ? 'text-[#E85D3F] font-bold' : 'text-neutral-700'
                 }`}
               >
-                <span>Resale</span>
-                {isLinkActive('/buy?inventoryType=RESALE') && (
+                <span>Buy</span>
+                {isLinkActive('/buy') && (
                   <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#E85D3F] rounded-full animate-fade-in" />
                 )}
               </Link>
@@ -273,52 +299,57 @@ function HeaderContent() {
                   />
                 </button>
 
-                {exploreOpen && (
-                  <div
-                    role="menu"
-                    className="absolute left-0 mt-3 w-80 bg-white border border-slate-200 shadow-2xl rounded-2xl p-2.5 z-50 animate-fade-in"
-                  >
-                    <div className="px-3 py-1.5 border-b border-slate-100 mb-1">
-                      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400 font-display">
-                        Property Intelligence
-                      </p>
-                    </div>
-
-                    <div className="space-y-1">
-                      {exploreItems.map((item) => {
-                        const Icon = item.icon;
-                        return (
-                          <Link
-                            key={item.title}
-                            href={item.href}
-                            onClick={closeAllMenus}
-                            role="menuitem"
-                            className="group flex items-start gap-3 p-2.5 rounded-xl hover:bg-slate-50 transition-colors"
-                          >
-                            <div className="p-2 rounded-lg bg-slate-50 group-hover:bg-[#FFF5EE] text-slate-600 group-hover:text-[#E85D3F] transition-colors shrink-0 mt-0.5">
-                              <Icon className="w-4 h-4" />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-xs sm:text-sm font-semibold text-slate-800 group-hover:text-[#E85D3F] transition-colors font-display">
-                                  {item.title}
-                                </span>
-                                {item.badge && (
-                                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#E85D3F] bg-[#FFF0EB] px-1.5 py-0.2 rounded font-display">
-                                    {item.badge}
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-xs text-slate-500 font-body leading-normal line-clamp-1 mt-0.5">
-                                {item.description}
-                              </p>
-                            </div>
-                          </Link>
-                        );
-                      })}
-                    </div>
+                <div
+                  role="menu"
+                  aria-hidden={!exploreOpen}
+                  className={`absolute left-0 mt-3 w-80 bg-white border border-slate-200 shadow-2xl rounded-2xl p-2.5 z-50 transition-all duration-150 ${
+                    exploreOpen
+                      ? 'opacity-100 visible pointer-events-auto translate-y-0'
+                      : 'opacity-0 invisible pointer-events-none -translate-y-1'
+                  }`}
+                >
+                  <div className="px-3 py-1.5 border-b border-slate-100 mb-1">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400 font-display">
+                      Property Intelligence
+                    </p>
                   </div>
-                )}
+
+                  <div className="space-y-1">
+                    {exploreItems.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <Link
+                          key={item.title}
+                          href={item.href}
+                          rel={item.nofollow ? 'nofollow' : undefined}
+                          onClick={closeAllMenus}
+                          role="menuitem"
+                          tabIndex={exploreOpen ? 0 : -1}
+                          className="group flex items-start gap-3 p-2.5 rounded-xl hover:bg-slate-50 transition-colors"
+                        >
+                          <div className="p-2 rounded-lg bg-slate-50 group-hover:bg-[#FFF5EE] text-slate-600 group-hover:text-[#E85D3F] transition-colors shrink-0 mt-0.5">
+                            <Icon className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs sm:text-sm font-semibold text-slate-800 group-hover:text-[#E85D3F] transition-colors font-display">
+                                {item.title}
+                              </span>
+                              {item.badge && (
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-[#E85D3F] bg-[#FFF0EB] px-1.5 py-0.2 rounded font-display">
+                                  {item.badge}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-500 font-body leading-normal line-clamp-1 mt-0.5">
+                              {item.description}
+                            </p>
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </nav>
           </div>
@@ -391,7 +422,7 @@ function HeaderContent() {
           onClick={closeAllMenus}
         >
           <div
-            className="w-full bg-white border-b border-neutral-200 shadow-2xl px-5 pt-5 pb-[calc(5.25rem+env(safe-area-inset-bottom,0px))] md:pb-6 space-y-5 max-h-[calc(100dvh-3.5rem)] sm:max-h-[calc(100dvh-68px)] overflow-y-auto overscroll-contain"
+            className="w-full bg-white border-b border-neutral-200 rounded-b-2xl shadow-2xl px-5 pt-4 pb-5 space-y-4 max-h-[calc(100dvh-7rem-env(safe-area-inset-bottom,0px))] sm:max-h-[calc(100dvh-124px-env(safe-area-inset-bottom,0px))] md:max-h-[calc(100dvh-68px)] overflow-y-auto overscroll-contain"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Mobile Search Quick Trigger */}
@@ -421,13 +452,13 @@ function HeaderContent() {
               </Link>
 
               <Link
-                href="/buy?inventoryType=RESALE"
+                href="/buy"
                 onClick={closeAllMenus}
                 className={`flex items-center justify-between py-2.5 px-3 rounded-lg text-sm font-semibold hover:bg-slate-50 hover:text-[#E85D3F] transition-colors ${
-                  isLinkActive('/buy?inventoryType=RESALE') ? 'text-[#E85D3F] bg-[#FFF8F5]' : 'text-slate-800'
+                  isLinkActive('/buy') ? 'text-[#E85D3F] bg-[#FFF8F5]' : 'text-slate-800'
                 }`}
               >
-                <span>Resale Homes</span>
+                <span>Buy &amp; Resale Homes</span>
                 <ArrowRight className="w-4 h-4 text-slate-400" />
               </Link>
 
@@ -444,6 +475,7 @@ function HeaderContent() {
 
               <Link
                 href="/projects?stage=NEW_LAUNCH"
+                rel="nofollow"
                 onClick={closeAllMenus}
                 className={`flex items-center justify-between py-2.5 px-3 rounded-lg text-sm font-semibold hover:bg-slate-50 hover:text-[#E85D3F] transition-colors ${
                   isLinkActive('/projects?stage=NEW_LAUNCH') ? 'text-[#E85D3F] bg-[#FFF8F5]' : 'text-slate-800'
@@ -489,6 +521,20 @@ function HeaderContent() {
               </Link>
 
               <Link
+                href="/reviews"
+                onClick={closeAllMenus}
+                className={`flex items-center justify-between py-2.5 px-3 rounded-lg text-sm font-medium hover:bg-slate-50 hover:text-[#E85D3F] transition-colors ${
+                  isLinkActive('/reviews') ? 'text-[#E85D3F] bg-[#FFF8F5] font-semibold' : 'text-slate-700'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <FileCheck2 className="w-4 h-4 text-slate-400" />
+                  <span>Project Reviews</span>
+                </div>
+                <ArrowRight className="w-4 h-4 text-slate-400" />
+              </Link>
+
+              <Link
                 href="/guides"
                 onClick={closeAllMenus}
                 className={`flex items-center justify-between py-2.5 px-3 rounded-lg text-sm font-medium hover:bg-slate-50 hover:text-[#E85D3F] transition-colors ${
@@ -498,6 +544,20 @@ function HeaderContent() {
                 <div className="flex items-center gap-2.5">
                   <BookOpen className="w-4 h-4 text-slate-400" />
                   <span>Buyer Guides &amp; Advisory</span>
+                </div>
+                <ArrowRight className="w-4 h-4 text-slate-400" />
+              </Link>
+
+              <Link
+                href="/market"
+                onClick={closeAllMenus}
+                className={`flex items-center justify-between py-2.5 px-3 rounded-lg text-sm font-medium hover:bg-slate-50 hover:text-[#E85D3F] transition-colors ${
+                  isLinkActive('/market') ? 'text-[#E85D3F] bg-[#FFF8F5] font-semibold' : 'text-slate-700'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <BarChart3 className="w-4 h-4 text-slate-400" />
+                  <span>Market Intelligence</span>
                 </div>
                 <ArrowRight className="w-4 h-4 text-slate-400" />
               </Link>

@@ -347,10 +347,10 @@ export default function EditDeveloperPage(props: EditDeveloperPageProps) {
                     name="canonicalUrl"
                     value={formData.seo?.canonicalUrl || ''}
                     onChange={handleSeoChange}
-                    placeholder={`e.g. https://greathomes.co.in/developers/${formData.slug || 'developer-slug'} or /developers/${formData.slug || 'developer-slug'}`}
+                    placeholder={`e.g. https://www.greathomes.co.in/developers/${formData.slug || 'developer-slug'} or /developers/${formData.slug || 'developer-slug'}`}
                     className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:ring-2 focus:ring-neutral-900 font-body"
                   />
-                  <p className="text-[11px] text-neutral-500 font-body">Leave blank to use default canonical URL. Accepts https://greathomes.co.in/developers/[slug] or /developers/[slug].</p>
+                  <p className="text-[11px] text-neutral-500 font-body">Leave blank to use default canonical URL. Accepts https://www.greathomes.co.in/developers/[slug] or /developers/[slug].</p>
                 </div>
               </div>
             </div>

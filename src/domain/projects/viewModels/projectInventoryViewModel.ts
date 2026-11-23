@@ -2,10 +2,16 @@ import type { Metadata } from 'next';
 import { ResaleFilterOptions, ResaleSortOption } from '../repositories/resaleRepository';
 import { RentalListingFilter, RentalSortOption } from '../repositories/rentalRepository';
 import { PublicProjectDto } from '../dto/projectDto';
+import {
+  buildPageMetadata,
+  formatLocationWithCity,
+  sanitizeMetaDescription,
+  SITE_ORIGIN,
+} from '../../seo/metadataBuilder';
 
 export const PROJECT_INVENTORY_PAGE_SIZE = 9;
 export const PROJECT_CAROUSEL_MAX_ITEMS = 6;
-const BASE_URL = 'https://www.greathomes.co.in';
+const BASE_URL = SITE_ORIGIN;
 
 const VALID_FURNISHING = new Set(['UNFURNISHED', 'SEMI_FURNISHED', 'FULLY_FURNISHED']);
 const VALID_FLOOR_CATEGORY = new Set(['LOWER_FLOOR', 'MID_FLOOR', 'HIGH_FLOOR']);
@@ -174,7 +180,7 @@ export function deriveProjectCarpetAreaRangeText(project: PublicProjectDto): str
 
 /**
  * Shared metadata builder for /projects/[slug]/resale and /projects/[slug]/rent.
- * - Clean page-1 URLs are always index, follow regardless of inventory count (0, 1-9, 10+, 100+).
+ * - Clean page-1 URLs are index, follow only when verified inventory exists (totalEligibleCount > 0); empty inventory pages return noindex, follow.
  * - Filtered, explicitly sorted, and paginated URLs are noindex, follow and canonicalize to clean base URL.
  * - Populates complete OpenGraph and Twitter card metadata using canonical project media.
  */
@@ -199,23 +205,19 @@ export function buildProjectInventorySeoMetadata(options: {
 
   const isResale = mode === 'RESALE';
   const rawLocality = project.location?.name?.trim();
-  const locationClause =
-    rawLocality && rawLocality.toLowerCase() !== 'kolkata'
-      ? `${rawLocality}, Kolkata`
-      : 'Kolkata';
-
-  const canonicalUrl = `${BASE_URL}/projects/${project.slug}/${isResale ? 'resale' : 'rent'}`;
+  const locationClause = formatLocationWithCity(rawLocality, 'Kolkata');
+  const canonicalPath = `/projects/${project.slug}/${isResale ? 'resale' : 'rent'}`;
 
   const cleanProjectName = project.name.split(/\s*[—–]\s*/)[0].trim() || project.name.trim();
 
   const baseTitle = isResale
-    ? `Resale Apartments in ${cleanProjectName}, ${locationClause}`
-    : `Apartments for Rent in ${cleanProjectName}, ${locationClause}`;
+    ? `Resale Flats in ${cleanProjectName}, ${rawLocality && rawLocality.toLowerCase() !== 'kolkata' ? rawLocality : 'Kolkata'}`
+    : `Flats for Rent in ${cleanProjectName}, ${rawLocality && rawLocality.toLowerCase() !== 'kolkata' ? rawLocality : 'Kolkata'}`;
 
   const titleCountBucket = formatInventoryTitleCountBucket(totalEligibleCount);
-  const title = titleCountBucket
-    ? `${baseTitle} – ${titleCountBucket} Listings | Great Homes`
-    : `${baseTitle} | Great Homes`;
+  const rawTitle = titleCountBucket
+    ? `${baseTitle} (${titleCountBucket} Verified)`
+    : baseTitle;
 
   const developerClause = project.developer?.name?.trim()
     ? ` by ${project.developer.name.trim()}`
@@ -224,7 +226,7 @@ export function buildProjectInventorySeoMetadata(options: {
     project.configurationsSummary?.trim() || project.snapshot?.configurations?.trim() || null;
   const configClause = configSummary ? `${configSummary} ` : '';
 
-  let description: string;
+  let rawDescription: string;
   if (totalEligibleCount > 0) {
     const countPhrase = formatInventoryListingCountPhrase({
       eligibleCount: totalEligibleCount,
@@ -233,52 +235,28 @@ export function buildProjectInventorySeoMetadata(options: {
       pluralNoun: isResale ? 'resale apartments' : 'rental apartments',
     });
 
-    description = isResale
-      ? `Browse ${countPhrase} for sale in ${project.name}${developerClause}, ${locationClause}. Compare ${configClause}configurations, carpet areas, floor levels & asking prices.`
-      : `Browse ${countPhrase} for rent in ${project.name}${developerClause}, ${locationClause}. Compare ${configClause}configurations, carpet areas, monthly rent & lease terms.`;
+    rawDescription = isResale
+      ? `Browse ${countPhrase} for sale in ${project.name}${developerClause}, ${locationClause}. Compare ${configClause}configurations, carpet areas & asking prices.`
+      : `Browse ${countPhrase} for rent in ${project.name}${developerClause}, ${locationClause}. Compare ${configClause}configurations, monthly rent & lease terms.`;
   } else {
-    description = isResale
-      ? `Explore resale apartments in ${project.name}${developerClause}, ${locationClause}. Review ${configClause}project configurations, carpet area details & register for resale availability alerts.`
-      : `Explore apartments for rent in ${project.name}${developerClause}, ${locationClause}. Review ${configClause}project configurations, carpet area details & register for rental availability alerts.`;
+    rawDescription = isResale
+      ? `Explore resale apartments in ${project.name}${developerClause}, ${locationClause}. Review ${configClause}configurations and register for resale availability alerts.`
+      : `Explore apartments for rent in ${project.name}${developerClause}, ${locationClause}. Review ${configClause}configurations and register for rental availability alerts.`;
   }
 
   const shouldIndex = totalEligibleCount > 0 && !hasActiveFilters && !hasExplicitSort && page === 1;
   const heroMedia = resolveCanonicalProjectHeroMedia(project, mode);
 
-  return {
-    title,
-    description,
-    alternates: {
-      canonical: canonicalUrl,
-    },
-    robots: {
-      index: shouldIndex,
-      follow: true,
-    },
-    openGraph: {
-      title,
-      description,
-      url: canonicalUrl,
-      siteName: 'Great Homes',
-      type: 'website',
-      ...(heroMedia
-        ? {
-            images: [
-              {
-                url: heroMedia.url,
-                alt: heroMedia.alt,
-              },
-            ],
-          }
-        : {}),
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title,
-      description,
-      ...(heroMedia ? { images: [heroMedia.url] } : {}),
-    },
-  };
+  return buildPageMetadata({
+    title: rawTitle,
+    description: sanitizeMetaDescription(rawDescription, rawDescription, { maxLength: 158 }),
+    canonicalPath,
+    index: shouldIndex,
+    follow: true,
+    ogType: 'website',
+    ogImage: heroMedia?.url,
+    ogImageAlt: heroMedia?.alt,
+  });
 }
 
 export interface ParsedProjectResaleSearchParams {

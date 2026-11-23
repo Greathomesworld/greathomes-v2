@@ -4,30 +4,51 @@ import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ChevronRight, Building2, MapPin, CheckCircle2, ShieldCheck, ArrowRight, HelpCircle } from 'lucide-react';
-import { BhkLandingData } from '@/src/domain/projects/services/bhkLandingService';
+import { BhkLandingData, EligibleBhkLandingEntry } from '@/src/domain/projects/services/bhkLandingService';
 import { formatIndianPrice } from '@/src/components/discovery/formatters';
 import { safeJsonLd } from '@/src/lib/safeJsonLd';
+import { formatLocationWithCity } from '@/src/domain/seo/metadataBuilder';
 
 interface BhkLandingPageRendererProps {
   data: BhkLandingData;
   jsonLd: Record<string, unknown>;
+  relatedBhkLinks?: EligibleBhkLandingEntry[];
 }
 
-export function BhkLandingPageRenderer({ data, jsonLd }: BhkLandingPageRendererProps) {
+export function BhkLandingPageRenderer({
+  data,
+  jsonLd,
+  relatedBhkLinks = [],
+}: BhkLandingPageRendererProps) {
   const {
     bedroomCount,
     localitySlug,
     localityName,
+    isCityLevel,
     projects,
     totalProjects,
     totalConfigurations,
+    verifiedReraCount,
     minPrice,
     hasPriceOnRequestOnly,
   } = data;
 
-  const startingPriceStr = !hasPriceOnRequestOnly && minPrice
-    ? formatIndianPrice(minPrice)
-    : 'Price on Request';
+  const locationWithCity = formatLocationWithCity(localityName, 'Kolkata');
+  const projectWord = totalProjects === 1 ? 'Project' : 'Projects';
+  const typologyWord = totalConfigurations === 1 ? 'Unit Typology' : 'Unit Typologies';
+
+  const startingPriceStr =
+    !hasPriceOnRequestOnly && minPrice ? formatIndianPrice(minPrice) : 'Price on Request';
+
+  const priceSentence =
+    !hasPriceOnRequestOnly && minPrice
+      ? `Published starting prices currently begin at ${formatIndianPrice(minPrice)}.`
+      : 'Current pricing is available on request from the developer or Great Homes advisors.';
+
+  const reraAnswer =
+    verifiedReraCount > 0
+      ? `${verifiedReraCount} of the ${totalProjects} listed ${bedroomCount} BHK ${projectWord.toLowerCase()} in ${locationWithCity} carry verified WBRERA registration records published directly on their Great Homes project pages.`
+      : `Great Homes displays official WBRERA registration status and developer disclosures on each individual project page for ${bedroomCount} BHK developments in ${locationWithCity}.`;
 
   return (
     <div className="min-h-screen bg-[#FAF9F6] text-[#111111]">
@@ -75,21 +96,29 @@ export function BhkLandingPageRenderer({ data, jsonLd }: BhkLandingPageRendererP
             {bedroomCount} BHK Flats in {localityName}
           </h1>
           <p className="text-sm sm:text-base font-body text-[#111111]/75 max-w-3xl leading-relaxed">
-            Explore {totalProjects} verified residential developments offering {bedroomCount} BHK configurations across {localityName}, Kolkata. Discover floor plans, RERA approvals, construction milestones, and transparent pricing intelligence.
+            Explore {totalProjects} verified residential {projectWord.toLowerCase()} offering{' '}
+            {bedroomCount} BHK configurations across {locationWithCity}. Compare floor plans, RERA
+            approvals, construction milestones, and transparent pricing intelligence.
           </p>
 
           <div className="mt-6 flex flex-wrap items-center gap-6 text-xs sm:text-sm font-display text-[#111111]/80">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-600" />
-              <span><strong>{totalProjects}</strong> Verified Projects</span>
+              <span>
+                <strong>{totalProjects}</strong> Verified {projectWord}
+              </span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-[#735A3A]" />
-              <span><strong>{totalConfigurations}</strong> Unit Typologies</span>
+              <span>
+                <strong>{totalConfigurations}</strong> {typologyWord}
+              </span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-amber-600" />
-              <span>Starting from <strong>{startingPriceStr}</strong></span>
+              <span>
+                Starting from <strong>{startingPriceStr}</strong>
+              </span>
             </div>
           </div>
         </div>
@@ -130,11 +159,20 @@ export function BhkLandingPageRenderer({ data, jsonLd }: BhkLandingPageRendererP
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
             {projects.map((p) => {
-              const heroMedia = p.media?.find(m => m.isFeatured) || p.media?.[0];
-              const hasPublicPrice = !p.pricing?.priceOnRequest && Boolean(p.pricing?.startingPrice && p.pricing.startingPrice > 0);
-              const priceDisplay = hasPublicPrice ? formatIndianPrice(p.pricing.startingPrice!) : 'Price on Request';
-              const locationLabel = p.location?.name || localityName;
-              const matchingBhkConfigs = (p.configurations || []).filter(c => c.bedroomCount === bedroomCount);
+              const heroMedia = p.media?.find((m) => m.isFeatured) || p.media?.[0];
+              const hasPublicPrice =
+                !p.pricing?.priceOnRequest &&
+                Boolean(p.pricing?.startingPrice && p.pricing.startingPrice > 0);
+              const priceDisplay = hasPublicPrice
+                ? formatIndianPrice(p.pricing.startingPrice!)
+                : 'Price on Request';
+              const locationLabel = formatLocationWithCity(
+                p.location?.name || localityName,
+                'Kolkata'
+              );
+              const matchingBhkConfigs = (p.configurations || []).filter(
+                (c) => c.bedroomCount === bedroomCount
+              );
 
               return (
                 <article
@@ -175,13 +213,11 @@ export function BhkLandingPageRenderer({ data, jsonLd }: BhkLandingPageRendererP
                     <div>
                       <div className="flex items-center gap-1.5 text-xs font-body text-[#111111]/60 mb-1">
                         <MapPin className="w-3.5 h-3.5 shrink-0 text-[#735A3A]" />
-                        <span className="truncate">{locationLabel}, Kolkata</span>
+                        <span className="truncate">{locationLabel}</span>
                       </div>
 
                       <h3 className="text-lg font-display font-bold text-[#111111] group-hover:text-[#735A3A] transition-colors leading-snug">
-                        <Link href={`/projects/${p.slug}`}>
-                          {p.name}
-                        </Link>
+                        <Link href={`/projects/${p.slug}`}>{p.name}</Link>
                       </h3>
 
                       {p.developer?.name && (
@@ -193,7 +229,8 @@ export function BhkLandingPageRenderer({ data, jsonLd }: BhkLandingPageRendererP
                       {/* Config summary pill */}
                       <div className="mt-3 flex flex-wrap gap-1.5">
                         <span className="px-2 py-0.5 bg-[#F5F2EB] text-[#111111] text-[11px] font-display font-medium border border-[#E5DFD5]">
-                          {bedroomCount} BHK ({matchingBhkConfigs.length} variant{matchingBhkConfigs.length === 1 ? '' : 's'})
+                          {bedroomCount} BHK ({matchingBhkConfigs.length} variant
+                          {matchingBhkConfigs.length === 1 ? '' : 's'})
                         </span>
                         {p.status && (
                           <span className="px-2 py-0.5 bg-[#F5F5F5] text-[#111111]/70 text-[11px] font-body border border-[#E5E5E5]">
@@ -229,8 +266,53 @@ export function BhkLandingPageRenderer({ data, jsonLd }: BhkLandingPageRendererP
           </div>
         )}
 
+        {/* Contextual Related BHK & Locality Links */}
+        {(relatedBhkLinks.length > 0 || !isCityLevel) && (
+          <section className="mt-14 pt-10 border-t border-[#EAE6DF]">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-5">
+              <div>
+                <h2 className="text-lg sm:text-xl font-display font-bold text-[#111111]">
+                  Explore Related Configurations &amp; Localities
+                </h2>
+                <p className="text-xs sm:text-sm font-body text-[#111111]/60 mt-0.5">
+                  Compare other verified BHK options across Kolkata micro-markets
+                </p>
+              </div>
+              {!isCityLevel && (
+                <Link
+                  href={`/locations/${localitySlug}`}
+                  className="inline-flex items-center gap-1.5 text-xs font-display font-semibold text-[#735A3A] hover:text-[#111111] transition-colors"
+                >
+                  <span>Full {localityName} Locality Guide</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2.5">
+              {relatedBhkLinks.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="inline-flex items-center gap-2 px-3.5 py-2 bg-white border border-[#E5DFD5] hover:border-[#111111] text-xs font-display font-medium text-[#111111] transition-colors"
+                >
+                  <span>{item.label}</span>
+                  <span className="text-[11px] text-[#111111]/50">({item.totalProjects})</span>
+                </Link>
+              ))}
+              <Link
+                href="/buy"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#F5F2EB] border border-[#E5DFD5] hover:border-[#111111] text-xs font-display font-semibold text-[#111111] transition-colors"
+              >
+                <span>All Properties for Sale</span>
+                <ArrowRight className="w-3 h-3" />
+              </Link>
+            </div>
+          </section>
+        )}
+
         {/* FAQs Section */}
-        <section className="mt-16 sm:mt-20 pt-10 border-t border-[#EAE6DF]">
+        <section className="mt-14 sm:mt-16 pt-10 border-t border-[#EAE6DF]">
           <div className="max-w-3xl">
             <div className="inline-flex items-center gap-1.5 text-xs font-display font-semibold text-[#735A3A] uppercase tracking-wider mb-2">
               <HelpCircle className="w-3.5 h-3.5" />
@@ -246,25 +328,29 @@ export function BhkLandingPageRenderer({ data, jsonLd }: BhkLandingPageRendererP
                   How many verified {bedroomCount} BHK projects are available in {localityName}?
                 </h3>
                 <p className="text-xs sm:text-sm font-body text-[#111111]/70 leading-relaxed">
-                  Great Homes features {totalProjects} verified residential developments with {bedroomCount} BHK typologies in {localityName}, Kolkata. Every listed project includes developer background, carpet area details, and RERA registration credentials.
+                  Great Homes features {totalProjects} verified residential{' '}
+                  {projectWord.toLowerCase()} offering {bedroomCount} BHK configurations in{' '}
+                  {locationWithCity}, complete with floor plans, carpet area details, and developer
+                  profiles.
                 </p>
               </div>
 
               <div className="bg-white border border-[#EAE6DF] p-5 sm:p-6">
                 <h3 className="text-sm sm:text-base font-display font-semibold text-[#111111] mb-2">
-                  What is the price range for {bedroomCount} BHK apartments in {localityName}?
+                  What is the price range for {bedroomCount} BHK flats in {localityName}?
                 </h3>
                 <p className="text-xs sm:text-sm font-body text-[#111111]/70 leading-relaxed">
-                  Starting prices in this category begin {startingPriceStr}. Final ticket size depends on tower floor level, view, configuration layout, and developer specifications.
+                  Prices for {bedroomCount} BHK flats in {locationWithCity} vary by micro-location,
+                  carpet area, and tower specification. {priceSentence}
                 </p>
               </div>
 
               <div className="bg-white border border-[#EAE6DF] p-5 sm:p-6">
                 <h3 className="text-sm sm:text-base font-display font-semibold text-[#111111] mb-2">
-                  Are these {bedroomCount} BHK developments RERA approved?
+                  Are {bedroomCount} BHK projects in {localityName} RERA registered?
                 </h3>
                 <p className="text-xs sm:text-sm font-body text-[#111111]/70 leading-relaxed">
-                  Yes, Great Homes validates and displays the official WBRERA registration number, phase timelines, and compliance status for every published project in Kolkata.
+                  {reraAnswer}
                 </p>
               </div>
             </div>

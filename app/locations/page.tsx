@@ -4,39 +4,37 @@ import { marketIntelligenceService } from '@/src/domain/marketIntelligence/servi
 import { Breadcrumbs } from '@/src/components/navigation/Breadcrumbs';
 import { LocationsDirectoryClient } from '@/src/components/locations/LocationsDirectoryClient';
 import { safeJsonLd } from '@/src/lib/safeJsonLd';
+import { buildPageMetadata } from '@/src/domain/seo/metadataBuilder';
 
-export const dynamic = 'force-dynamic';
 export const revalidate = 300;
 
-export const metadata: Metadata = {
-  title: 'Residential Areas in Kolkata | Locality Guide – Great Homes',
+export const metadata: Metadata = buildPageMetadata({
+  title: 'Residential Areas in Kolkata | Locality Guide',
   description:
     'Explore Kolkata residential areas, neighbourhoods and localities. Discover New Town, Rajarhat, Salt Lake, Ballygunge and property opportunities with Great Homes.',
-  alternates: {
-    canonical: 'https://www.greathomes.co.in/locations',
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
-  openGraph: {
-    title: 'Residential Areas in Kolkata | Locality Guide – Great Homes',
-    description:
-      'Explore Kolkata residential areas, neighbourhoods and localities. Discover New Town, Rajarhat, Salt Lake, Ballygunge and property opportunities with Great Homes.',
-    url: 'https://www.greathomes.co.in/locations',
-    siteName: 'Great Homes',
-    type: 'website',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Residential Areas in Kolkata | Locality Guide – Great Homes',
-    description:
-      'Explore Kolkata residential areas, neighbourhoods and localities. Discover New Town, Rajarhat, Salt Lake, Ballygunge and property opportunities with Great Homes.',
-  },
-};
+  canonicalPath: '/locations',
+});
 
 export default async function LocationsDirectoryPage() {
-  const summary = await marketIntelligenceService.getDirectoryIntelligenceSummary();
+  const summary = await marketIntelligenceService
+    .getDirectoryIntelligenceSummary()
+    .catch(() => ({
+      totals: {
+        areasCount: 0,
+        neighbourhoodsCount: 0,
+        featuredAreasCount: 0,
+        publishedProjectsCount: 0,
+        verifiedResaleCount: 0,
+        verifiedRentalCount: 0,
+        unverifiedResaleCount: 0,
+        unverifiedRentalCount: 0,
+      },
+      areas: [],
+      neighbourhoods: [],
+      mappableProjects: [],
+      citiesAndMunicipalities: [],
+      corridorCounts: {},
+    }));
 
   const breadcrumbItems = [
     { label: 'Home', href: '/' },

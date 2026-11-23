@@ -14,12 +14,12 @@ import {
 } from 'lucide-react';
 
 export default function SearchConsoleAdminPage() {
-  const [inspectUrlInput, setInspectUrlInput] = useState('https://greathomes.co.in/projects');
+  const [inspectUrlInput, setInspectUrlInput] = useState('https://www.greathomes.co.in/projects');
   const [inspectLoading, setInspectLoading] = useState(false);
   const [inspectError, setInspectError] = useState<string | null>(null);
   const [inspectResult, setInspectResult] = useState<any | null>(null);
 
-  const [sitemapFeedInput, setSitemapFeedInput] = useState('https://greathomes.co.in/sitemap.xml');
+  const [sitemapFeedInput, setSitemapFeedInput] = useState('https://www.greathomes.co.in/sitemap.xml');
   const [sitemapLoading, setSitemapLoading] = useState(false);
   const [sitemapError, setSitemapError] = useState<string | null>(null);
   const [sitemapResult, setSitemapResult] = useState<any | null>(null);
@@ -35,7 +35,7 @@ export default function SearchConsoleAdminPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           targetUrl: inspectUrlInput,
-          siteUrl: 'https://greathomes.co.in',
+          siteUrl: 'https://www.greathomes.co.in',
         }),
       });
       const data = await res.json();
@@ -61,7 +61,7 @@ export default function SearchConsoleAdminPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           feedpath: sitemapFeedInput,
-          siteUrl: 'https://greathomes.co.in',
+          siteUrl: 'https://www.greathomes.co.in',
         }),
       });
       const data = await res.json();
@@ -161,7 +161,7 @@ export default function SearchConsoleAdminPage() {
                   required
                   value={inspectUrlInput}
                   onChange={e => setInspectUrlInput(e.target.value)}
-                  placeholder="https://greathomes.co.in/projects/..."
+                  placeholder="https://www.greathomes.co.in/projects/..."
                   className="flex-1 px-3.5 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-900 font-mono"
                 />
                 <button
@@ -178,9 +178,9 @@ export default function SearchConsoleAdminPage() {
             <div className="flex flex-wrap gap-1.5 text-[11px]">
               <span className="text-neutral-400 font-sans">Presets:</span>
               {[
-                'https://greathomes.co.in/projects',
-                'https://greathomes.co.in/developers',
-                'https://greathomes.co.in/admin/seo/overview',
+                'https://www.greathomes.co.in/projects',
+                'https://www.greathomes.co.in/developers',
+                'https://www.greathomes.co.in/admin/seo/overview',
               ].map(preset => (
                 <button
                   key={preset}
@@ -188,7 +188,7 @@ export default function SearchConsoleAdminPage() {
                   onClick={() => setInspectUrlInput(preset)}
                   className="px-2 py-0.5 rounded bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-mono cursor-pointer"
                 >
-                  {preset.replace('https://greathomes.co.in', '')}
+                  {preset.replace('https://www.greathomes.co.in', '')}
                 </button>
               ))}
             </div>

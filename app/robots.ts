@@ -1,4 +1,5 @@
 import { MetadataRoute } from 'next';
+import { SITE_ORIGIN } from '@/src/domain/seo/metadataBuilder';
 
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -11,13 +12,13 @@ export default function robots(): MetadataRoute.Robots {
           '/admin/',
           '/account/',
           '/my-properties',
-          '/post-property',
+          '/post-property/new',
           '/compression-gallery',
           '/compare',
         ],
       },
     ],
-    sitemap: 'https://www.greathomes.co.in/sitemap.xml',
-    host: 'https://www.greathomes.co.in',
+    sitemap: `${SITE_ORIGIN}/sitemap.xml`,
+    host: SITE_ORIGIN,
   };
 }
