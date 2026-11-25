@@ -10,6 +10,7 @@ import { ComparisonTray } from './../src/components/comparison/ComparisonTray';
 import { VisitorTelemetryProvider } from './../src/components/telemetry/VisitorTelemetryProvider';
 import { SearchProvider } from './../src/context/SearchContext';
 import { GlobalModalsHost } from './../src/components/layout/GlobalModalsHost';
+import { GoogleAnalytics } from './../src/components/analytics/GoogleAnalytics';
 import { safeJsonLd } from './../src/lib/safeJsonLd';
 
 import {
@@ -117,6 +118,7 @@ export default function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }}
         />
+        <GoogleAnalytics />
         <VisitorTelemetryProvider>
           <EnquiryProvider>
             <CustomerAuthProvider>
