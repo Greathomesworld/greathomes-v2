@@ -7,7 +7,7 @@ import { buildPageMetadata } from '@/src/domain/seo/metadataBuilder';
 export const revalidate = 300;
 
 export const metadata: Metadata = buildPageMetadata({
-  title: 'Independent Kolkata Project Reviews & Assessments',
+  title: 'Kolkata Project Reviews & Buyer Assessments',
   description:
     'Independent editorial assessments of Kolkata residential projects covering floor plans, pricing, WBRERA verification, and locality connectivity.',
   canonicalPath: '/reviews',

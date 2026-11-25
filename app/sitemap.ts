@@ -18,7 +18,7 @@ import {
   getEligibleRentalListings,
 } from '@/src/domain/projects/viewModels/projectSectionEligibility';
 import {
-  normalizeAbsoluteImageUrl,
+  normalizePublicSeoImageUrl,
   SITE_ORIGIN,
 } from '@/src/domain/seo/metadataBuilder';
 
@@ -166,7 +166,7 @@ async function buildSitemap(): Promise<MetadataRoute.Sitemap> {
   // Project URLs with strictly validated absolute https:// <image:loc>
   const projectUrls: MetadataRoute.Sitemap = publishedProjects.map((p) => {
     const rawHero = p.media?.find((m) => m.isFeatured)?.url || p.media?.[0]?.url;
-    const absoluteHero = normalizeAbsoluteImageUrl(rawHero);
+    const absoluteHero = normalizePublicSeoImageUrl(rawHero);
     const lastModified = resolveOptionalDate(p.updatedAt);
 
     return {

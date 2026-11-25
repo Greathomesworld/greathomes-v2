@@ -11,7 +11,7 @@ import {
   buildNoIndexMetadata,
   buildPageMetadata,
   formatLocationWithCity,
-  normalizeAbsoluteImageUrl,
+  normalizePublicSeoImageUrl,
   sanitizeMetaDescription,
   SITE_ORIGIN,
 } from '@/src/domain/seo/metadataBuilder';
@@ -48,9 +48,16 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const alreadyHasRentPhrase = /\bfor\s+rent\b|\brental\b/i.test(listing.title);
   const titleCore = alreadyHasRentPhrase ? listing.title : `${listing.title} for Rent`;
-  const rawTitle = listing.formattedMonthlyRent
+  const withRentTitle = listing.formattedMonthlyRent
     ? `${titleCore} – ${listing.formattedMonthlyRent}`
     : titleCore;
+  // Avoid clamping off currency/period units (e.g. "/mo") when title + rent exceeds 51 chars (+14 brand = 65)
+  const rawTitle =
+    withRentTitle.length <= 51
+      ? withRentTitle
+      : titleCore.length <= 51
+        ? titleCore
+        : listing.title;
 
   const fallbackDescription = `Explore this ${listing.isVerified ? 'verified ' : ''}${
     listing.propertyType === 'PLOT'
@@ -157,7 +164,7 @@ export default async function RentalListingDetailPage({ params }: PageProps) {
     : 'Apartment';
 
   const listingImages = listing.media
-    .map((m) => normalizeAbsoluteImageUrl(m.url))
+    .map((m) => normalizePublicSeoImageUrl(m.url))
     .filter((u): u is string => Boolean(u));
 
   const fallbackSchemaDesc = `${listing.title} for rent in ${formatLocationWithCity(

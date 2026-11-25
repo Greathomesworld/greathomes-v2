@@ -2,7 +2,7 @@ import { PublicProjectDto } from '@/src/domain/projects/dto/projectDto';
 import { isKnownTestDeveloperSlug } from '@/src/domain/developers/services/developerService';
 import { safeJsonLd } from '@/src/lib/safeJsonLd';
 import {
-  normalizeAbsoluteImageUrl,
+  normalizePublicSeoImageUrl,
   sanitizeMetaDescription,
   SITE_ORIGIN,
 } from '@/src/domain/seo/metadataBuilder';
@@ -42,7 +42,7 @@ export function ProjectStructuredData({ project }: ProjectStructuredDataProps) {
   }));
 
   const normalizedImages = (project.media || [])
-    .map((m) => normalizeAbsoluteImageUrl(m.url))
+    .map((m) => normalizePublicSeoImageUrl(m.url))
     .filter((u): u is string => Boolean(u));
 
   const cleanDesc = sanitizeMetaDescription(

@@ -194,8 +194,17 @@ export function formatLocationWithCity(
     return cleanLoc;
   }
 
-  // Never output "West Bengal, Kolkata" for state-level pages
-  if (lower === 'west bengal' || lower === 'west bengal, india' || lower === 'india') {
+  // Never output "West Bengal, Kolkata" for state-level pages or append Kolkata to separate districts/cities
+  if (
+    lower === 'west bengal' ||
+    lower === 'west bengal, india' ||
+    lower === 'india' ||
+    lower === 'howrah' ||
+    lower === 'hooghly' ||
+    lower.endsWith(', hooghly') ||
+    lower.endsWith(', howrah') ||
+    lower.endsWith(', west bengal')
+  ) {
     return cleanLoc;
   }
 
@@ -453,17 +462,25 @@ export function isPlaceholderImageUrl(rawUrl?: string | null): boolean {
 }
 
 /**
+ * Normalizes a public SEO image URL (for OpenGraph, JSON-LD, or sitemap `<image:loc>`)
+ * and returns `null` if it is invalid or points to a banned placeholder host.
+ */
+export function normalizePublicSeoImageUrl(rawUrl?: string | null): string | null {
+  const normalized = normalizeAbsoluteImageUrl(rawUrl);
+  if (!normalized || isPlaceholderImageUrl(normalized)) {
+    return null;
+  }
+  return normalized;
+}
+
+/**
  * Resolves an editorial article/review image URL for OpenGraph, Twitter Cards,
  * Article JSON-LD, and editorial presentation:
  * 1. Valid existing non-placeholder absolute image URL
  * 2. Branded Great Homes default social image (`/og-image.png`)
  */
 export function resolveEditorialSeoImage(rawUrl?: string | null): string {
-  const normalized = normalizeAbsoluteImageUrl(rawUrl);
-  if (!normalized || isPlaceholderImageUrl(normalized)) {
-    return DEFAULT_OG_IMAGE;
-  }
-  return normalized;
+  return normalizePublicSeoImageUrl(rawUrl) || DEFAULT_OG_IMAGE;
 }
 
 /**
@@ -520,30 +537,41 @@ export interface LockedProjectTitleInput {
 }
 
 /**
- * LOCKED PROJECT TITLE STRATEGY (Section 4 — Canonical)
+ * LOCKED PROJECT TITLE STRATEGY (Section 4 — Canonical, Phase 3 F-12 Tightened)
  *
  * Formula: Project name + location + verified configuration + selective search intent + Great Homes branding
- * Example: "Merlin Rise in Rajarhat | 2 & 3 BHK, Price & Floor Plans | Great Homes"
+ * Example: "Merlin Rise in Rajarhat | 2 & 3 BHK, Price | Great Homes" (56 chars)
  *
  * Precedence:
- * 1. Validated manual override (`project_seo.metaTitle`, >= 15 chars) normalized with single `| Great Homes` branding.
- * 2. Verified project data following the locked formula with graceful length discipline (target <= 74 chars).
+ * 1. Validated manual override (`project_seo.metaTitle`, >= 15 chars) normalized with single `| Great Homes` branding (<= 65 chars).
+ * 2. Verified project data following the locked formula with practical SERP length discipline (target <= 62 chars).
  */
 export function buildLockedProjectTitle(input: LockedProjectTitleInput): string {
   const cleanOverride = stripBrandSuffix(input.overrideTitle);
   if (cleanOverride && cleanOverride.length >= 15) {
-    return formatBrandTitle(cleanOverride, { maxLength: 82 });
+    return formatBrandTitle(cleanOverride, { maxLength: 65 });
   }
 
   const projectName = stripHtmlAndNormalizeWhitespace(input.name) || 'Residential Project';
-  const rawLocation = stripHtmlAndNormalizeWhitespace(input.locationName);
+  const rawLocation = stripHtmlAndNormalizeWhitespace(input.locationName)
+    // Defensively guard against stale "West Bengal, Kolkata" labels passed by callers
+    .replace(/^West Bengal,\s*Kolkata$/i, 'West Bengal');
+
+  // Compact locality drops redundant ", Kolkata" when a specific Kolkata locality is already named
+  // (e.g. "Rajarhat, Kolkata" -> "Rajarhat") so project + locality + intent fit comfortably in <= 62 chars.
+  const compactLocation = rawLocation.replace(/,\s*Kolkata$/i, '').trim() || rawLocation;
+
   const normalizedNameLower = projectName.toLowerCase();
-
-  // Avoid repeating locality if project name already explicitly contains it (e.g. "Merlin Rise Rajarhat")
   const hasLocation =
-    Boolean(rawLocation) && !normalizedNameLower.includes(rawLocation.toLowerCase());
+    Boolean(rawLocation) &&
+    !normalizedNameLower.includes(compactLocation.toLowerCase()) &&
+    !normalizedNameLower.includes(rawLocation.toLowerCase());
 
-  const subject = hasLocation ? `${projectName} in ${rawLocation}` : projectName;
+  const subjectFull = hasLocation ? `${projectName} in ${rawLocation}` : projectName;
+  const subjectCompact = hasLocation ? `${projectName} in ${compactLocation}` : projectName;
+  const subjects =
+    subjectCompact !== subjectFull ? [subjectFull, subjectCompact] : [subjectCompact];
+
   const configSummary = formatVerifiedConfigurationSummary(
     input.configurations,
     input.propertyTypes
@@ -552,39 +580,52 @@ export function buildLockedProjectTitle(input: LockedProjectTitleInput): string 
   const hasPricing = input.hasPricing !== false;
   const hasFloorPlans = input.hasFloorPlans !== false;
 
+  // Avoid awkward double-ampersand phrasing like "2 & 3 BHK & Price"
+  const configPricePhrase = configSummary
+    ? configSummary.includes('&')
+      ? `${configSummary}, Price`
+      : `${configSummary} & Price`
+    : null;
+
   // Build ordered candidates from richest selective-intent phrase to cleanest concise fallback
   const candidates: string[] = [];
 
   if (configSummary) {
-    if (hasPricing && hasFloorPlans) {
-      candidates.push(`${subject} | ${configSummary}, Price & Floor Plans | ${SITE_NAME}`);
+    for (const subject of subjects) {
+      if (hasPricing && hasFloorPlans) {
+        candidates.push(`${subject} | ${configSummary}, Price & Floor Plans | ${SITE_NAME}`);
+      }
+      if (hasPricing && configPricePhrase) {
+        candidates.push(`${subject} | ${configPricePhrase} | ${SITE_NAME}`);
+      }
+      if (hasFloorPlans) {
+        candidates.push(`${subject} | ${configSummary} Floor Plans | ${SITE_NAME}`);
+      }
+      candidates.push(`${subject} | ${configSummary} | ${SITE_NAME}`);
     }
-    if (hasPricing) {
-      candidates.push(`${subject} | ${configSummary} & Price | ${SITE_NAME}`);
-    }
-    if (hasFloorPlans) {
-      candidates.push(`${subject} | ${configSummary} Floor Plans | ${SITE_NAME}`);
-    }
-    candidates.push(`${subject} | ${configSummary} | ${SITE_NAME}`);
   } else {
-    if (hasPricing && hasFloorPlans) {
-      candidates.push(`${subject} | Price & Floor Plans | ${SITE_NAME}`);
-    } else if (hasPricing) {
-      candidates.push(`${subject} | Price & Details | ${SITE_NAME}`);
+    for (const subject of subjects) {
+      if (hasPricing && hasFloorPlans) {
+        candidates.push(`${subject} | Price & Floor Plans | ${SITE_NAME}`);
+      } else if (hasPricing) {
+        candidates.push(`${subject} | Price & Details | ${SITE_NAME}`);
+      }
     }
   }
 
-  candidates.push(`${subject} | ${SITE_NAME}`);
+  for (const subject of subjects) {
+    candidates.push(`${subject} | ${SITE_NAME}`);
+  }
 
-  // Choose the first candidate within clean SERP length (<= 74 chars)
+  // Choose the first candidate within practical SERP width (<= 62 chars)
   for (const candidate of candidates) {
-    if (candidate.length <= 74) {
+    if (candidate.length <= 62) {
       return candidate;
     }
   }
 
-  // If even `${subject} | Great Homes` is unusually long, clamp cleanly with single branding
-  return formatBrandTitle(subject, { maxLength: 74 });
+  // If even `${subjectCompact} | Great Homes` exceeds 62 chars, clamp cleanly with single branding
+  return formatBrandTitle(subjectCompact, { maxLength: 62 });
 }
 
 export interface ProjectDescriptionInput {
@@ -670,6 +711,7 @@ export interface BuildPageMetadataInput {
   modifiedTime?: string;
   authors?: string[];
   omitCanonical?: boolean;
+  maxTitleLength?: number;
 }
 
 /**
@@ -680,7 +722,7 @@ export interface BuildPageMetadataInput {
 export function buildPageMetadata(input: BuildPageMetadataInput): Metadata {
   const formattedTitle = formatBrandTitle(input.title, {
     includeBrand: input.includeBrand ?? true,
-    maxLength: 82,
+    maxLength: input.maxTitleLength ?? 65,
   });
 
   const cleanDescription = sanitizeMetaDescription(input.description, input.description, {

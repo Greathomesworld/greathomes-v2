@@ -374,13 +374,35 @@ function deduplicateLocationParts(parts: Array<string | null | undefined>): stri
   return result;
 }
 
+const STATE_OR_COUNTRY_NAMES = new Set([
+  'west bengal',
+  'west bengal, india',
+  'india',
+]);
+
+const NON_KOLKATA_METRO_NAMES = new Set([
+  'howrah',
+  'hooghly',
+  'north 24 parganas',
+  'south 24 parganas',
+  'nadia',
+  'purba bardhaman',
+  'paschim bardhaman',
+  'darjeeling',
+  'siliguri',
+  'durgapur',
+  'asansol',
+]);
+
 /**
- * Formats a concise location label (e.g. "Rajarhat, Kolkata" or "Kolkata")
- * without ever duplicating city/locality names.
+ * Formats a concise location label (e.g. "Rajarhat, Kolkata", "Uttarpara, Hooghly",
+ * "West Bengal", or "Kolkata") without duplicating city/locality names or
+ * appending ", Kolkata" to state-level or non-Kolkata district entities.
  */
 export function formatProjectLocationShortLabel(
   location?: {
     name?: string | null;
+    type?: string | null;
     city?: string | null;
     state?: string | null;
     path?: { name: string; type?: string }[] | string;
@@ -389,11 +411,19 @@ export function formatProjectLocationShortLabel(
 ): string {
   if (!location) return defaultCity || '';
 
+  const rawName = (location.name || '').trim();
+  const lowerName = rawName.toLowerCase();
+  const explicitType = (location.type || '').toUpperCase();
+
   const rawPath = location.path;
   let cityFromPath: string | null = null;
+  let districtFromPath: string | null = null;
+  let lastPathType = '';
 
-  if (Array.isArray(rawPath)) {
+  if (Array.isArray(rawPath) && rawPath.length > 0) {
     cityFromPath = rawPath.find(p => (p.type || '').toUpperCase() === 'CITY')?.name || null;
+    districtFromPath = rawPath.find(p => (p.type || '').toUpperCase() === 'DISTRICT')?.name || null;
+    lastPathType = (rawPath[rawPath.length - 1]?.type || '').toUpperCase();
   } else if (typeof rawPath === 'string') {
     const segments = rawPath.split('>').map(s => s.trim()).filter(Boolean);
     if (segments.length >= 2) {
@@ -403,18 +433,42 @@ export function formatProjectLocationShortLabel(
     }
   }
 
-  const resolvedCity = location.city ?? cityFromPath ?? defaultCity;
-  const parts = deduplicateLocationParts([location.name, resolvedCity]);
+  const effectiveType = explicitType || lastPathType;
+
+  // Never append a city (e.g. ", Kolkata") to a state-level or country-level location
+  if (effectiveType === 'STATE' || STATE_OR_COUNTRY_NAMES.has(lowerName)) {
+    return rawName || 'West Bengal';
+  }
+
+  // Never append ", Kolkata" to a standalone non-Kolkata city/district (e.g. Howrah, Hooghly)
+  if (
+    effectiveType === 'CITY' ||
+    effectiveType === 'DISTRICT' ||
+    NON_KOLKATA_METRO_NAMES.has(lowerName)
+  ) {
+    return rawName || defaultCity || '';
+  }
+
+  // If location sits under a non-Kolkata district with no explicit city ancestor (e.g. Uttarpara -> Hooghly),
+  // use that district instead of blindly falling back to Kolkata.
+  const inferredParentRegion =
+    location.city ??
+    cityFromPath ??
+    (districtFromPath && districtFromPath.toLowerCase() !== lowerName ? districtFromPath : null) ??
+    defaultCity;
+
+  const parts = deduplicateLocationParts([rawName, inferredParentRegion]);
   return parts.join(', ');
 }
 
 /**
- * Formats a full location label (e.g. "Rajarhat, Kolkata, West Bengal" or "Kolkata, West Bengal")
- * without ever duplicating city, locality, or state names.
+ * Formats a full location label (e.g. "Rajarhat, Kolkata, West Bengal", "Hooghly, West Bengal",
+ * or "West Bengal") without ever duplicating city, locality, or state names.
  */
 export function formatProjectLocationFullLabel(
   location?: {
     name?: string | null;
+    type?: string | null;
     city?: string | null;
     state?: string | null;
     path?: { name: string; type?: string }[] | string;
@@ -426,13 +480,21 @@ export function formatProjectLocationFullLabel(
     return deduplicateLocationParts([defaultCity, defaultState]).join(', ');
   }
 
+  const rawName = (location.name || '').trim();
+  const lowerName = rawName.toLowerCase();
+  const explicitType = (location.type || '').toUpperCase();
+
   const rawPath = location.path;
   let cityFromPath: string | null = null;
+  let districtFromPath: string | null = null;
   let stateFromPath: string | null = null;
+  let lastPathType = '';
 
-  if (Array.isArray(rawPath)) {
+  if (Array.isArray(rawPath) && rawPath.length > 0) {
     cityFromPath = rawPath.find(p => (p.type || '').toUpperCase() === 'CITY')?.name || null;
+    districtFromPath = rawPath.find(p => (p.type || '').toUpperCase() === 'DISTRICT')?.name || null;
     stateFromPath = rawPath.find(p => (p.type || '').toUpperCase() === 'STATE')?.name || null;
+    lastPathType = (rawPath[rawPath.length - 1]?.type || '').toUpperCase();
   } else if (typeof rawPath === 'string') {
     const segments = rawPath.split('>').map(s => s.trim()).filter(Boolean);
     if (segments.length >= 2) {
@@ -443,10 +505,28 @@ export function formatProjectLocationFullLabel(
     }
   }
 
-  const resolvedCity = location.city ?? cityFromPath ?? defaultCity;
+  const effectiveType = explicitType || lastPathType;
   const resolvedState = location.state ?? stateFromPath ?? defaultState;
 
-  const parts = deduplicateLocationParts([location.name, resolvedCity, resolvedState]);
+  if (effectiveType === 'STATE' || STATE_OR_COUNTRY_NAMES.has(lowerName)) {
+    return rawName || resolvedState || 'West Bengal';
+  }
+
+  if (
+    effectiveType === 'CITY' ||
+    effectiveType === 'DISTRICT' ||
+    NON_KOLKATA_METRO_NAMES.has(lowerName)
+  ) {
+    return deduplicateLocationParts([rawName, resolvedState]).join(', ');
+  }
+
+  const resolvedCity =
+    location.city ??
+    cityFromPath ??
+    (districtFromPath && districtFromPath.toLowerCase() !== lowerName ? districtFromPath : null) ??
+    defaultCity;
+
+  const parts = deduplicateLocationParts([rawName, resolvedCity, resolvedState]);
   return parts.join(', ');
 }
 

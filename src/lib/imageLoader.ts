@@ -1,4 +1,4 @@
-import { normalizeMediaPublicUrl } from '@/src/lib/mediaUtils';
+import { isApprovedFirstPartyMediaUrl, normalizeMediaPublicUrl } from '@/src/lib/mediaUtils';
 
 export interface ImageLoaderProps {
   src: string;
@@ -52,7 +52,13 @@ export default function greatHomesImageLoader({
     }
   }
 
-  // Avoid appending duplicate w/q parameters if already present in query string
+  // Static Cloudflare R2 objects and first-party static assets ignore ?w=&q= query strings;
+  // returning the canonical URL prevents unnecessary CDN/browser cache fragmentation.
+  if (isApprovedFirstPartyMediaUrl(normalizedSrc)) {
+    return normalizedSrc;
+  }
+
+  // Avoid appending duplicate w/q parameters for other external image CDNs
   if (normalizedSrc.startsWith('http://') || normalizedSrc.startsWith('https://')) {
     try {
       const parsed = new URL(normalizedSrc);
@@ -65,7 +71,6 @@ export default function greatHomesImageLoader({
     }
   }
 
-  const separator = normalizedSrc.includes('?') ? '&' : '?';
-  return `${normalizedSrc}${separator}w=${width}&q=${q}`;
+  return normalizedSrc;
 }
 

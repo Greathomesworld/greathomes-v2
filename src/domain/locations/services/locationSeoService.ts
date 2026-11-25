@@ -7,15 +7,17 @@ import { projectIntelligenceService } from '../../projects/services/projectIntel
 import {
   isPublicCanonicalLocation,
   getLocationEditorialTagline,
-  getLocationFullDescription,
-  getLocationVisualTheme,
 } from '../locationRegionMapper';
 import {
   buildPageMetadata,
+  DEFAULT_OG_IMAGE,
+  formatBrandTitle,
   formatLocationWithCity,
+  normalizePublicSeoImageUrl,
   sanitizeMetaDescription,
   SITE_ORIGIN,
 } from '../../seo/metadataBuilder';
+import { isApprovedFirstPartyMediaUrl } from '../../../lib/mediaUtils';
 
 export type LocationSeoIneligibilityReason =
   | 'SUFFICIENT_CONTENT'
@@ -43,8 +45,9 @@ export interface EvaluateLocationSeoParams {
   location: Location;
   path?: Location[];
   childLocations?: Location[];
-  projects?: Array<{ id: string; lifecycleStatus?: string }>;
+  projects?: Array<{ id: string; lifecycleStatus?: string; heroImageUrl?: string | null }>;
   isAlias?: boolean;
+  preferredImageUrl?: string | null;
 }
 
 const LOCATION_LEVEL_PUBLIC_NAMES: Record<LocationType, string> = {
@@ -58,22 +61,22 @@ const LOCATION_LEVEL_PUBLIC_NAMES: Record<LocationType, string> = {
 
 const CURATED_SEO_METADATA: Record<string, { title: string; description: string }> = {
   'new-town': {
-    title: 'New Town Kolkata – Residential Areas & Property Guide | Great Homes',
+    title: 'New Town Kolkata – Projects & Property Guide | Great Homes',
     description:
       'Explore residential projects, resale homes, rentals, Action Areas I, II & III, connectivity and locality intelligence in New Town, Kolkata.',
   },
   'rajarhat': {
-    title: 'Rajarhat Kolkata – Residential Localities & Property Guide | Great Homes',
+    title: 'Rajarhat Kolkata – Projects & Property Guide | Great Homes',
     description:
       'Discover residential projects, verified resale homes, rental properties, micro-markets and connectivity intelligence across Rajarhat, Kolkata on Great Homes.',
   },
   'salt-lake': {
-    title: 'Salt Lake Kolkata – Sectors, Projects & Property Guide | Great Homes',
+    title: 'Salt Lake Kolkata – Sectors & Property Guide | Great Homes',
     description:
       'Explore residential sectors, Sector V connectivity, verified projects, resale homes and rentals in Salt Lake (Bidhannagar), Kolkata on Great Homes.',
   },
   'ballygunge': {
-    title: 'Ballygunge Kolkata – Residential Area & Property Guide | Great Homes',
+    title: 'Ballygunge Kolkata – Projects & Property Guide | Great Homes',
     description:
       'Discover premium residential projects, verified resale apartments, rental homes, social infrastructure and locality intelligence in Ballygunge, South Kolkata.',
   },
@@ -104,29 +107,93 @@ export class LocationSeoService {
     const cleanSlug = (location.slug || '').toLowerCase().trim();
     const canonicalUrl = `https://www.greathomes.co.in/locations/${cleanSlug}`;
 
-    // 1. Build unique, location-specific SEO title and description
+    // 1. Build unique, concise, geographically accurate SEO title and description (F-12)
     const curated = CURATED_SEO_METADATA[cleanSlug];
     const cityAncestor = path.find(p => p.type === 'CITY' && p.id !== location.id);
+    const districtAncestor = path.find(p => p.type === 'DISTRICT' && p.id !== location.id);
     const areaAncestor = path.find(p => p.type === 'AREA' && p.id !== location.id);
-    const cityName = cityAncestor ? cityAncestor.name : 'Kolkata';
-    const nameIncludesCity = location.name.toLowerCase().includes(cityName.toLowerCase());
+
+    const isTopLevelRegion =
+      location.type === 'STATE' || location.type === 'CITY' || location.type === 'DISTRICT';
+    const regionContextName = cityAncestor
+      ? cityAncestor.name
+      : districtAncestor
+        ? districtAncestor.name
+        : isTopLevelRegion
+          ? ''
+          : 'Kolkata';
+    const cityNameForDesc = regionContextName || location.name || 'Kolkata';
+
+    const locLower = location.name.trim().toLowerCase();
+    const regionLower = regionContextName.trim().toLowerCase();
+    const nameIncludesRegion = Boolean(regionLower) && locLower.includes(regionLower);
+
+    const pickCompactLocationTitle = (candidates: string[]): string => {
+      const fitting = candidates.find((c) => c.length <= 62);
+      if (fitting) return fitting;
+      return formatBrandTitle(candidates[candidates.length - 1], { maxLength: 62 });
+    };
 
     let title: string;
     if (curated) {
       title = curated.title;
     } else if (location.type === 'NEIGHBOURHOOD' && areaAncestor) {
-      const areaIncludesCity = areaAncestor.name.toLowerCase().includes(cityName.toLowerCase());
-      const cityPart = nameIncludesCity || areaIncludesCity ? '' : ` ${cityName}`;
-      title = `${location.name}, ${areaAncestor.name}${cityPart} – Locality & Property Guide | Great Homes`;
+      const areaLower = areaAncestor.name.trim().toLowerCase();
+      // Prevent duplicate locality names like "New Alipore Block A, New Alipore" or "Tollygunge Metro, Tollygunge"
+      const childContainsArea = Boolean(areaLower) && locLower.includes(areaLower);
+      const areaIncludesRegion = Boolean(regionLower) && areaLower.includes(regionLower);
+      const regionSuffix =
+        !regionContextName || nameIncludesRegion || (!childContainsArea && areaIncludesRegion)
+          ? ''
+          : `, ${regionContextName}`;
+
+      const subjectWithParent = childContainsArea
+        ? `${location.name}${regionSuffix}`
+        : `${location.name}, ${areaAncestor.name}`;
+      const subjectWithParentAndRegion = childContainsArea
+        ? `${location.name}${regionSuffix}`
+        : `${location.name}, ${areaAncestor.name}${regionSuffix}`;
+
+      title = pickCompactLocationTitle([
+        `${subjectWithParentAndRegion} – Property Guide | Great Homes`,
+        `${subjectWithParent} – Property Guide | Great Homes`,
+        `${subjectWithParent} – Flats & Projects | Great Homes`,
+        `${subjectWithParent} | Great Homes`,
+      ]);
     } else if (location.type === 'AREA') {
-      const citySuffix = nameIncludesCity ? '' : ` ${cityName}`;
-      title = `${location.name}${citySuffix} – Residential Area & Property Guide | Great Homes`;
+      const regionSuffix = !regionContextName || nameIncludesRegion ? '' : `, ${regionContextName}`;
+      title = pickCompactLocationTitle([
+        `${location.name}${regionSuffix} – Projects & Property Guide | Great Homes`,
+        `${location.name}${regionSuffix} – Property Guide | Great Homes`,
+        `${location.name}${regionSuffix} – Flats & Projects | Great Homes`,
+        `${location.name}${regionSuffix} | Great Homes`,
+      ]);
     } else if (location.type === 'CITY') {
-      title = `${location.name} – Residential Areas, Neighbourhoods & Property Guide | Great Homes`;
+      title = pickCompactLocationTitle([
+        `${location.name} – Residential Areas & Property Guide | Great Homes`,
+        `${location.name} – Residential Projects & Areas | Great Homes`,
+        `${location.name} – Property Guide | Great Homes`,
+        `${location.name} | Great Homes`,
+      ]);
+    } else if (location.type === 'STATE') {
+      title = pickCompactLocationTitle([
+        `${location.name} – Residential Projects & Areas | Great Homes`,
+        `${location.name} – Property Guide | Great Homes`,
+        `${location.name} | Great Homes`,
+      ]);
+    } else if (location.type === 'DISTRICT') {
+      title = pickCompactLocationTitle([
+        `${location.name} – Residential Projects & Guide | Great Homes`,
+        `${location.name} – Property Guide | Great Homes`,
+        `${location.name} | Great Homes`,
+      ]);
     } else {
-      const parentNames = path.filter(p => p.id !== location.id).map(p => p.name);
-      const contextSubtitle = parentNames.length > 0 ? `, ${parentNames.join(', ')}` : '';
-      title = `${location.name}${contextSubtitle} – Residential Projects & Location Guide | Great Homes`;
+      const regionSuffix = !regionContextName || nameIncludesRegion ? '' : `, ${regionContextName}`;
+      title = pickCompactLocationTitle([
+        `${location.name}${regionSuffix} – Residential Areas & Guide | Great Homes`,
+        `${location.name}${regionSuffix} – Property Guide | Great Homes`,
+        `${location.name}${regionSuffix} | Great Homes`,
+      ]);
     }
 
     let description: string;
@@ -139,11 +206,14 @@ export class LocationSeoService {
           ? rawTagline
           : `${rawTagline}.`
         : '';
+      const areaAlreadyInName = Boolean(
+        areaAncestor && locLower.includes(areaAncestor.name.trim().toLowerCase())
+      );
       const contextName =
-        location.type === 'NEIGHBOURHOOD' && areaAncestor
-          ? `${location.name} (${formatLocationWithCity(areaAncestor.name, cityName)})`
-          : formatLocationWithCity(location.name, cityName);
-      const compactContextName = formatLocationWithCity(location.name, cityName);
+        location.type === 'NEIGHBOURHOOD' && areaAncestor && !areaAlreadyInName
+          ? `${location.name} (${formatLocationWithCity(areaAncestor.name, cityNameForDesc)})`
+          : formatLocationWithCity(location.name, cityNameForDesc);
+      const compactContextName = formatLocationWithCity(location.name, cityNameForDesc);
       const candidates = [
         tagline
           ? `${tagline} Explore residential projects, resale homes & rentals in ${contextName} on Great Homes.`
@@ -160,8 +230,17 @@ export class LocationSeoService {
       description = sanitizeMetaDescription(chosenRaw, chosenRaw, { maxLength: 158 });
     }
 
-    const visualTheme = getLocationVisualTheme(cleanSlug, Boolean(location.featured));
-    const imageUrl = visualTheme.imageUrl;
+    // Prefer verified first-party/R2 project hero image for location OG/Twitter cards (F-13),
+    // falling back to branded Great Homes default OG image instead of third-party Unsplash stock URLs.
+    const candidatePreferred =
+      params.preferredImageUrl ||
+      projects.find((p) => Boolean(p.heroImageUrl))?.heroImageUrl ||
+      null;
+    const normalizedPreferred = normalizePublicSeoImageUrl(candidatePreferred);
+    const imageUrl =
+      normalizedPreferred && isApprovedFirstPartyMediaUrl(normalizedPreferred)
+        ? normalizedPreferred
+        : DEFAULT_OG_IMAGE;
 
     // 2. Non-canonical test/fixture guard
     if (!isPublicCanonicalLocation(location)) {

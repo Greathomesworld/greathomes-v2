@@ -101,12 +101,6 @@ export default function (phase) {
         },
         {
           protocol: 'https',
-          hostname: 'picsum.photos',
-          port: '',
-          pathname: '/**',
-        },
-        {
-          protocol: 'https',
           hostname: 'media.greathomes.co.in',
           port: '',
           pathname: '/**',
@@ -126,18 +120,6 @@ export default function (phase) {
         {
           protocol: 'https',
           hostname: '*.r2.cloudflarestorage.com',
-          port: '',
-          pathname: '/**',
-        },
-        {
-          protocol: 'https',
-          hostname: 'www.propvestors.in',
-          port: '',
-          pathname: '/**',
-        },
-        {
-          protocol: 'https',
-          hostname: 'propvestors.in',
           port: '',
           pathname: '/**',
         },

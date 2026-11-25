@@ -15,7 +15,7 @@ import { buildPageMetadata } from '@/src/domain/seo/metadataBuilder';
 export const revalidate = 300;
 
 export const metadata: Metadata = buildPageMetadata({
-  title: 'Real Estate Developers in Kolkata – Verified Builders',
+  title: 'Verified Real Estate Developers in Kolkata',
   description:
     "Explore Kolkata's leading real estate developers and builders. Compare active projects, WBRERA credentials and location footprints on Great Homes.",
   canonicalPath: '/developers',

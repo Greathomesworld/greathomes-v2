@@ -32,7 +32,7 @@ import { buildPageMetadata } from '@/src/domain/seo/metadataBuilder';
 export const revalidate = 60;
 
 export const metadata: Metadata = buildPageMetadata({
-  title: 'Post Property in Kolkata Free – Sell or Rent Verified Homes',
+  title: 'Post Property Free in Kolkata – Sell or Rent',
   description:
     'Sell or rent your Kolkata apartment, independent house, or residential plot for free on Great Homes with guided submission, verification & contact privacy.',
   canonicalPath: '/post-property',

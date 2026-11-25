@@ -13,7 +13,7 @@ import {
   buildNoIndexMetadata,
   buildPageMetadata,
   formatLocationWithCity,
-  normalizeAbsoluteImageUrl,
+  normalizePublicSeoImageUrl,
   sanitizeMetaDescription,
   SITE_ORIGIN,
 } from '@/src/domain/seo/metadataBuilder';
@@ -67,9 +67,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     ? ` at ${listing.customProjectDisplay}, ${locationWithCity}`
     : ` in ${locationWithCity}`;
 
-  const rawTitle = listing.formattedAskingPrice
+  const withPriceTitle = listing.formattedAskingPrice
     ? `${listing.title} – ${listing.formattedAskingPrice}`
     : listing.title;
+  // Avoid clamping off currency units (e.g. "Cr"/"Lakh") when title + price exceeds 51 chars (+14 brand = 65)
+  const rawTitle = withPriceTitle.length <= 51 ? withPriceTitle : listing.title;
 
   const fallbackDescription = `Explore this ${listing.isVerified ? 'verified ' : ''}${
     listing.propertyType === 'PLOT'
@@ -198,7 +200,7 @@ export default async function ResaleListingDetailPage({ params }: PageProps) {
     : 'Apartment';
 
   const listingImages = listing.media
-    .map((m) => normalizeAbsoluteImageUrl(m.url))
+    .map((m) => normalizePublicSeoImageUrl(m.url))
     .filter((u): u is string => Boolean(u));
 
   const fallbackSchemaDesc = `${listing.title} in ${formatLocationWithCity(
