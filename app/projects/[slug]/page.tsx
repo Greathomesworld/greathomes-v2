@@ -156,36 +156,25 @@ export default async function ProjectDetailPage(
     notFound();
   }
 
-  const [availabilityRecords, resaleListings, rentalListings, developerDto] = await Promise.all([
-    newBookingService.getProjectConfigurationAvailabilityRecords(project.id),
-    resaleListingService.getPublicListingsForProject(project.id),
-    rentalListingService.getPublicListingsForProject(project.id),
-    developerService.getDeveloperProfileForProject(project.developer.id).catch(() => null),
-  ]);
-
-  const mergedConfigurations = mergeConfigurationAvailabilityOverrides(
-    project.configurations,
-    availabilityRecords
-  );
-
-  const eligibleResaleListings = getEligibleResaleListings(resaleListings, project.id);
-  const eligibleRentalListings = getEligibleRentalListings(rentalListings, project.id);
-  const eligibleGalleryMedia = getEligibleGalleryMedia(project.media);
-  const eligibleAmenities = getEligibleAmenities(project.amenities);
-  const eligibleFaqs = (project.faqs || []).filter(
-    f => f && f.isPublished !== false && f.question && f.question.trim().length > 0 && f.answer && f.answer.trim().length > 0
-  );
-
   const locationVm = buildProjectLocationViewModel(
     project.location,
     null,
     project
   );
 
-  const [discoveryBundle, fallbackGeodesicConnectivity] = await Promise.all([
+  const [
+    availabilityRecords,
+    resaleListings,
+    rentalListings,
+    developerDto,
+    rawDiscoveryBundle,
+    fallbackGeodesicConnectivity,
+  ] = await Promise.all([
+    newBookingService.getProjectConfigurationAvailabilityRecords(project.id),
+    resaleListingService.getPublicListingsForProject(project.id),
+    rentalListingService.getPublicListingsForProject(project.id),
+    developerService.getDeveloperProfileForProject(project.developer.id).catch(() => null),
     propertyDiscoveryService.getProjectDetailDiscoveryBundle(project, {
-      excludeResaleIds: eligibleResaleListings.map(r => r.id),
-      excludeRentalIds: eligibleRentalListings.map(r => r.id),
       maxDistanceKm: 15,
       limit: 6,
     }),
@@ -208,6 +197,27 @@ export default async function ProjectDetailPage(
       { radiusKm: 15, limit: 20, allowRoadRouting: false }
     ),
   ]);
+
+  const mergedConfigurations = mergeConfigurationAvailabilityOverrides(
+    project.configurations,
+    availabilityRecords
+  );
+
+  const eligibleResaleListings = getEligibleResaleListings(resaleListings, project.id);
+  const eligibleRentalListings = getEligibleRentalListings(rentalListings, project.id);
+  const eligibleGalleryMedia = getEligibleGalleryMedia(project.media);
+  const eligibleAmenities = getEligibleAmenities(project.amenities);
+  const eligibleFaqs = (project.faqs || []).filter(
+    f => f && f.isPublished !== false && f.question && f.question.trim().length > 0 && f.answer && f.answer.trim().length > 0
+  );
+
+  const projectResaleIds = new Set(eligibleResaleListings.map(r => r.id));
+  const projectRentalIds = new Set(eligibleRentalListings.map(r => r.id));
+  const discoveryBundle = {
+    ...rawDiscoveryBundle,
+    nearbyResale: rawDiscoveryBundle.nearbyResale.filter(r => !projectResaleIds.has(r.id)),
+    nearbyRental: rawDiscoveryBundle.nearbyRental.filter(r => !projectRentalIds.has(r.id)),
+  };
 
   const overviewText = (project.description || project.shortDescription || '').trim();
 

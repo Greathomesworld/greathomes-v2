@@ -1,10 +1,12 @@
-import React, { Suspense } from 'react';
+import React from 'react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import Image from 'next/image';
 import {
   ArrowRight,
   Building2,
   Camera,
+  Check,
   CheckCircle2,
   EyeOff,
   FileCheck2,
@@ -15,7 +17,11 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import { getPostPropertyPage1Data } from '@/src/domain/postProperty/page1Data';
-import { PostPropertyHeroClient } from '@/src/components/post-property/PostPropertyHeroClient';
+import {
+  PostPropertyHeroClient,
+  PostPropertySessionStatus,
+} from '@/src/components/post-property/PostPropertyHeroClient';
+import { PostPropertyTrustTicker } from '@/src/components/post-property/PostPropertyTrustTicker';
 import { KolkataLineArt } from '@/src/components/post-property/KolkataLineArt';
 import { PostPropertyFaqAccordion } from '@/src/components/post-property/PostPropertyFaqAccordion';
 import { POST_PROPERTY_FAQS } from '@/src/components/post-property/postPropertyFaqData';
@@ -111,19 +117,87 @@ export default async function PostPropertyEntryPage() {
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] text-[#111111]">
-      {/* 1. Split Hero with Server-Rendered Kolkata Architectural Line-Art + Interactive Quick Form */}
-      <Suspense
-        fallback={
-          <div className="border-b border-[#E5E0D8] bg-[#FAF7F2] px-4 py-16 text-center text-sm text-[#6E6A65] font-body">
-            Loading Great Homes Post Property Hub...
+      {/* 1. Split Hero with Server-Rendered H1, Trust Proposition & Kolkata Skyline + Interactive Quick Form */}
+      <section className="relative overflow-hidden border-b border-[#E5E0D8] bg-gradient-to-b from-[#F6F1E9] via-[#FAF7F2] to-[#FAFAF8] pt-3 pb-6 sm:pt-5 sm:pb-8 lg:pt-12 lg:pb-12">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 gap-3.5 sm:gap-5 lg:grid-cols-12 lg:gap-10 lg:items-center">
+            {/* Left Proposition Column (Server-Rendered outside Suspense for SSR SEO discoverability) */}
+            <div className="lg:col-span-7 flex flex-col justify-between">
+              <div className="order-2 lg:order-1">
+                <h1
+                  className="font-editorial text-[27px] leading-[1.1] font-normal tracking-tight text-[#111111] text-center sm:text-4xl lg:text-left lg:text-[54px] lg:leading-[1.06]"
+                  style={{ textWrap: 'balance' }}
+                >
+                  Sell or Rent Your Property in Kolkata, Faster.
+                </h1>
+
+                <p className="hidden lg:block mt-4 max-w-xl font-body text-[17px] leading-relaxed text-[#4A4743]">
+                  List your apartment, independent house, or plot on Great Homes and reach genuine,
+                  verified buyers and tenants.
+                </p>
+
+                {/* Mobile Compact Vertical Trust Ticker (1000ms interval, upward loop) */}
+                <div className="mt-2 lg:hidden">
+                  <PostPropertyTrustTicker />
+                </div>
+
+                {/* Desktop Static Trust List (Server-Rendered) */}
+                <ul className="hidden lg:block mt-5 space-y-2 font-body text-[15px] text-[#333333]">
+                  <li className="flex items-center gap-2.5">
+                    <Check
+                      className="h-4 w-4 shrink-0 text-[#E85D3F]"
+                      strokeWidth={2.4}
+                      aria-hidden="true"
+                    />
+                    <span>Verified listings &amp; serious enquiries</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <Check
+                      className="h-4 w-4 shrink-0 text-[#E85D3F]"
+                      strokeWidth={2.4}
+                      aria-hidden="true"
+                    />
+                    <span>Simple, guided submission</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <Check
+                      className="h-4 w-4 shrink-0 text-[#E85D3F]"
+                      strokeWidth={2.4}
+                      aria-hidden="true"
+                    />
+                    <span>Your data stays private and secure</span>
+                  </li>
+                </ul>
+
+                {/* Signed-in Session Status & Quick Shortcut (Client Leaf) */}
+                <PostPropertySessionStatus />
+              </div>
+
+              {/* Mobile Kolkata Hero Illustration (< lg) + Desktop Kolkata Skyline SVG */}
+              <div className="order-1 mb-2.5 mx-auto w-full max-w-[320px] sm:max-w-[380px] lg:order-2 lg:mt-4 lg:mb-0 lg:-mb-12 lg:mx-0 lg:max-w-[540px]">
+                <Image
+                  src="/assets/aistudio/kolkata_greathomes_hero_70pct_e2cb9440.webp"
+                  alt="Kolkata skyline with Victoria Memorial, Howrah Bridge, and tram"
+                  width={952}
+                  height={317}
+                  priority
+                  sizes="(max-width: 640px) 320px, 380px"
+                  referrerPolicy="no-referrer"
+                  className="block h-auto w-full lg:hidden"
+                />
+                <div className="hidden lg:block">
+                  <KolkataLineArt className="w-full" />
+                </div>
+              </div>
+            </div>
+
+            {/* Right Compact Quick Submission Form (Interactive Client Control; URL params isolated in Suspense) */}
+            <div className="lg:col-span-5 relative z-10">
+              <PostPropertyHeroClient initialLocations={locationOptions} />
+            </div>
           </div>
-        }
-      >
-        <PostPropertyHeroClient
-          initialLocations={locationOptions}
-          skylineSlot={<KolkataLineArt className="w-full" />}
-        />
-      </Suspense>
+        </div>
+      </section>
 
       {/* 2. Three-Step Explanation Section (Server-Rendered) */}
       <section className="mx-auto max-w-6xl px-4 pt-12 pb-10 sm:pt-14 sm:px-6 lg:px-8">

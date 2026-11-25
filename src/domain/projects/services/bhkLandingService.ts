@@ -47,7 +47,9 @@ export class BhkLandingService {
    */
   async resolveBhkLandingData(
     bedroomCount: number,
-    localitySlug: string
+    localitySlug: string,
+    preloadedProjects?: PublicProjectDto[],
+    preloadedLocations?: any[]
   ): Promise<BhkLandingData | null> {
     if (bedroomCount < 1 || bedroomCount > 5) {
       return null;
@@ -56,7 +58,10 @@ export class BhkLandingService {
     const cleanLocSlug = localitySlug.toLowerCase().trim();
     const isCityLevel = cleanLocSlug === 'kolkata';
 
-    const allLocations = await locationRepository.findAll();
+    const [allLocations, allPublished] = await Promise.all([
+      preloadedLocations ? Promise.resolve(preloadedLocations) : locationRepository.findAll(),
+      preloadedProjects ? Promise.resolve(preloadedProjects) : projectIntelligenceService.listAllProjects({}, false),
+    ]);
     const locMap = new Map(allLocations.map((l) => [l.id, l]));
 
     let targetLocName = 'Kolkata';
@@ -68,8 +73,6 @@ export class BhkLandingService {
       targetLocName = found.name;
     }
 
-    // Load all published projects
-    const allPublished = await projectIntelligenceService.listAllProjects({}, false);
     const publishedProjects = (allPublished || []).filter(
       (p) => p.lifecycleStatus === 'PUBLISHED' && Boolean(p.slug)
     );
@@ -163,10 +166,11 @@ export class BhkLandingService {
    * from live published project & canonical location data. Used by sitemap.ts and internal linking.
    */
   async getEligibleBhkLandingPages(
-    preloadedProjects?: PublicProjectDto[]
+    preloadedProjects?: PublicProjectDto[],
+    preloadedLocations?: any[]
   ): Promise<EligibleBhkLandingEntry[]> {
     const [allLocations, rawProjects] = await Promise.all([
-      locationRepository.findAll(),
+      preloadedLocations ? Promise.resolve(preloadedLocations) : locationRepository.findAll(),
       preloadedProjects
         ? Promise.resolve(preloadedProjects)
         : projectIntelligenceService.listAllProjects({}, false),
@@ -305,15 +309,54 @@ export class BhkLandingService {
   }
 
   /**
+   * Resolves BHK landing page data AND curated related eligible BHK links
+   * from a SINGLE parallel load of locations and published projects (0 duplicate catalog queries).
+   */
+  async resolveBhkLandingBundle(
+    bedroomCount: number,
+    localitySlug: string
+  ): Promise<{ data: BhkLandingData; relatedBhkLinks: EligibleBhkLandingEntry[] } | null> {
+    if (bedroomCount < 1 || bedroomCount > 5) {
+      return null;
+    }
+
+    const [allLocations, allPublished] = await Promise.all([
+      locationRepository.findAll(),
+      projectIntelligenceService.listAllProjects({}, false),
+    ]);
+
+    const data = await this.resolveBhkLandingData(
+      bedroomCount,
+      localitySlug,
+      allPublished,
+      allLocations
+    );
+    if (!data) {
+      return null;
+    }
+
+    const relatedBhkLinks = await this.getRelatedEligibleBhkLinks(
+      data.bedroomCount,
+      data.localitySlug,
+      allPublished,
+      allLocations
+    );
+
+    return { data, relatedBhkLinks };
+  }
+
+  /**
    * Returns curated related eligible BHK links for internal cross-linking on a BHK landing page:
    * sibling BHK counts in the same locality + same BHK count across other top localities.
    */
   async getRelatedEligibleBhkLinks(
     bedroomCount: number,
-    localitySlug: string
+    localitySlug: string,
+    preloadedProjects?: PublicProjectDto[],
+    preloadedLocations?: any[]
   ): Promise<EligibleBhkLandingEntry[]> {
     const clean = localitySlug.toLowerCase().trim();
-    const all = await this.getEligibleBhkLandingPages();
+    const all = await this.getEligibleBhkLandingPages(preloadedProjects, preloadedLocations);
 
     const sameLocality = all
       .filter((e) => e.localitySlug === clean && e.bedroomCount !== bedroomCount)

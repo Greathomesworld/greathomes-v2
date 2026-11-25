@@ -1182,8 +1182,8 @@ export class PropertyDiscoveryService {
 
     const [maps, publishedResale, publishedRental] = await Promise.all([
       options?.preloadedMaps ? Promise.resolve(options.preloadedMaps) : this.getReferenceMaps(),
-      resaleListingService.listAdminListings({ lifecycleStatus: 'PUBLISHED' }),
-      rentalListingService.getAllListingsAdmin({ lifecycleStatus: 'PUBLISHED' }),
+      resaleListingService.getPublishedListingsWithMedia(),
+      rentalListingService.getPublishedListingsWithMedia(),
     ]);
 
     const resolveListingCoords = (listing: {
@@ -1554,7 +1554,11 @@ export class PropertyDiscoveryService {
     } | null;
   }> {
     const limit = params.limit ?? 6;
-    const maps = await this.getReferenceMaps();
+    const [maps, publishedResale, publishedRental] = await Promise.all([
+      this.getReferenceMaps(),
+      params.mode === 'RESALE' ? resaleListingService.getPublishedListingsWithMedia() : Promise.resolve([]),
+      params.mode === 'RENTAL' ? rentalListingService.getPublishedListingsWithMedia() : Promise.resolve([]),
+    ]);
 
     // Resolve effective location ID from standalone locationId or parent project locationId
     let effectiveLocationId = params.locationId || null;
@@ -1588,10 +1592,6 @@ export class PropertyDiscoveryService {
     const similarRental: RentDiscoveryCardDto[] = [];
 
     if (params.mode === 'RESALE') {
-      const publishedResale = await resaleListingService.listAdminListings({
-        lifecycleStatus: 'PUBLISHED',
-      });
-
       const scoredResale: { card: ResaleDiscoveryCardDto; score: number; priceDelta: number }[] = [];
 
       for (const r of publishedResale) {
@@ -1692,10 +1692,6 @@ export class PropertyDiscoveryService {
 
       similarResale.push(...scoredResale.slice(0, limit).map(s => s.card));
     } else {
-      const publishedRental = await rentalListingService.getAllListingsAdmin({
-        lifecycleStatus: 'PUBLISHED',
-      });
-
       const scoredRental: { card: RentDiscoveryCardDto; score: number; rentDelta: number }[] = [];
 
       for (const r of publishedRental) {

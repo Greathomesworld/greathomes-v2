@@ -4,8 +4,8 @@ import { getDb } from '@/src/db/client';
 import { projectIntelligenceService } from '@/src/domain/projects/services/projectIntelligenceService';
 import {
   developerService,
-  isKnownTestDeveloperSlug,
 } from '@/src/domain/developers/services/developerService';
+import { evaluateDeveloperSeoEligibility } from '@/src/domain/developers/services/developerSeoService';
 import { locationSeoService } from '@/src/domain/locations/services/locationSeoService';
 import { LOCATION_ALIASES } from '@/src/domain/locations/services/locationService';
 import { isPublicCanonicalLocation } from '@/src/domain/locations/locationRegionMapper';
@@ -214,14 +214,56 @@ async function buildSitemap(): Promise<MetadataRoute.Sitemap> {
     }
   }
 
-  // Published canonical developers (defensively excluding test stubs)
+  // Build in-memory published project & editorial counts per developer for consistent SEO eligibility (F-04)
+  const publishedProjectsByDeveloperId = new Map<string, number>();
+  for (const p of publishedProjects) {
+    const devId = p.developer?.id;
+    if (devId) {
+      publishedProjectsByDeveloperId.set(
+        devId,
+        (publishedProjectsByDeveloperId.get(devId) || 0) + 1
+      );
+    }
+  }
+
+  const publishedEditorialByDeveloperId = new Map<string, number>();
+  const publishedEditorialByDeveloperSlug = new Map<string, number>();
+  for (const article of editorialItems) {
+    if (article.developer?.id) {
+      publishedEditorialByDeveloperId.set(
+        article.developer.id,
+        (publishedEditorialByDeveloperId.get(article.developer.id) || 0) + 1
+      );
+    }
+    if (article.developer?.slug) {
+      const slugKey = article.developer.slug.trim().toLowerCase();
+      publishedEditorialByDeveloperSlug.set(
+        slugKey,
+        (publishedEditorialByDeveloperSlug.get(slugKey) || 0) + 1
+      );
+    }
+  }
+
+  // Only SEO-eligible canonical developers (consistent with /developers/[slug] robots metadata)
   const developerUrls: MetadataRoute.Sitemap = developersItems
-    .filter(
-      (d) =>
-        Boolean(d.slug && d.slug.trim()) &&
-        d.status === 'PUBLISHED' &&
-        !isKnownTestDeveloperSlug(d.slug)
-    )
+    .filter((d) => {
+      const slugKey = (d.slug || '').trim().toLowerCase();
+      const publishedProjectCount =
+        projectsResult.status === 'fulfilled'
+          ? (publishedProjectsByDeveloperId.get(d.id) ?? d.projectCount ?? 0)
+          : (d.projectCount ?? 0);
+      const publishedEditorialCount = Math.max(
+        publishedEditorialByDeveloperId.get(d.id) || 0,
+        slugKey ? publishedEditorialByDeveloperSlug.get(slugKey) || 0 : 0
+      );
+
+      const eligibility = evaluateDeveloperSeoEligibility({
+        developer: d,
+        publishedProjectCount,
+        publishedEditorialCount,
+      });
+      return eligibility.eligible;
+    })
     .map((d) => {
       const lastModified = resolveOptionalDate(d.updatedAt);
       return {

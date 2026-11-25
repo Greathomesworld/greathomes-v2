@@ -50,11 +50,14 @@ export function HomeIntelligenceGuides({ articles = [] }: HomeIntelligenceGuides
         {articles.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
             {articles.slice(0, 3).map((article) => {
-              const articleUrl = article.canonicalUrl || `/guides/${article.slug}`;
+              const articleUrl =
+                article.type === 'PROJECT_REVIEW'
+                  ? `/reviews/${article.slug}`
+                  : `/guides/${article.slug}`;
               return (
                 <article
                   key={article.id}
-                  className="group bg-white rounded-2xl border border-neutral-200 overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col"
+                  className="group relative bg-white rounded-2xl border border-neutral-200 overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col"
                 >
                   {article.featuredImage ? (
                     <div className="relative h-48 w-full overflow-hidden bg-neutral-100">

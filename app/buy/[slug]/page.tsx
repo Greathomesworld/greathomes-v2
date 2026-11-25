@@ -18,6 +18,8 @@ import {
   SITE_ORIGIN,
 } from '@/src/domain/seo/metadataBuilder';
 
+export const revalidate = 120;
+
 interface PageProps {
   params: Promise<{ slug: string }>;
 }
@@ -27,9 +29,9 @@ const getResaleDetailCached = cache(async (slugOrId: string) => {
   return resaleListingService.getPublicListingDetailBySlugOrId(slugOrId);
 });
 
-const getBhkLandingCached = cache(async (bedroomCount: number, localitySlug: string) => {
+const getBhkLandingBundleCached = cache(async (bedroomCount: number, localitySlug: string) => {
   await ensureSeedData();
-  return bhkLandingService.resolveBhkLandingData(bedroomCount, localitySlug);
+  return bhkLandingService.resolveBhkLandingBundle(bedroomCount, localitySlug);
 });
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -40,11 +42,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (bhkMatch) {
     const bedroomCount = parseInt(bhkMatch[1], 10);
     const localitySlug = bhkMatch[2];
-    const data = await getBhkLandingCached(bedroomCount, localitySlug);
-    if (!data) {
+    const bundle = await getBhkLandingBundleCached(bedroomCount, localitySlug);
+    if (!bundle) {
       notFound();
     }
-    return bhkLandingService.generateSeoMetadata(data);
+    return bhkLandingService.generateSeoMetadata(bundle.data);
   }
 
   // Stage 2: Fall through to verified Resale Listing Detail
@@ -102,14 +104,12 @@ export default async function ResaleListingDetailPage({ params }: PageProps) {
   if (bhkMatch) {
     const bedroomCount = parseInt(bhkMatch[1], 10);
     const localitySlug = bhkMatch[2];
-    const data = await getBhkLandingCached(bedroomCount, localitySlug);
-    if (!data) {
+    const bundle = await getBhkLandingBundleCached(bedroomCount, localitySlug);
+    if (!bundle) {
       notFound();
     }
-    const [jsonLd, relatedBhkLinks] = await Promise.all([
-      Promise.resolve(bhkLandingService.generateJsonLd(data)),
-      bhkLandingService.getRelatedEligibleBhkLinks(data.bedroomCount, data.localitySlug),
-    ]);
+    const { data, relatedBhkLinks } = bundle;
+    const jsonLd = bhkLandingService.generateJsonLd(data);
     return (
       <BhkLandingPageRenderer
         data={data}

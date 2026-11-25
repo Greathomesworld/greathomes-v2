@@ -17,6 +17,7 @@ import { developerRepository } from '@/src/infrastructure/repositories/developer
 import { locationRepository } from '@/src/infrastructure/repositories/locationProvider';
 
 import { normalizeMediaPublicUrl } from '@/src/lib/mediaUtils';
+import { isPlaceholderImageUrl } from '@/src/domain/seo/metadataBuilder';
 
 export class EditorialService {
   private repository = editorialRepositoryPostgres;
@@ -129,7 +130,10 @@ export class EditorialService {
       authorRole: article.authorRole || 'Editorial Team',
       publishedAt: article.publishedAt ? article.publishedAt.toISOString() : null,
       updatedAt: article.updatedAt.toISOString(),
-      featuredImage: normalizeMediaPublicUrl(article.featuredImage || null),
+      featuredImage: (() => {
+        const normalized = normalizeMediaPublicUrl(article.featuredImage || null);
+        return normalized && !isPlaceholderImageUrl(normalized) ? normalized : null;
+      })(),
       seoTitle: article.seoTitle || article.title,
       seoDescription: article.seoDescription || article.excerpt,
       canonicalUrl: canonicalPath,

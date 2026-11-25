@@ -60,7 +60,7 @@ const CURATED_SEO_METADATA: Record<string, { title: string; description: string 
   'new-town': {
     title: 'New Town Kolkata – Residential Areas & Property Guide | Great Homes',
     description:
-      'Explore residential projects, resale homes, rental properties, Action Areas I, II & III, connectivity and property intelligence in New Town, Kolkata with Great Homes.',
+      'Explore residential projects, resale homes, rentals, Action Areas I, II & III, connectivity and locality intelligence in New Town, Kolkata.',
   },
   'rajarhat': {
     title: 'Rajarhat Kolkata – Residential Localities & Property Guide | Great Homes',
@@ -70,7 +70,7 @@ const CURATED_SEO_METADATA: Record<string, { title: string; description: string 
   'salt-lake': {
     title: 'Salt Lake Kolkata – Sectors, Projects & Property Guide | Great Homes',
     description:
-      'Explore residential sectors, Sector V connectivity, verified projects, resale homes and rental opportunities in Salt Lake (Bidhannagar), Kolkata with Great Homes.',
+      'Explore residential sectors, Sector V connectivity, verified projects, resale homes and rentals in Salt Lake (Bidhannagar), Kolkata on Great Homes.',
   },
   'ballygunge': {
     title: 'Ballygunge Kolkata – Residential Area & Property Guide | Great Homes',
@@ -143,8 +143,21 @@ export class LocationSeoService {
         location.type === 'NEIGHBOURHOOD' && areaAncestor
           ? `${location.name} (${formatLocationWithCity(areaAncestor.name, cityName)})`
           : formatLocationWithCity(location.name, cityName);
-      const rawDesc = `${tagline ? `${tagline} ` : ''}Explore residential projects, resale homes, rental listings and connectivity in ${contextName} with Great Homes.`;
-      description = sanitizeMetaDescription(rawDesc, rawDesc, { maxLength: 158 });
+      const compactContextName = formatLocationWithCity(location.name, cityName);
+      const candidates = [
+        tagline
+          ? `${tagline} Explore residential projects, resale homes & rentals in ${contextName} on Great Homes.`
+          : '',
+        tagline
+          ? `${tagline} Explore projects, resale & rentals in ${compactContextName} on Great Homes.`
+          : '',
+        `Explore residential projects, resale homes, rentals and connectivity in ${contextName} on Great Homes.`,
+        `Explore residential projects, resale homes, rentals and connectivity in ${compactContextName} on Great Homes.`,
+      ].filter(Boolean);
+
+      const fittingCandidate = candidates.find((c) => c.length <= 158);
+      const chosenRaw = fittingCandidate || candidates[candidates.length - 1];
+      description = sanitizeMetaDescription(chosenRaw, chosenRaw, { maxLength: 158 });
     }
 
     const visualTheme = getLocationVisualTheme(cleanSlug, Boolean(location.featured));

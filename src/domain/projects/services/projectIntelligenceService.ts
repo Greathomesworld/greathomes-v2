@@ -528,9 +528,11 @@ export class ProjectIntelligenceService {
     project: Project,
     isInternalStaff = false
   ): Promise<PublicProjectDto | null> {
-    const [developer, location, configurations, media, amenities, faqs, rera, considerations, devMedia, availabilities] = await Promise.all([
+    const [developer, allLocations, configurations, media, amenities, faqs, rera, considerations, devMedia, availabilities] = await Promise.all([
       this.developerRepository.findById(project.developerId),
-      this.locationRepository.findById(project.locationId),
+      typeof this.locationRepository.findAll === 'function'
+        ? this.locationRepository.findAll()
+        : Promise.resolve([]),
       this.configurationRepository.findByProjectId(project.id),
       this.mediaRepository.findByProjectId(project.id),
       this.amenityRepository.findByProjectId(project.id),
@@ -546,6 +548,11 @@ export class ProjectIntelligenceService {
       return null;
     }
 
+    const locationMap = new Map<string, Location>(allLocations.map(l => [l.id, l]));
+    const location =
+      locationMap.get(project.locationId) ||
+      (await this.locationRepository.findById(project.locationId));
+
     if (!location) {
       console.warn(`[ProjectIntelligence] Data Inconsistency: Location '${project.locationId}' not found for project '${project.id}' (${project.name}). Excluding from payload.`);
       return null;
@@ -556,7 +563,10 @@ export class ProjectIntelligenceService {
       availabilityByConfigId.set(av.configurationId, av);
     }
 
-    const locationPath = await this.resolveLocationPath(location.id);
+    const locationPath =
+      locationMap.size > 0 && locationMap.has(location.id)
+        ? this.resolveLocationPathFromMap(location.id, locationMap)
+        : await this.resolveLocationPath(location.id);
     const devLogo = devMedia.find(m => (m.category || '').toUpperCase() === 'LOGO' && m.url && m.url.trim().length > 0);
 
     return toPublicProjectDto(
@@ -629,6 +639,22 @@ export class ProjectIntelligenceService {
   async listProjects(
     options: ProjectListOptions = {},
     isInternalStaff = false
+  ): Promise<{
+    data: PublicProjectDto[];
+    pagination: {
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+    };
+  }> {
+    return this.executeListProjects(options, isInternalStaff, false);
+  }
+
+  private async executeListProjects(
+    options: ProjectListOptions = {},
+    isInternalStaff = false,
+    disablePagination = false
   ): Promise<{
     data: PublicProjectDto[];
     pagination: {
@@ -797,8 +823,10 @@ export class ProjectIntelligenceService {
     });
 
     const total = matchedEntries.length;
-    const totalPages = Math.ceil(total / limit) || 1;
-    const pageEntries = matchedEntries.slice((page - 1) * limit, page * limit);
+    const totalPages = disablePagination ? 1 : Math.ceil(total / limit) || 1;
+    const pageEntries = disablePagination
+      ? matchedEntries
+      : matchedEntries.slice((page - 1) * limit, page * limit);
 
     if (pageEntries.length === 0) {
       return {
@@ -945,28 +973,15 @@ export class ProjectIntelligenceService {
   }
 
   /**
-   * Paginates through all pages of listProjects (50 records per page) so callers
-   * such as public sitemaps and location SEO eligibility checks never truncate at 50 records.
+   * Loads all matching projects in a single batched pass (1 Batch A + 1 Batch B)
+   * without truncating at 50 records or repeating Batch A/B across sequential page loops.
    */
   async listAllProjects(
     options: Omit<ProjectListOptions, 'page' | 'limit'> = {},
     isInternalStaff = false
   ): Promise<PublicProjectDto[]> {
-    const collected: PublicProjectDto[] = [];
-    let currentPage = 1;
-    let totalPages = 1;
-
-    do {
-      const res = await this.listProjects(
-        { ...options, page: currentPage, limit: 50 },
-        isInternalStaff
-      );
-      collected.push(...res.data);
-      totalPages = res.pagination.totalPages || 1;
-      currentPage += 1;
-    } while (currentPage <= totalPages);
-
-    return collected;
+    const res = await this.executeListProjects(options, isInternalStaff, true);
+    return res.data;
   }
 
   /**

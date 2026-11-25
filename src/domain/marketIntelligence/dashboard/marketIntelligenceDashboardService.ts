@@ -1,10 +1,34 @@
 import { getDb } from '../../../db/client';
 import { locations, locationMarketSnapshots } from '../../../db/schema';
 import { eq, desc, inArray } from 'drizzle-orm';
-import { marketIntelligenceService } from '../services/marketIntelligenceService';
+import {
+  marketIntelligenceService,
+  resolveLocationScopeIdsFromList,
+  type PreloadedScopedMarketData,
+} from '../services/marketIntelligenceService';
 import { marketEventService } from '../services/marketEventService';
 import { ensureSeedData } from '../../../infrastructure/seed';
 import { locationRepository } from '../../../infrastructure/repositories/locationProvider';
+import {
+  projectRepository,
+  projectConfigurationRepository,
+  projectReraRepository,
+} from '../../../infrastructure/repositories/projectProvider';
+import { resaleListingRepository } from '../../projects/repositories/resaleRepository';
+import { rentalListingRepository } from '../../projects/repositories/rentalRepository';
+import {
+  resaleListingService,
+  isKnownTestResaleListing,
+  isVerifiedPublicResaleListing,
+  isPublishedUnverifiedPublicResaleListing,
+} from '../../projects/services/resaleService';
+import {
+  rentalListingService,
+  isKnownTestRentalListing,
+  isVerifiedPublicRentalListing,
+  isPublishedUnverifiedPublicRentalListing,
+} from '../../projects/services/rentalService';
+import { propertyDiscoveryService } from '../../projects/services/propertyDiscoveryService';
 
 export interface MarketDashboardDTO {
   overview: {
@@ -86,6 +110,10 @@ const dashboardCache = new Map<string, { data: MarketDashboardDTO; expiresAt: nu
 const inflightDashboardRequests = new Map<string, Promise<MarketDashboardDTO>>();
 
 export class MarketIntelligenceDashboardService {
+  clearCache(): void {
+    dashboardCache.clear();
+  }
+
   async getDashboardData(options?: {
     locationSlug?: string;
     scope?: 'DIRECT' | 'DESCENDANT';
@@ -161,23 +189,159 @@ export class MarketIntelligenceDashboardService {
 
     const resolvedLocationId = targetLocation ? targetLocation.id : 'loc_kolkata';
 
-    // 2. Fetch scope, supply, RERA, pricing, and historical snapshots in parallel
-    const [scopeIds, supplyMetrics, reraCoverageMetrics, priceMetricsList, fetchedHistoricalSnapshots] =
-      await Promise.all([
-        marketIntelligenceService.resolveLocationScopeIds(resolvedLocationId, scope),
-        marketIntelligenceService.getSupplyMetrics(resolvedLocationId, scope),
-        marketIntelligenceService.getReraCoverage(resolvedLocationId, scope),
-        marketIntelligenceService.getPriceMetrics(resolvedLocationId, scope),
+    // 2. Resolve selected location scope purely in memory from the already-loaded location list
+    const scopeIds = resolveLocationScopeIdsFromList(allPublishedLocations, resolvedLocationId, scope);
+    const gridLocations = allPublishedLocations.filter(loc =>
+      ['CITY', 'DISCOVERY_REGION', 'AREA', 'NEIGHBOURHOOD'].includes(loc.type)
+    );
+    const gridLocationIds = gridLocations.map(l => l.id);
+
+    // 3. Load all public market intelligence inputs in ONE parallel batch (zero per-location N+1 queries)
+    let allPublishedProjects: any[] = [];
+    let configsByProject = new Map<string, any[]>();
+    let reraStatusByProject = new Map<string, string>();
+    let allNonTestResale: any[] = [];
+    let allNonTestRental: any[] = [];
+    let fetchedHistoricalSnapshots: any[] = [];
+    let gridSnapRows: Array<{ locationId: string | null; snapshotDate: Date | string | null }> = [];
+    let rawEvents: any[] = [];
+
+    const eventsPromise = (
+      scopeIds.length > 0
+        ? marketEventService.getEventsForLocations(scopeIds, 10)
+        : marketEventService.getLatestEvents(10)
+    ).catch(() => []);
+
+    if (db) {
+      const [refMaps, pubResale, pubRental, histSnaps, gSnaps, events] = await Promise.all([
+        propertyDiscoveryService.getReferenceMaps(),
+        resaleListingService.getPublishedListingsRaw().catch(() => []),
+        rentalListingService.getPublishedListingsRaw().catch(() => []),
         db
+          .select()
+          .from(locationMarketSnapshots)
+          .where(eq(locationMarketSnapshots.locationId, resolvedLocationId))
+          .orderBy(desc(locationMarketSnapshots.snapshotDate))
+          .limit(12)
+          .catch(() => []),
+        gridLocationIds.length > 0
           ? db
-              .select()
+              .select({
+                locationId: locationMarketSnapshots.locationId,
+                snapshotDate: locationMarketSnapshots.snapshotDate,
+              })
               .from(locationMarketSnapshots)
-              .where(eq(locationMarketSnapshots.locationId, resolvedLocationId))
+              .where(inArray(locationMarketSnapshots.locationId, gridLocationIds))
               .orderBy(desc(locationMarketSnapshots.snapshotDate))
-              .limit(12)
               .catch(() => [])
           : Promise.resolve([]),
+        eventsPromise,
       ]);
+
+      allPublishedProjects = refMaps.projectsList.filter((p: any) => p.lifecycleStatus === 'PUBLISHED');
+      configsByProject = refMaps.configsByProject;
+      for (const [pid, r] of refMaps.reraByProject.entries()) {
+        if (r && r.status) {
+          reraStatusByProject.set(pid, r.status);
+        }
+      }
+      allNonTestResale = pubResale.filter(r => !isKnownTestResaleListing(r));
+      allNonTestRental = pubRental.filter(r => !isKnownTestRentalListing(r));
+      fetchedHistoricalSnapshots = histSnaps;
+      gridSnapRows = gSnaps;
+      rawEvents = events;
+    } else {
+      const [allProjects, allConfigs, allRera, pubResale, pubRental, events] = await Promise.all([
+        projectRepository.findAll(),
+        projectConfigurationRepository.findAll(),
+        projectReraRepository.findAll(),
+        resaleListingRepository.findAll({ lifecycleStatus: 'PUBLISHED' }),
+        rentalListingRepository.findAll({ lifecycleStatus: 'PUBLISHED' }),
+        eventsPromise,
+      ]);
+
+      allPublishedProjects = allProjects.filter(
+        p => (p.lifecycleStatus ? p.lifecycleStatus === 'PUBLISHED' : p.isPublished !== false)
+      );
+      for (const cfg of allConfigs) {
+        const list = configsByProject.get(cfg.projectId) || [];
+        list.push(cfg);
+        configsByProject.set(cfg.projectId, list);
+      }
+      for (const r of allRera) {
+        if (r.status) {
+          reraStatusByProject.set(r.projectId, r.status);
+        }
+      }
+      allNonTestResale = pubResale.filter(r => !isKnownTestResaleListing(r));
+      allNonTestRental = pubRental.filter(r => !isKnownTestRentalListing(r));
+      rawEvents = events;
+    }
+
+    // Build pre-indexed lookup maps for O(1) per-location slicing
+    const projectsByLocationId = new Map<string, any[]>();
+    for (const p of allPublishedProjects) {
+      if (!p.locationId) continue;
+      const list = projectsByLocationId.get(p.locationId) || [];
+      list.push(p);
+      projectsByLocationId.set(p.locationId, list);
+    }
+
+    const sliceScopedData = (locIds: string[]): PreloadedScopedMarketData => {
+      const locIdSet = new Set(locIds);
+      const publishedProjects: any[] = [];
+      const projectConfigurationRows: any[] = [];
+      const publishedProjIdSet = new Set<string>();
+
+      for (const lid of locIdSet) {
+        const locProjects = projectsByLocationId.get(lid);
+        if (!locProjects) continue;
+        for (const p of locProjects) {
+          publishedProjects.push(p);
+          publishedProjIdSet.add(p.id);
+          const cfgs = configsByProject.get(p.id);
+          if (cfgs) {
+            projectConfigurationRows.push(...cfgs);
+          }
+        }
+      }
+
+      const scopedResale = allNonTestResale.filter(
+        r => (r.projectId && publishedProjIdSet.has(r.projectId)) || (r.locationId && locIdSet.has(r.locationId))
+      );
+      const scopedRental = allNonTestRental.filter(
+        r => (r.projectId && publishedProjIdSet.has(r.projectId)) || (r.locationId && locIdSet.has(r.locationId))
+      );
+
+      return {
+        publishedProjects,
+        projectConfigurationRows,
+        verifiedResaleRows: scopedResale.filter(r => isVerifiedPublicResaleListing(r as any)),
+        unverifiedResaleRows: scopedResale.filter(r => isPublishedUnverifiedPublicResaleListing(r as any)),
+        verifiedRentalRows: scopedRental.filter(r => isVerifiedPublicRentalListing(r as any)),
+        unverifiedRentalRows: scopedRental.filter(r => isPublishedUnverifiedPublicRentalListing(r as any)),
+      };
+    };
+
+    const selectedScopedData = sliceScopedData(scopeIds);
+
+    const [supplyMetrics, reraCoverageMetrics, priceMetricsList] = await Promise.all([
+      marketIntelligenceService.getSupplyMetrics(resolvedLocationId, scope, scopeIds, selectedScopedData),
+      marketIntelligenceService.getReraCoverage(
+        resolvedLocationId,
+        scope,
+        scopeIds,
+        selectedScopedData.publishedProjects,
+        reraStatusByProject
+      ),
+      marketIntelligenceService.getPriceMetrics(
+        resolvedLocationId,
+        scope,
+        scopeIds,
+        selectedScopedData.publishedProjects,
+        selectedScopedData.projectConfigurationRows
+      ),
+    ]);
 
     const selectedPriceBasisMetrics = priceMetricsList.find(p => p.priceBasis === basis) || {
       minRatePerSqft: null,
@@ -193,68 +357,48 @@ export class MarketIntelligenceDashboardService {
       notProvided: reraCoverageMetrics.notProvidedProjects,
     };
 
-    // 3. Location breakdown grid — single batched snapshot query + bounded concurrent metrics
-    const gridLocations = allPublishedLocations.filter(loc =>
-      ['CITY', 'DISCOVERY_REGION', 'AREA', 'NEIGHBOURHOOD'].includes(loc.type)
-    );
-
+    // 4. Location breakdown grid — computed in-memory from single batched dataset (0 N+1 queries)
     const latestSnapshotDateByLoc = new Map<string, string>();
-    if (db && gridLocations.length > 0) {
-      try {
-        const snapRows = await db
-          .select({
-            locationId: locationMarketSnapshots.locationId,
-            snapshotDate: locationMarketSnapshots.snapshotDate,
+    for (const row of gridSnapRows) {
+      if (row.locationId && row.snapshotDate && !latestSnapshotDateByLoc.has(row.locationId)) {
+        latestSnapshotDateByLoc.set(
+          row.locationId,
+          new Date(row.snapshotDate).toLocaleDateString('en-IN', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
           })
-          .from(locationMarketSnapshots)
-          .where(inArray(locationMarketSnapshots.locationId, gridLocations.map(l => l.id)))
-          .orderBy(desc(locationMarketSnapshots.snapshotDate));
-
-        for (const row of snapRows) {
-          if (row.locationId && row.snapshotDate && !latestSnapshotDateByLoc.has(row.locationId)) {
-            latestSnapshotDateByLoc.set(
-              row.locationId,
-              new Date(row.snapshotDate).toLocaleDateString('en-IN', {
-                day: 'numeric',
-                month: 'short',
-                year: 'numeric',
-              })
-            );
-          }
-        }
-      } catch {
-        // ignore optional snapshot date errors
+        );
       }
     }
 
-    const locationGrid: MarketDashboardDTO['locations'] = [];
-    const CHUNK_SIZE = 6;
-    for (let i = 0; i < gridLocations.length; i += CHUNK_SIZE) {
-      const chunk = gridLocations.slice(i, i + CHUNK_SIZE);
-      const chunkResults = await Promise.all(
-        chunk.map(async (loc) => {
-          const locScope = ['CITY', 'DISCOVERY_REGION'].includes(loc.type) ? 'DESCENDANT' : 'DIRECT';
-          const [locSupply, locRera] = await Promise.all([
-            marketIntelligenceService.getSupplyMetrics(loc.id, locScope),
-            marketIntelligenceService.getReraCoverage(loc.id, locScope),
-          ]);
-          return {
-            id: loc.id,
-            name: loc.name,
-            slug: loc.slug,
-            type: loc.type,
-            projectsCount: locSupply.publishedProjects,
-            resaleCount: locSupply.resaleListingsCount,
-            rentalCount: locSupply.rentalListingsCount,
-            reraVerifiedCount: locRera.verifiedProjects,
-            latestDataDate: latestSnapshotDateByLoc.get(loc.id) || '7 Oct 2026',
-          };
-        })
-      );
-      locationGrid.push(...chunkResults);
-    }
+    const locationGrid: MarketDashboardDTO['locations'] = gridLocations.map(loc => {
+      const locScope = ['CITY', 'DISCOVERY_REGION'].includes(loc.type) ? 'DESCENDANT' : 'DIRECT';
+      const locScopeIds = resolveLocationScopeIdsFromList(allPublishedLocations, loc.id, locScope);
+      const locData = sliceScopedData(locScopeIds);
 
-    // 4. Historical Trends & History
+      let reraVerifiedCount = 0;
+      for (const p of locData.publishedProjects) {
+        const status = reraStatusByProject.get(p.id) || (p as any).reraStatus || 'NOT_PROVIDED';
+        if (status === 'VERIFIED') {
+          reraVerifiedCount++;
+        }
+      }
+
+      return {
+        id: loc.id,
+        name: loc.name,
+        slug: loc.slug,
+        type: loc.type,
+        projectsCount: locData.publishedProjects.length,
+        resaleCount: locData.verifiedResaleRows.length,
+        rentalCount: locData.verifiedRentalRows.length,
+        reraVerifiedCount,
+        latestDataDate: latestSnapshotDateByLoc.get(loc.id) || '7 Oct 2026',
+      };
+    });
+
+    // 5. Historical Trends & History
     let historicalSnapshots: any[] = fetchedHistoricalSnapshots;
 
     if (historicalSnapshots.length < 2) {
@@ -319,18 +463,6 @@ export class MarketIntelligenceDashboardService {
       { name: 'Provided', count: reraMetrics.provided },
       { name: 'Not Provided', count: reraMetrics.notProvided },
     ];
-
-    // 5. Recent Market Activity
-    let rawEvents = [];
-    try {
-      if (scopeIds.length > 0) {
-        rawEvents = await marketEventService.getEventsForLocations(scopeIds, 10);
-      } else {
-        rawEvents = await marketEventService.getLatestEvents(10);
-      }
-    } catch (e) {
-      rawEvents = [];
-    }
 
     const recentActivity = rawEvents.map(ev => {
       const locObj = allPublishedLocations.find(l => l.id === ev.locationId);

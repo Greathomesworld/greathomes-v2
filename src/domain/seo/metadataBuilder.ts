@@ -37,6 +37,69 @@ const GENERIC_PLACEHOLDER_DESCRIPTIONS = new Set([
 ]);
 
 /**
+ * Trailing connectors, prepositions, articles, and verb fragments that should never
+ * terminate a clamped meta title or meta description.
+ */
+const DANGLING_TRAILING_WORDS = new Set([
+  '&',
+  'and',
+  'or',
+  'nor',
+  'but',
+  'yet',
+  'so',
+  'with',
+  'without',
+  'in',
+  'on',
+  'at',
+  'to',
+  'for',
+  'of',
+  'from',
+  'by',
+  'across',
+  'near',
+  'via',
+  'about',
+  'into',
+  'through',
+  'under',
+  'over',
+  'between',
+  'among',
+  'around',
+  'offering',
+  'featuring',
+  'including',
+  'starting',
+  'the',
+  'a',
+  'an',
+  'your',
+  'our',
+  'their',
+  'this',
+  'that',
+  'these',
+  'those',
+]);
+
+/**
+ * Known placeholder / stock-randomizer image hosts that must never appear in
+ * public SEO metadata (OpenGraph, Twitter Cards, Schema.org JSON-LD, or editorial covers).
+ */
+const PLACEHOLDER_IMAGE_HOSTS = new Set([
+  'picsum.photos',
+  'fastly.picsum.photos',
+  'via.placeholder.com',
+  'placehold.co',
+  'placehold.it',
+  'placekitten.com',
+  'dummyimage.com',
+]);
+
+/**
  * Strips HTML tags and normalizes all whitespace (newlines, tabs, repeated spaces).
  */
 export function stripHtmlAndNormalizeWhitespace(input?: string | null): string {
@@ -74,6 +137,9 @@ export function stripBrandSuffix(rawTitle?: string | null): string {
 
 /**
  * Appends `| Great Homes` exactly once unless `includeBrand` is false.
+ * When `includeBrand` is false, preserves an existing trailing Great Homes brand suffix
+ * (deduplicating any repeated brand suffix) instead of stripping it, while leaving
+ * intentionally unbranded or lead-branded titles untouched.
  */
 export function formatBrandTitle(
   rawCoreTitle: string,
@@ -81,13 +147,16 @@ export function formatBrandTitle(
 ): string {
   const includeBrand = options?.includeBrand !== false;
   const maxLength = options?.maxLength ?? 78;
-  const core = stripBrandSuffix(rawCoreTitle);
+  const cleanRaw = stripHtmlAndNormalizeWhitespace(rawCoreTitle);
+  const core = stripBrandSuffix(cleanRaw);
 
   if (!core) {
     return `${SITE_NAME} | Verified Residential Property Discovery in Kolkata`;
   }
 
-  if (!includeBrand) {
+  const hasTrailingBrand = cleanRaw.length !== core.length;
+
+  if (!includeBrand && !hasTrailingBrand) {
     return clampAtWordBoundary(core, maxLength, false);
   }
 
@@ -134,8 +203,42 @@ export function formatLocationWithCity(
 }
 
 /**
+ * Strips dangling trailing punctuation, connectors/prepositions, and split brand stubs
+ * (e.g. "...with Great" when "Great Homes" was truncated mid-brand).
+ */
+function stripDanglingTail(candidate: string, originalFullText: string): string {
+  let result = candidate.replace(/[\s,;:–—|\-/&+]+$/g, '').trim();
+  if (!result) return '';
+
+  // Detect clipped trailing "Great" that came from "Great Homes"
+  if (/\bGreat$/i.test(result)) {
+    const escaped = result.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (new RegExp(`${escaped}\\s+Homes\\b`, 'i').test(originalFullText)) {
+      result = result.replace(/\s*\bGreat$/i, '').replace(/[\s,;:–—|\-/&+]+$/g, '').trim();
+    }
+  }
+
+  // Repeatedly pop trailing dangling conjunctions, prepositions, or articles
+  const tokens = result.split(/\s+/).filter(Boolean);
+  while (tokens.length > 3) {
+    const lastRaw = tokens[tokens.length - 1];
+    const lastNormalized = lastRaw.replace(/^[^a-z0-9&]+|[^a-z0-9&]+$/gi, '').toLowerCase();
+    if (!lastNormalized || DANGLING_TRAILING_WORDS.has(lastNormalized)) {
+      tokens.pop();
+      continue;
+    }
+    break;
+  }
+
+  return tokens
+    .join(' ')
+    .replace(/[\s,;:–—|\-/&+]+$/g, '')
+    .trim();
+}
+
+/**
  * Trims text strictly on word boundaries so meta titles and descriptions
- * are never sliced mid-word.
+ * are never sliced mid-word or left ending on dangling connectors.
  */
 export function clampAtWordBoundary(
   input: string,
@@ -147,13 +250,17 @@ export function clampAtWordBoundary(
 
   const effectiveMax = addEllipsis ? Math.max(10, maxLength - 1) : maxLength;
   const slice = clean.slice(0, effectiveMax);
+  const nextChar = clean.charAt(effectiveMax);
+  // Only keep the full slice if the cut landed cleanly on whitespace/punctuation
+  const endsOnWordBoundary = !nextChar || /[\s.,;:!?()[\]"'–—|-]/.test(nextChar);
   const lastSpace = slice.lastIndexOf(' ');
-  const candidate =
-    lastSpace >= Math.floor(effectiveMax * 0.65)
+  const rawCandidate = endsOnWordBoundary
+    ? slice
+    : lastSpace >= Math.floor(effectiveMax * 0.5)
       ? slice.slice(0, lastSpace)
       : slice;
 
-  const trimmed = candidate.replace(/[\s,;:–—|-]+$/g, '').trim();
+  const trimmed = stripDanglingTail(rawCandidate, clean);
   if (!trimmed) return clean.slice(0, maxLength).trim();
   return addEllipsis ? `${trimmed}…` : trimmed;
 }
@@ -206,18 +313,30 @@ export function sanitizeMetaDescription(
     return chosen;
   }
 
-  // Prefer ending at a complete sentence within [minLength, maxLength]
+  // 1. Prefer ending cleanly at a complete sentence within [max(minLength, 70), maxLength]
+  const sentenceFloor = Math.max(minLength, Math.min(70, Math.floor(maxLength * 0.5)));
   const candidate = chosen.slice(0, maxLength);
-  const lastPeriod = Math.max(
-    candidate.lastIndexOf('. '),
-    candidate.lastIndexOf('! '),
-    candidate.lastIndexOf('? ')
-  );
-  if (lastPeriod >= Math.max(minLength, Math.floor(maxLength * 0.65))) {
-    return candidate.slice(0, lastPeriod + 1).trim();
+  let bestSentenceEnd = -1;
+  const sentenceBoundaryRegex = /[.!?](?=\s|$)/g;
+  let match: RegExpExecArray | null;
+  while ((match = sentenceBoundaryRegex.exec(candidate)) !== null) {
+    if (match.index + 1 >= sentenceFloor) {
+      bestSentenceEnd = match.index + 1;
+    }
+  }
+  if (bestSentenceEnd !== -1) {
+    return candidate.slice(0, bestSentenceEnd).trim();
   }
 
-  return clampAtWordBoundary(chosen, maxLength, false);
+  // 2. Otherwise clamp cleanly at a word boundary, strip dangling tails, and close with a period
+  const clamped = clampAtWordBoundary(chosen, Math.max(20, maxLength - 1), false);
+  if (!clamped) {
+    return clampAtWordBoundary(chosen, maxLength, false);
+  }
+  if (/[.!?]$/.test(clamped)) {
+    return clamped;
+  }
+  return clamped.length + 1 <= maxLength ? `${clamped}.` : clamped;
 }
 
 /**
@@ -303,6 +422,48 @@ export function normalizeAbsoluteImageUrl(rawUrl?: string | null): string | null
   }
 
   return null;
+}
+
+/**
+ * Returns true if the URL points to a known placeholder / random stock image host
+ * (such as picsum.photos) that must not be emitted in SEO or editorial image tags.
+ */
+export function isPlaceholderImageUrl(rawUrl?: string | null): boolean {
+  if (!rawUrl || typeof rawUrl !== 'string') return false;
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return false;
+
+  try {
+    const parsed = trimmed.startsWith('//')
+      ? new URL(`https:${trimmed}`)
+      : trimmed.startsWith('/')
+        ? new URL(trimmed, SITE_ORIGIN)
+        : new URL(trimmed);
+    const host = parsed.hostname.toLowerCase();
+    if (PLACEHOLDER_IMAGE_HOSTS.has(host)) return true;
+    for (const placeholderHost of PLACEHOLDER_IMAGE_HOSTS) {
+      if (host.endsWith(`.${placeholderHost}`)) return true;
+    }
+    return false;
+  } catch {
+    return /(?:picsum\.photos|via\.placeholder\.com|placehold\.co|placekitten\.com|dummyimage\.com)/i.test(
+      trimmed
+    );
+  }
+}
+
+/**
+ * Resolves an editorial article/review image URL for OpenGraph, Twitter Cards,
+ * Article JSON-LD, and editorial presentation:
+ * 1. Valid existing non-placeholder absolute image URL
+ * 2. Branded Great Homes default social image (`/og-image.png`)
+ */
+export function resolveEditorialSeoImage(rawUrl?: string | null): string {
+  const normalized = normalizeAbsoluteImageUrl(rawUrl);
+  if (!normalized || isPlaceholderImageUrl(normalized)) {
+    return DEFAULT_OG_IMAGE;
+  }
+  return normalized;
 }
 
 /**
@@ -467,10 +628,28 @@ export function buildProjectMetaDescription(input: ProjectDescriptionInput): str
     ? ` starting from ${input.startingPriceFormatted}`
     : '';
   const reraPhrase = input.hasVerifiedRera ? ' WBRERA verified details.' : '';
+  const leadWithDev = `Explore ${projectName}${byDev} in ${locWithCity}${configPhrase}${pricePhrase}.`;
+  const leadCompact = `Explore ${projectName} in ${locWithCity}${configPhrase}${pricePhrase}.`;
+  const leadCore = `Explore ${projectName} in ${locWithCity}${configPhrase}.`;
+  const leadMinimal = `Explore ${projectName} in ${locWithCity}.`;
 
-  const structured = `Explore ${projectName}${byDev} in ${locWithCity}${configPhrase}${pricePhrase}. Check floor plans, amenities, possession timeline & pricing on Great Homes.${reraPhrase}`;
+  // Ordered complete-sentence candidates so descriptions stay concise & naturally punctuated within 158 chars
+  const candidates = [
+    `${leadWithDev} Check floor plans, amenities, possession & pricing on Great Homes.${reraPhrase}`,
+    `${leadWithDev} Check floor plans, amenities & pricing on Great Homes.${reraPhrase}`,
+    `${leadWithDev} Check floor plans, amenities & pricing on Great Homes.`,
+    `${leadCompact} Check floor plans, amenities & pricing on Great Homes.`,
+    `${leadCore} Check floor plans, amenities, possession & pricing on Great Homes.`,
+    `${leadMinimal} Check floor plans, amenities & pricing on Great Homes.`,
+  ];
 
-  return sanitizeMetaDescription(structured, input.shortDescription || structured, {
+  for (const candidate of candidates) {
+    if (candidate.length <= 158) {
+      return candidate;
+    }
+  }
+
+  return sanitizeMetaDescription(leadCompact, input.shortDescription || leadMinimal, {
     maxLength: 158,
   });
 }
@@ -515,7 +694,11 @@ export function buildPageMetadata(input: BuildPageMetadataInput): Metadata {
 
   const index = input.index !== false;
   const follow = input.follow !== false;
-  const resolvedImage = normalizeAbsoluteImageUrl(input.ogImage) || DEFAULT_OG_IMAGE;
+  const normalizedOgImage = normalizeAbsoluteImageUrl(input.ogImage);
+  const resolvedImage =
+    normalizedOgImage && !isPlaceholderImageUrl(normalizedOgImage)
+      ? normalizedOgImage
+      : DEFAULT_OG_IMAGE;
 
   const openGraphBase: NonNullable<Metadata['openGraph']> = {
     title: formattedTitle,

@@ -12,91 +12,78 @@ export function PropertyDetailHeader({ listing }: PropertyDetailHeaderProps) {
   const primaryPrice = isResale ? listing.formattedAskingPrice : listing.formattedMonthlyRent;
   const priceLabel = isResale ? 'Asking Price' : 'Monthly Rent';
 
-  const hasBeds =
-    typeof listing.bedroomCount === 'number' &&
-    Number.isFinite(listing.bedroomCount) &&
-    listing.bedroomCount > 0;
-
-  const mobileMainHeadline =
-    listing.propertyType === 'PLOT'
-      ? 'Residential Plot'
-      : hasBeds
-      ? `${listing.bedroomCount} BHK ${listing.propertyTypeDisplay}`
-      : listing.configuration || listing.propertyTypeDisplay;
-
   const mobileSubHeadline = listing.project
-    ? `at ${listing.project.name}`
+    ? `Part of ${listing.project.name}`
     : listing.customProjectDisplay
-    ? `at ${listing.customProjectDisplay}`
+    ? listing.customProjectDisplay
     : listing.location
-    ? `in ${listing.location.name}`
+    ? listing.locationDisplay
     : listing.customLocalityDisplay
-    ? `in ${listing.customLocalityDisplay}`
-    : 'in Kolkata';
+    ? listing.customLocalityDisplay
+    : 'Kolkata';
 
   return (
     <div className="pt-1">
-      {/* DESKTOP TITLE & LOCATION ROW */}
-      <div className="hidden md:block space-y-2">
-        <h1 className="text-2xl lg:text-[32px] font-serif font-bold text-[#111111] tracking-tight leading-tight">
-          {listing.title}
-        </h1>
+      {/* UNIFIED RESPONSIVE TITLE, LOCATION & MOBILE PRICE HEADER (Single Semantic H1) */}
+      <div className="flex items-start justify-between gap-3 md:block">
+        <div className="min-w-0 flex-1 space-y-1 md:space-y-2">
+          <h1 className="text-xl md:text-2xl lg:text-[32px] font-serif font-bold text-[#111111] tracking-tight leading-snug md:leading-tight">
+            {listing.title}
+          </h1>
 
-        <div className="flex items-center flex-wrap gap-2 text-sm text-[#111111]/75 font-body">
-          <MapPin className="w-4 h-4 text-[#E85D3F] shrink-0" />
-          {listing.location ? (
-            <Link
-              href={listing.location.url}
-              className="hover:text-[#E85D3F] transition-colors font-medium text-[#111111]/85"
-            >
-              {listing.locationDisplay}
-            </Link>
-          ) : (
-            <span className="font-medium text-[#111111]/85">{listing.locationDisplay}</span>
-          )}
-
-          {listing.project ? (
-            <>
-              <span className="text-[#111111]/35">·</span>
+          {/* Mobile concise project/location context below H1 (<md) */}
+          <div className="md:hidden">
+            {listing.project ? (
               <Link
                 href={listing.project.url}
-                className="font-display font-semibold text-[#111111] underline decoration-[#111111]/30 hover:decoration-[#E85D3F] hover:text-[#E85D3F] underline-offset-4 transition-colors"
+                className="text-sm font-display font-medium text-[#111111]/75 hover:text-[#E85D3F] block truncate"
               >
-                {`Part of ${listing.project.name}`}
+                {mobileSubHeadline}
               </Link>
-            </>
-          ) : listing.customProjectDisplay ? (
-            <>
-              <span className="text-[#111111]/35">·</span>
-              <span className="font-display font-semibold text-[#111111]/85">
-                {listing.customProjectDisplay}
-              </span>
-            </>
-          ) : null}
-        </div>
-      </div>
+            ) : (
+              <p className="text-sm font-display font-medium text-[#111111]/75 truncate">
+                {mobileSubHeadline}
+              </p>
+            )}
+          </div>
 
-      {/* MOBILE TITLE & PRICE SIDE-BY-SIDE HEADER (Matches Mobile Reference) */}
-      <div className="md:hidden flex items-start justify-between gap-3 pt-1">
-        <div className="min-w-0 flex-1 space-y-0.5">
-          <h1 className="text-xl font-serif font-bold text-[#111111] leading-snug">
-            {mobileMainHeadline}
-          </h1>
-          {listing.project ? (
-            <Link
-              href={listing.project.url}
-              className="text-sm font-display font-medium text-[#111111]/75 hover:text-[#E85D3F] block truncate"
-            >
-              {mobileSubHeadline}
-            </Link>
-          ) : (
-            <p className="text-sm font-display font-medium text-[#111111]/75 truncate">
-              {mobileSubHeadline}
-            </p>
-          )}
+          {/* Desktop Location & Parent Project Row (md+) */}
+          <div className="hidden md:flex items-center flex-wrap gap-2 text-sm text-[#111111]/75 font-body">
+            <MapPin className="w-4 h-4 text-[#E85D3F] shrink-0" />
+            {listing.location ? (
+              <Link
+                href={listing.location.url}
+                className="hover:text-[#E85D3F] transition-colors font-medium text-[#111111]/85"
+              >
+                {listing.locationDisplay}
+              </Link>
+            ) : (
+              <span className="font-medium text-[#111111]/85">{listing.locationDisplay}</span>
+            )}
+
+            {listing.project ? (
+              <>
+                <span className="text-[#111111]/35">·</span>
+                <Link
+                  href={listing.project.url}
+                  className="font-display font-semibold text-[#111111] underline decoration-[#111111]/30 hover:decoration-[#E85D3F] hover:text-[#E85D3F] underline-offset-4 transition-colors"
+                >
+                  {`Part of ${listing.project.name}`}
+                </Link>
+              </>
+            ) : listing.customProjectDisplay ? (
+              <>
+                <span className="text-[#111111]/35">·</span>
+                <span className="font-display font-semibold text-[#111111]/85">
+                  {listing.customProjectDisplay}
+                </span>
+              </>
+            ) : null}
+          </div>
         </div>
 
-        <div className="text-right shrink-0">
+        {/* Mobile Price Column (<md only; desktop price lives in sticky enquiry sidebar) */}
+        <div className="md:hidden text-right shrink-0">
           <span className="text-xl font-display font-bold text-[#111111] block leading-snug">
             {primaryPrice}
           </span>

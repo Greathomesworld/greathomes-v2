@@ -786,7 +786,28 @@ export class ResaleListingService {
       this.resolveProjectDto(projectId),
     ]);
     const valid = published.filter(l => !isKnownTestResaleListing(l));
-    return Promise.all(valid.map(l => this.buildPublicDto(l, projectDto)));
+    if (valid.length === 0) return [];
+
+    let mediaByListing: Map<string, any[]> | null = null;
+    if (typeof this.repo.findMediaByListingIds === 'function') {
+      const allMedia = await this.repo.findMediaByListingIds(valid.map(l => l.id));
+      mediaByListing = new Map<string, any[]>();
+      for (const m of allMedia) {
+        const arr = mediaByListing.get(m.resaleListingId) || [];
+        arr.push(m);
+        mediaByListing.set(m.resaleListingId, arr);
+      }
+    }
+
+    return Promise.all(
+      valid.map(l =>
+        this.buildPublicDto(
+          l,
+          projectDto,
+          mediaByListing ? { mediaList: mediaByListing.get(l.id) || [] } : undefined
+        )
+      )
+    );
   }
 
   async getPaginatedPublicListingsForProject(
@@ -878,6 +899,79 @@ export class ResaleListingService {
       return this.inflightPublished;
     }
     return load();
+  }
+
+  /**
+   * Fast, PII-free batched loader for public discovery cards & nearby/similar resale bundles.
+   * Executes at most 2 queries total (published listings + batch media) instead of N+1 per listing.
+   */
+  public async getPublishedListingsWithMedia(): Promise<
+    Array<
+      ResaleListing & {
+        listingParty: { type: ListingPartyType; label: string };
+        media: Array<{
+          id: string;
+          mediaType: string;
+          category: string;
+          url: string;
+          altText: string | null;
+          caption: string | null;
+          sortOrder: number;
+          isFeatured: boolean;
+        }>;
+      }
+    >
+  > {
+    const rawList = await this.getPublishedListingsRaw();
+    const eligible = rawList.filter(
+      l => l && l.id && l.lifecycleStatus === 'PUBLISHED' && !isKnownTestResaleListing(l)
+    );
+    if (eligible.length === 0) return [];
+
+    const listingIds = eligible.map(l => l.id);
+    const allMedia =
+      typeof this.repo.findMediaByListingIds === 'function'
+        ? await this.repo.findMediaByListingIds(listingIds)
+        : (await Promise.all(listingIds.map(id => this.repo.findMediaByListingId(id)))).flat();
+
+    const mediaByListing = new Map<string, any[]>();
+    for (const m of allMedia) {
+      const arr = mediaByListing.get(m.resaleListingId) || [];
+      arr.push(m);
+      mediaByListing.set(m.resaleListingId, arr);
+    }
+
+    return eligible.map(l => {
+      const rawMedia = mediaByListing.get(l.id) || [];
+      const filteredMedia = rawMedia
+        .filter(
+          (m: any) =>
+            m &&
+            typeof m.url === 'string' &&
+            m.url.trim().length > 0 &&
+            (m.mediaType || 'IMAGE').toUpperCase() !== 'VIDEO' &&
+            (m.category || '').toUpperCase() !== 'WALKTHROUGH'
+        )
+        .map((m: any) => ({
+          id: m.id,
+          mediaType: m.mediaType,
+          category: m.category,
+          url: normalizeMediaPublicUrl(m.url) || m.url,
+          altText: m.altText ?? null,
+          caption: m.caption ?? null,
+          sortOrder: m.sortOrder,
+          isFeatured: m.isFeatured,
+        }));
+
+      return {
+        ...l,
+        listingParty: {
+          type: l.listingPartyType,
+          label: l.listingPartyType === 'OWNER' ? 'Owner Listed' : 'Listing Partner',
+        },
+        media: filteredMedia,
+      };
+    });
   }
 
   async deleteListing(id: string): Promise<boolean> {

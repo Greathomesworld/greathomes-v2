@@ -3,7 +3,11 @@ import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { editorialService } from '@/src/domain/editorial/services/editorialService';
 import { ArticleDetailView } from '@/src/components/editorial/ArticleDetailView';
-import { buildNoIndexMetadata, buildPageMetadata } from '@/src/domain/seo/metadataBuilder';
+import {
+  buildNoIndexMetadata,
+  buildPageMetadata,
+  resolveEditorialSeoImage,
+} from '@/src/domain/seo/metadataBuilder';
 
 export const revalidate = 300;
 
@@ -32,10 +36,11 @@ export async function generateMetadata({
     description: story.seoDescription || story.excerpt || story.title,
     canonicalPath: `/guides/${story.slug}`,
     canonicalUrl: story.canonicalUrl,
+    allowedCanonicalPrefix: '/guides/',
     index: false,
     follow: true,
     ogType: 'article',
-    ogImage: story.featuredImage,
+    ogImage: resolveEditorialSeoImage(story.featuredImage),
     ogImageAlt: story.title,
     publishedTime: story.publishedAt || undefined,
     modifiedTime: story.updatedAt,

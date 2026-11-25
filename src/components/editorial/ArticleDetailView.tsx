@@ -8,8 +8,8 @@ import { safeJsonLd } from '@/src/lib/safeJsonLd';
 import { SafeEditorialBody } from './SafeEditorialBody';
 import {
   DEFAULT_OG_IMAGE,
-  normalizeAbsoluteImageUrl,
   normalizeCanonicalUrl,
+  resolveEditorialSeoImage,
   SITE_NAME,
   SITE_ORIGIN,
   stripBrandSuffix,
@@ -22,9 +22,10 @@ interface ArticleDetailViewProps {
 export function ArticleDetailView({ article }: ArticleDetailViewProps) {
   const canonicalUrl = normalizeCanonicalUrl(
     article.canonicalUrl,
-    `/guides/${article.slug}`
+    `/guides/${article.slug}`,
+    { allowedPathPrefix: '/guides/' }
   );
-  const articleImage = normalizeAbsoluteImageUrl(article.featuredImage) || DEFAULT_OG_IMAGE;
+  const articleImage = resolveEditorialSeoImage(article.featuredImage);
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -213,7 +214,7 @@ export function ArticleDetailView({ article }: ArticleDetailViewProps) {
               {article.relatedArticles.map((rel) => (
                 <Link
                   key={rel.id}
-                  href={`/guides/${rel.slug}`}
+                  href={rel.type === 'PROJECT_REVIEW' ? `/reviews/${rel.slug}` : `/guides/${rel.slug}`}
                   className="group rounded-xl border border-stone-200 bg-white p-5 transition-all hover:border-[#E85D3F]"
                 >
                   <span className="font-display text-xs font-semibold text-[#218C5A] uppercase tracking-wider">{rel.typeDisplay}</span>

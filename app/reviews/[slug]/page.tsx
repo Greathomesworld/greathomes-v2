@@ -3,7 +3,7 @@ import { Metadata } from 'next';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { editorialService } from '@/src/domain/editorial/services/editorialService';
 import { ReviewDetailView } from '@/src/components/editorial/ReviewDetailView';
-import { buildPageMetadata } from '@/src/domain/seo/metadataBuilder';
+import { buildPageMetadata, resolveEditorialSeoImage } from '@/src/domain/seo/metadataBuilder';
 
 export const revalidate = 300;
 
@@ -26,14 +26,17 @@ export async function generateMetadata({
     review.type === 'PROJECT_REVIEW'
       ? `/reviews/${review.slug}`
       : `/guides/${review.slug}`;
+  const allowedCanonicalPrefix =
+    review.type === 'PROJECT_REVIEW' ? '/reviews/' : '/guides/';
 
   return buildPageMetadata({
     title: review.seoTitle || review.title,
     description: review.seoDescription || review.excerpt || review.title,
     canonicalPath,
     canonicalUrl: review.canonicalUrl,
+    allowedCanonicalPrefix,
     ogType: 'article',
-    ogImage: review.featuredImage,
+    ogImage: resolveEditorialSeoImage(review.featuredImage),
     ogImageAlt: review.title,
     publishedTime: review.publishedAt || undefined,
     modifiedTime: review.updatedAt,

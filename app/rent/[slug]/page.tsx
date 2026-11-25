@@ -16,6 +16,8 @@ import {
   SITE_ORIGIN,
 } from '@/src/domain/seo/metadataBuilder';
 
+export const revalidate = 120;
+
 interface PageProps {
   params: Promise<{ slug: string }>;
 }

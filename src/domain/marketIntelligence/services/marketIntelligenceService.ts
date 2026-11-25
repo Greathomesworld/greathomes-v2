@@ -148,6 +148,40 @@ export interface PreloadedScopedMarketData {
   unverifiedRentalRows: any[];
 }
 
+export function resolveLocationScopeIdsFromList(
+  allLocations: Array<{ id: string; slug?: string; parentId?: string | null; status?: string; type?: string }>,
+  locationIdOrSlug: string,
+  scope: MetricScope = 'DESCENDANT'
+): string[] {
+  const rootLoc = allLocations.find(l => l.id === locationIdOrSlug || l.slug === locationIdOrSlug);
+  const rootId = rootLoc ? rootLoc.id : locationIdOrSlug;
+
+  if (scope === 'DIRECT') return [rootId];
+
+  const scopeIds = new Set<string>([rootId]);
+  let addedNew = true;
+  let iteration = 0;
+  const maxIterations = 50; // Guard against infinite loop in case of hierarchy cycles
+  while (addedNew && iteration < maxIterations) {
+    iteration++;
+    addedNew = false;
+    for (const loc of allLocations) {
+      if (
+        loc.status === 'PUBLISHED' &&
+        isPublicCanonicalLocation(loc as any) &&
+        loc.parentId &&
+        scopeIds.has(loc.parentId) &&
+        !scopeIds.has(loc.id)
+      ) {
+        scopeIds.add(loc.id);
+        addedNew = true;
+      }
+    }
+  }
+
+  return Array.from(scopeIds);
+}
+
 export class MarketIntelligenceService {
   private pgLocationsCache: { data: Array<{ id: string; name: string; slug: string; parentId?: string | null; status: string; type?: string; latitude?: number | null; longitude?: number | null }>; expiresAt: number } | null = null;
   private pgPlacesCache: { data: any[]; expiresAt: number } | null = null;
@@ -167,35 +201,7 @@ export class MarketIntelligenceService {
       this.pgLocationsCache = { data: allLocations, expiresAt: Date.now() + 3_000 };
     }
 
-    const rootLoc = allLocations.find(l => l.id === locationIdOrSlug || l.slug === locationIdOrSlug);
-    const rootId = rootLoc ? rootLoc.id : locationIdOrSlug;
-
-    if (scope === 'DIRECT') return [rootId];
-
-    // Find direct location and its published canonical descendants
-    const scopeIds = new Set<string>([rootId]);
-
-    let addedNew = true;
-    let iteration = 0;
-    const maxIterations = 50; // Guard against infinite loop in case of hierarchy cycles
-    while (addedNew && iteration < maxIterations) {
-      iteration++;
-      addedNew = false;
-      for (const loc of allLocations) {
-        if (
-          loc.status === 'PUBLISHED' &&
-          isPublicCanonicalLocation(loc as any) &&
-          loc.parentId &&
-          scopeIds.has(loc.parentId) &&
-          !scopeIds.has(loc.id)
-        ) {
-          scopeIds.add(loc.id);
-          addedNew = true;
-        }
-      }
-    }
-
-    return Array.from(scopeIds);
+    return resolveLocationScopeIdsFromList(allLocations, locationIdOrSlug, scope);
   }
 
   /**
@@ -493,7 +499,8 @@ export class MarketIntelligenceService {
     locationId: string,
     scope: MetricScope = 'DESCENDANT',
     preResolvedLocationIds?: string[],
-    preloadedPublishedProjects?: any[]
+    preloadedPublishedProjects?: any[],
+    preloadedReraMap?: Map<string, string>
   ): Promise<ReraCoverageMetrics> {
     const locationIds = preResolvedLocationIds || (await this.resolveLocationScopeIds(locationId, scope));
     if (locationIds.length === 0) {
@@ -502,7 +509,9 @@ export class MarketIntelligenceService {
     const db = getDb();
 
     if (!db) {
-      await ensureSeedData();
+      if (!preloadedPublishedProjects || !preloadedReraMap) {
+        await ensureSeedData();
+      }
       const locIdSet = new Set(locationIds);
       const projRows =
         preloadedPublishedProjects ||
@@ -514,10 +523,13 @@ export class MarketIntelligenceService {
         return { verifiedProjects: 0, providedProjects: 0, notProvidedProjects: 0, totalProjects: 0, verifiedPercentage: 0 };
       }
 
-      const allRera = await projectReraRepository.findAll();
-      const reraMap = new Map<string, string>();
-      for (const r of allRera) {
-        reraMap.set(r.projectId, r.status);
+      let reraMap = preloadedReraMap;
+      if (!reraMap) {
+        const allRera = await projectReraRepository.findAll();
+        reraMap = new Map<string, string>();
+        for (const r of allRera) {
+          reraMap.set(r.projectId, r.status);
+        }
       }
 
       let verifiedProjects = 0;
@@ -555,18 +567,21 @@ export class MarketIntelligenceService {
     }
 
     const projIds = projRows.map(p => p.id);
-    const reraMap = new Map<string, string>();
-    if (projIds.length > 0) {
-      try {
-        const refMaps = await propertyDiscoveryService.getReferenceMaps();
-        for (const pid of projIds) {
-          const r = refMaps.reraByProject.get(pid);
-          if (r && r.status) {
-            reraMap.set(pid, r.status);
+    let reraMap = preloadedReraMap;
+    if (!reraMap) {
+      reraMap = new Map<string, string>();
+      if (projIds.length > 0) {
+        try {
+          const refMaps = await propertyDiscoveryService.getReferenceMaps();
+          for (const pid of projIds) {
+            const r = refMaps.reraByProject.get(pid);
+            if (r && r.status) {
+              reraMap.set(pid, r.status);
+            }
           }
+        } catch {
+          // Table fallback
         }
-      } catch {
-        // Table fallback
       }
     }
 

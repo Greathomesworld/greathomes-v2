@@ -8,8 +8,8 @@ import { safeJsonLd } from '@/src/lib/safeJsonLd';
 import { SafeEditorialBody } from './SafeEditorialBody';
 import {
   DEFAULT_OG_IMAGE,
-  normalizeAbsoluteImageUrl,
   normalizeCanonicalUrl,
+  resolveEditorialSeoImage,
   SITE_NAME,
   SITE_ORIGIN,
   stripBrandSuffix,
@@ -22,9 +22,10 @@ interface ReviewDetailViewProps {
 export function ReviewDetailView({ review }: ReviewDetailViewProps) {
   const canonicalUrl = normalizeCanonicalUrl(
     review.canonicalUrl,
-    `/reviews/${review.slug}`
+    `/reviews/${review.slug}`,
+    { allowedPathPrefix: '/reviews/' }
   );
-  const reviewImage = normalizeAbsoluteImageUrl(review.featuredImage) || DEFAULT_OG_IMAGE;
+  const reviewImage = resolveEditorialSeoImage(review.featuredImage);
 
   const jsonLd = {
     '@context': 'https://schema.org',

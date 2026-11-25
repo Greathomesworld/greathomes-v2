@@ -99,49 +99,58 @@ export function GuidesDirectoryView({ initialArticles, totalArticles }: GuidesDi
           </div>
         ) : (
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredArticles.map((article) => (
-              <article
-                key={article.id}
-                className="group flex flex-col justify-between overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xs transition-all hover:border-stone-300 hover:shadow-md"
-              >
-                <div>
-                  {/* Card Header Tag */}
-                  <div className="flex items-center justify-between border-b border-stone-100 px-5 py-3 text-xs font-display font-medium text-stone-500">
-                    <span className="inline-flex items-center gap-1 text-[#218C5A] font-semibold">
-                      <Tag className="h-3 w-3" />
-                      {article.typeDisplay}
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      {article.readingTimeMinutes} min read
-                    </span>
+            {filteredArticles.map((article) => {
+              const articleHref =
+                article.type === 'PROJECT_REVIEW'
+                  ? `/reviews/${article.slug}`
+                  : `/guides/${article.slug}`;
+              const ctaLabel =
+                article.type === 'PROJECT_REVIEW' ? 'Read Review' : 'Read Guide';
+
+              return (
+                <article
+                  key={article.id}
+                  className="group flex flex-col justify-between overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xs transition-all hover:border-stone-300 hover:shadow-md"
+                >
+                  <div>
+                    {/* Card Header Tag */}
+                    <div className="flex items-center justify-between border-b border-stone-100 px-5 py-3 text-xs font-display font-medium text-stone-500">
+                      <span className="inline-flex items-center gap-1 text-[#218C5A] font-semibold">
+                        <Tag className="h-3 w-3" />
+                        {article.typeDisplay}
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {article.readingTimeMinutes} min read
+                      </span>
+                    </div>
+
+                    {/* Card Body */}
+                    <div className="p-5">
+                      <h2 className="font-editorial text-xl font-bold tracking-tight text-[#111111] group-hover:text-[#E85D3F] transition-colors line-clamp-2">
+                        <Link href={articleHref}>{article.title}</Link>
+                      </h2>
+                      <p className="mt-3 font-body text-sm leading-relaxed text-stone-600 line-clamp-3">
+                        {article.excerpt}
+                      </p>
+                    </div>
                   </div>
 
-                  {/* Card Body */}
-                  <div className="p-5">
-                    <h2 className="font-editorial text-xl font-bold tracking-tight text-[#111111] group-hover:text-[#E85D3F] transition-colors line-clamp-2">
-                      <Link href={`/guides/${article.slug}`}>{article.title}</Link>
-                    </h2>
-                    <p className="mt-3 font-body text-sm leading-relaxed text-stone-600 line-clamp-3">
-                      {article.excerpt}
-                    </p>
+                  {/* Card Footer */}
+                  <div className="border-t border-stone-100 bg-stone-50 px-5 py-3.5 flex items-center justify-between">
+                    <span className="font-body text-xs text-stone-500">
+                      By {article.authorName}
+                    </span>
+                    <Link
+                      href={articleHref}
+                      className="inline-flex items-center gap-1 font-display text-xs font-semibold text-[#E85D3F] hover:underline"
+                    >
+                      {ctaLabel} <ChevronRight className="h-3.5 w-3.5" />
+                    </Link>
                   </div>
-                </div>
-
-                {/* Card Footer */}
-                <div className="border-t border-stone-100 bg-stone-50 px-5 py-3.5 flex items-center justify-between">
-                  <span className="font-body text-xs text-stone-500">
-                    By {article.authorName}
-                  </span>
-                  <Link
-                    href={`/guides/${article.slug}`}
-                    className="inline-flex items-center gap-1 font-display text-xs font-semibold text-[#E85D3F] hover:underline"
-                  >
-                    Read Guide <ChevronRight className="h-3.5 w-3.5" />
-                  </Link>
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
         )}
       </main>

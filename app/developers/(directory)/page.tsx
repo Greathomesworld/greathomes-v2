@@ -17,7 +17,7 @@ export const revalidate = 300;
 export const metadata: Metadata = buildPageMetadata({
   title: 'Real Estate Developers in Kolkata – Verified Builders',
   description:
-    "Explore Kolkata's leading real estate developers and builders. Compare active residential projects, WBRERA credentials, and location footprints on Great Homes.",
+    "Explore Kolkata's leading real estate developers and builders. Compare active projects, WBRERA credentials and location footprints on Great Homes.",
   canonicalPath: '/developers',
 });
 

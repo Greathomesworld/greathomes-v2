@@ -68,10 +68,10 @@ export function PropertyEnquirySidebar({ listing }: PropertyEnquirySidebarProps)
       {/* CARD 1: Get Assistance from Great Homes (Matches Desktop Reference) */}
       <div className="bg-white rounded-2xl border border-[#E6E2DC] p-5 sm:p-6 shadow-xs space-y-4">
         <div className="space-y-1">
-          <h3 className="text-lg sm:text-xl font-display font-bold text-[#111111] leading-snug">
+          <h2 className="text-lg sm:text-xl font-display font-bold text-[#111111] leading-snug">
             Get Assistance from{' '}
             <span className="text-[#E85D3F] block sm:inline">Great Homes</span>
-          </h3>
+          </h2>
           <p className="text-xs text-[#111111]/65 font-body leading-relaxed">
             {isResale
               ? 'Help with property information, seller coordination and a site visit.'
@@ -165,9 +165,9 @@ export function PropertyEnquirySidebar({ listing }: PropertyEnquirySidebarProps)
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-5 h-5 text-[#218C5A] shrink-0" />
-              <h4 className="text-sm font-display font-bold text-[#111111]">
+              <h3 className="text-sm font-display font-bold text-[#111111]">
                 Verification Details
-              </h4>
+              </h3>
             </div>
             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#1E8E5A] text-white text-[10px] font-display font-semibold">
               <CheckCircle2 className="w-3 h-3" />
@@ -195,9 +195,9 @@ export function PropertyEnquirySidebar({ listing }: PropertyEnquirySidebarProps)
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-[#111111]/60 shrink-0" />
-              <h4 className="text-sm font-display font-bold text-[#111111]">
+              <h3 className="text-sm font-display font-bold text-[#111111]">
                 Verification Status
-              </h4>
+              </h3>
             </div>
             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#111111]/8 text-[#111111]/75 text-[10px] font-display font-semibold">
               <span>Verification Pending</span>

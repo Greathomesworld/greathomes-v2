@@ -7,12 +7,15 @@ import { notFound } from 'next/navigation';
 export const revalidate = 300;
 
 import { developerService } from '@/src/domain/developers/services/developerService';
+import { evaluateDeveloperSeoEligibility } from '@/src/domain/developers/services/developerSeoService';
+import { editorialService } from '@/src/domain/editorial/services/editorialService';
 import { PublicDeveloperDto, PublicProjectDto } from '@/src/domain/developers/dto/developerDto';
 import { safeJsonLd } from '@/src/lib/safeJsonLd';
 import { buildDeveloperJsonLd } from '@/src/domain/seo/auditEngine';
 import {
   buildPageMetadata,
   formatBrandTitle,
+  sanitizeMetaDescription,
   stripBrandSuffix,
 } from '@/src/domain/seo/metadataBuilder';
 import { ensureSeedData } from '@/src/infrastructure/seed';
@@ -44,6 +47,15 @@ interface DeveloperPageProps {
 const getCachedDeveloperProfileBundle = cache(async (slug: string) => {
   await ensureSeedData();
   return developerService.getDeveloperProfileBundleBySlug(slug);
+});
+
+const getCachedDeveloperEditorialCount = cache(async (slug: string): Promise<number> => {
+  try {
+    const stories = await editorialService.getDeveloperStories(slug);
+    return stories.length;
+  } catch {
+    return 0;
+  }
 });
 
 /**
@@ -172,14 +184,11 @@ function buildFactualStageSummary(projects: PublicProjectDto[], reraVerifiedCoun
 }
 
 /**
- * Truncates text cleanly at a word boundary to fit within maxLength.
+ * Sanitizes developer meta descriptions cleanly on sentence/word boundaries
+ * without dangling conjunctions or awkward mid-clause truncation.
  */
-function truncateCleanly(text: string, maxLength: number): string {
-  const clean = text.replace(/\s+/g, ' ').trim();
-  if (clean.length <= maxLength) return clean;
-  const sliced = clean.slice(0, maxLength - 1);
-  const lastSpace = sliced.lastIndexOf(' ');
-  return `${(lastSpace > maxLength * 0.6 ? sliced.slice(0, lastSpace) : sliced).replace(/[.,;:\-\s]+$/, '')}…`;
+function formatDeveloperDescription(text: string, maxLength = 158): string {
+  return sanitizeMetaDescription(text, text, { minLength: 20, maxLength });
 }
 
 /**
@@ -214,7 +223,7 @@ function buildDeveloperSeoTitle(developer: PublicDeveloperDto): string {
     return minimal;
   }
 
-  return truncateCleanly(developer.name, 60);
+  return formatBrandTitle(developer.name, { maxLength: 60 });
 }
 
 /**
@@ -230,12 +239,12 @@ function buildDeveloperSeoDescription(
 ): string {
   const customDesc = developer.seo?.metaDescription?.trim();
   if (customDesc && customDesc.length >= 45 && customDesc.length <= 160) {
-    return customDesc;
+    return formatDeveloperDescription(customDesc, 158);
   }
 
   const shortDesc = developer.shortDescription?.trim();
   if (shortDesc && shortDesc.length >= 45) {
-    return truncateCleanly(shortDesc, 158);
+    return formatDeveloperDescription(shortDesc, 158);
   }
 
   if (projects.length > 0) {
@@ -255,11 +264,11 @@ function buildDeveloperSeoDescription(
         : '';
 
     const factual = `Explore ${projects.length} published project${projects.length === 1 ? '' : 's'} (${categoryLabel}) by ${developer.name}${locSnippet} on Great Homes.`;
-    return truncateCleanly(factual, 158);
+    return formatDeveloperDescription(factual, 158);
   }
 
-  return truncateCleanly(
-    `View the official developer profile and published residential real estate portfolio for ${developer.name} in Kolkata on Great Homes.`,
+  return formatDeveloperDescription(
+    `View the official developer profile and residential real estate portfolio for ${developer.name} in Kolkata on Great Homes.`,
     158
   );
 }
@@ -275,6 +284,14 @@ export async function generateMetadata(
   }
 
   const { developer, projects } = bundle;
+  const publishedEditorialCount =
+    projects.length > 0 ? 0 : await getCachedDeveloperEditorialCount(developer.slug);
+  const seoEligibility = evaluateDeveloperSeoEligibility({
+    developer,
+    publishedProjectCount: projects.length,
+    publishedEditorialCount,
+  });
+
   const title = buildDeveloperSeoTitle(developer);
   const description = buildDeveloperSeoDescription(developer, projects);
 
@@ -285,6 +302,8 @@ export async function generateMetadata(
     canonicalPath: `/developers/${developer.slug}`,
     canonicalUrl: developer.seo?.canonicalUrl,
     allowedCanonicalPrefix: '/developers/',
+    index: seoEligibility.index,
+    follow: seoEligibility.follow,
     ogType: 'profile',
     ogImage: developer.logoUrl,
     ogImageAlt: `${developer.name} logo`,
